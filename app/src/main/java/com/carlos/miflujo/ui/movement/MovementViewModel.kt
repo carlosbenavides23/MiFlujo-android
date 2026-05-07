@@ -86,6 +86,22 @@ class MovementViewModel(
         }
     }
 
+    fun deleteMovement(
+        movement: Movement,
+        onDeleted: () -> Unit,
+    ) {
+        viewModelScope.launch {
+            try {
+                movementRepository.deleteMovement(movement)
+                _feedbackMessage.value = "Movimiento eliminado"
+                onDeleted()
+            } catch (exception: Exception) {
+                if (exception is CancellationException) throw exception
+                _feedbackMessage.value = "No se pudo eliminar el movimiento"
+            }
+        }
+    }
+
     fun clearFeedbackMessage() {
         _feedbackMessage.value = null
     }
