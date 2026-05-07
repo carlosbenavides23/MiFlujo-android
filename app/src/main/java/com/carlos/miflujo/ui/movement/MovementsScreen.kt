@@ -20,57 +20,30 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.carlos.miflujo.domain.model.Currency
+import com.carlos.miflujo.domain.model.Movement
 import com.carlos.miflujo.domain.model.MovementCategory
 import com.carlos.miflujo.domain.model.MovementSubcategory
 import com.carlos.miflujo.domain.model.MovementType
-import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
-
-private enum class MovementFilter(val label: String) {
-    All(label = "Todos"),
-    Income(label = "Ingresos"),
-    Expense(label = "Egresos"),
-}
-
-private data class LocalSampleMovement(
-    val id: Long,
-    val type: MovementType,
-    val amountMinor: Long,
-    val currency: Currency,
-    val date: LocalDate,
-    val category: MovementCategory,
-    val subcategory: MovementSubcategory? = null,
-    val detail: String? = null,
-)
 
 private val movementDateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yy")
 
 @Composable
-fun MovementsScreen(modifier: Modifier = Modifier) {
-    var selectedMonth by remember { mutableStateOf(YearMonth.of(2026, 5)) }
-    var selectedFilter by rememberSaveable { mutableStateOf(MovementFilter.All) }
-    var selectedMovement by remember { mutableStateOf<LocalSampleMovement?>(null) }
-    var movementPendingDelete by remember { mutableStateOf<LocalSampleMovement?>(null) }
-
-    val visibleMovements = remember(selectedMonth, selectedFilter) {
-        localSampleMovements
-            .filter { YearMonth.from(it.date) == selectedMonth }
-            .filter { movement ->
-                when (selectedFilter) {
-                    MovementFilter.All -> true
-                    MovementFilter.Income -> movement.type == MovementType.INCOME
-                    MovementFilter.Expense -> movement.type == MovementType.EXPENSE
-                }
-            }
-            .sortedByDescending { it.date }
-    }
+fun MovementsScreen(
+    uiState: MovementUiState,
+    onPreviousMonth: () -> Unit,
+    onNextMonth: () -> Unit,
+    onFilterSelected: (MovementFilter) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var selectedMovement by remember { mutableStateOf<Movement?>(null) }
+    var movementPendingDelete by remember { mutableStateOf<Movement?>(null) }
 
     LazyColumn(
         modifier = modifier
@@ -88,26 +61,26 @@ fun MovementsScreen(modifier: Modifier = Modifier) {
 
         item {
             MonthSelector(
-                selectedMonth = selectedMonth,
-                onPreviousMonth = { selectedMonth = selectedMonth.minusMonths(1) },
-                onNextMonth = { selectedMonth = selectedMonth.plusMonths(1) },
+                selectedMonth = uiState.selectedMonth,
+                onPreviousMonth = onPreviousMonth,
+                onNextMonth = onNextMonth,
             )
         }
 
         item {
             MovementFilters(
-                selectedFilter = selectedFilter,
-                onFilterSelected = { selectedFilter = it },
+                selectedFilter = uiState.selectedFilter,
+                onFilterSelected = onFilterSelected,
             )
         }
 
-        if (visibleMovements.isEmpty()) {
+        if (uiState.movements.isEmpty()) {
             item {
                 EmptyMovementsCard()
             }
         } else {
             items(
-                items = visibleMovements,
+                items = uiState.movements,
                 key = { it.id },
             ) { movement ->
                 MovementRow(
@@ -199,7 +172,7 @@ private fun MovementFilters(
 
 @Composable
 private fun MovementRow(
-    movement: LocalSampleMovement,
+    movement: Movement,
     onClick: () -> Unit,
 ) {
     Card(
@@ -266,7 +239,7 @@ private fun EmptyMovementsCard() {
 
 @Composable
 private fun MovementDetailDialog(
-    movement: LocalSampleMovement,
+    movement: Movement,
     onDismissRequest: () -> Unit,
     onEditClick: () -> Unit,
     onDeleteClick: () -> Unit,
@@ -312,18 +285,18 @@ private fun MovementDetailDialog(
 
 @Composable
 private fun DeleteMovementConfirmationDialog(
-    movement: LocalSampleMovement,
+    movement: Movement,
     onDismissRequest: () -> Unit,
     onConfirmPlaceholder: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismissRequest,
         title = {
-            Text(text = "Confirmar eliminación")
+            Text(text = "Eliminar pendiente")
         },
         text = {
             Text(
-                text = "Eliminar ${movement.formattedSignedAmount()} del ${movement.date.format(movementDateFormatter)} se implementará cuando exista persistencia. No se borrará nada en esta etapa.",
+                text = "La eliminación de ${movement.formattedSignedAmount()} del ${movement.date.format(movementDateFormatter)} se implementará en una siguiente etapa. No se borrará nada ahora.",
             )
         },
         confirmButton = {
@@ -360,12 +333,12 @@ private fun DetailLine(
 }
 
 @Composable
-private fun LocalSampleMovement.amountColor() = when (type) {
+private fun Movement.amountColor() = when (type) {
     MovementType.INCOME -> MaterialTheme.colorScheme.primary
     MovementType.EXPENSE -> MaterialTheme.colorScheme.error
 }
 
-private fun LocalSampleMovement.formattedSignedAmount(): String {
+private fun Movement.formattedSignedAmount(): String {
     val sign = when (type) {
         MovementType.INCOME -> "+"
         MovementType.EXPENSE -> "-"
@@ -373,14 +346,14 @@ private fun LocalSampleMovement.formattedSignedAmount(): String {
     return "$sign ${currency.symbol()} ${amountMinor.formatMinorAmount()}"
 }
 
-private fun LocalSampleMovement.typeLabel(): String {
+private fun Movement.typeLabel(): String {
     return when (type) {
         MovementType.INCOME -> "Ingreso"
         MovementType.EXPENSE -> "Egreso"
     }
 }
 
-private fun LocalSampleMovement.categoryLabel(): String {
+private fun Movement.categoryLabel(): String {
     return when (category) {
         MovementCategory.GENERAL_INCOME -> "Ingreso"
         MovementCategory.FIXED_COST -> "Costo fijo${subcategory?.let { " · ${it.label()}" }.orEmpty()}"
@@ -427,52 +400,3 @@ private fun YearMonth.toSpanishMonthLabel(): String {
     }
     return "$month $year"
 }
-
-private val localSampleMovements = listOf(
-    LocalSampleMovement(
-        id = 1L,
-        type = MovementType.INCOME,
-        amountMinor = 500000L,
-        currency = Currency.CORDOBA,
-        date = LocalDate.of(2026, 5, 5),
-        category = MovementCategory.GENERAL_INCOME,
-        detail = "Venta del día",
-    ),
-    LocalSampleMovement(
-        id = 2L,
-        type = MovementType.EXPENSE,
-        amountMinor = 180000L,
-        currency = Currency.CORDOBA,
-        date = LocalDate.of(2026, 5, 5),
-        category = MovementCategory.FIXED_COST,
-        subcategory = MovementSubcategory.ELECTRICITY,
-        detail = "Pago de luz",
-    ),
-    LocalSampleMovement(
-        id = 3L,
-        type = MovementType.EXPENSE,
-        amountMinor = 10000L,
-        currency = Currency.DOLLAR,
-        date = LocalDate.of(2026, 5, 4),
-        category = MovementCategory.MAINTENANCE,
-        detail = "Repuesto comprado",
-    ),
-    LocalSampleMovement(
-        id = 4L,
-        type = MovementType.INCOME,
-        amountMinor = 25000L,
-        currency = Currency.DOLLAR,
-        date = LocalDate.of(2026, 5, 2),
-        category = MovementCategory.GENERAL_INCOME,
-        detail = "Pago recibido",
-    ),
-    LocalSampleMovement(
-        id = 5L,
-        type = MovementType.EXPENSE,
-        amountMinor = 45000L,
-        currency = Currency.CORDOBA,
-        date = LocalDate.of(2026, 4, 28),
-        category = MovementCategory.OTHER,
-        detail = null,
-    ),
-)

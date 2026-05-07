@@ -1,5 +1,8 @@
 package com.carlos.miflujo.ui
 
+import android.content.Context
+import android.content.ContextWrapper
+import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -15,20 +18,25 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModelProvider
+import com.carlos.miflujo.MiFlujoAppProvider
 import com.carlos.miflujo.ui.home.HomeScreen
 import com.carlos.miflujo.ui.movement.AddMovementDialog
+import com.carlos.miflujo.ui.movement.MovementViewModel
+import com.carlos.miflujo.ui.movement.MovementViewModelFactory
 import com.carlos.miflujo.ui.movement.MovementsScreen
 import com.carlos.miflujo.ui.report.ReportScreen
-import kotlinx.coroutines.launch
 
 private enum class MainDestination(
     val label: String,
@@ -44,8 +52,26 @@ private enum class MainDestination(
 fun MiFlujoApp() {
     var selectedDestination by rememberSaveable { mutableStateOf(MainDestination.Home) }
     var showAddMovementDialog by rememberSaveable { mutableStateOf(false) }
+    val context = LocalContext.current
+    val activity = remember(context) { context.findComponentActivity() }
+    val movementRepository = remember(context) {
+        MiFlujoAppProvider.movementRepository(context)
+    }
+    val movementViewModel = remember(activity, movementRepository) {
+        ViewModelProvider(
+            activity,
+            MovementViewModelFactory(movementRepository),
+        )[MovementViewModel::class.java]
+    }
+    val movementUiState by movementViewModel.uiState.collectAsState()
+    val feedbackMessage by movementViewModel.feedbackMessage.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
-    val coroutineScope = rememberCoroutineScope()
+
+    LaunchedEffect(feedbackMessage) {
+        val message = feedbackMessage ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(message)
+        movementViewModel.clearFeedbackMessage()
+    }
 
     Scaffold(
         topBar = {
@@ -91,7 +117,12 @@ fun MiFlujoApp() {
         ) {
             when (selectedDestination) {
                 MainDestination.Home -> HomeScreen()
-                MainDestination.Movements -> MovementsScreen()
+                MainDestination.Movements -> MovementsScreen(
+                    uiState = movementUiState,
+                    onPreviousMonth = movementViewModel::goToPreviousMonth,
+                    onNextMonth = movementViewModel::goToNextMonth,
+                    onFilterSelected = movementViewModel::selectFilter,
+                )
                 MainDestination.Report -> ReportScreen()
             }
         }
@@ -102,13 +133,13 @@ fun MiFlujoApp() {
             onDismissRequest = {
                 showAddMovementDialog = false
             },
-            onValidated = {
-                showAddMovementDialog = false
-                coroutineScope.launch {
-                    snackbarHostState.showSnackbar(
-                        message = "Movimiento listo para guardar en una siguiente etapa",
-                    )
-                }
+            onSubmit = { input ->
+                movementViewModel.addMovement(
+                    input = input,
+                    onInserted = {
+                        showAddMovementDialog = false
+                    },
+                )
             },
         )
     }
@@ -124,5 +155,13 @@ private fun DestinationIcon(text: String) {
             text = text,
             style = MaterialTheme.typography.labelMedium,
         )
+    }
+}
+
+private tailrec fun Context.findComponentActivity(): ComponentActivity {
+    return when (this) {
+        is ComponentActivity -> this
+        is ContextWrapper -> baseContext.findComponentActivity()
+        else -> error("MiFlujoApp must run inside a ComponentActivity.")
     }
 }
