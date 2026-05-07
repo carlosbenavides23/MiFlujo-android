@@ -37,6 +37,8 @@ import com.carlos.miflujo.ui.movement.MovementViewModel
 import com.carlos.miflujo.ui.movement.MovementViewModelFactory
 import com.carlos.miflujo.ui.movement.MovementsScreen
 import com.carlos.miflujo.ui.report.ReportScreen
+import com.carlos.miflujo.ui.report.ReportViewModel
+import com.carlos.miflujo.ui.report.ReportViewModelFactory
 
 private enum class MainDestination(
     val label: String,
@@ -63,7 +65,14 @@ fun MiFlujoApp() {
             MovementViewModelFactory(movementRepository),
         )[MovementViewModel::class.java]
     }
+    val reportViewModel = remember(activity, movementRepository) {
+        ViewModelProvider(
+            activity,
+            ReportViewModelFactory(movementRepository),
+        )[ReportViewModel::class.java]
+    }
     val movementUiState by movementViewModel.uiState.collectAsState()
+    val reportUiState by reportViewModel.uiState.collectAsState()
     val feedbackMessage by movementViewModel.feedbackMessage.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -123,7 +132,11 @@ fun MiFlujoApp() {
                     onNextMonth = movementViewModel::goToNextMonth,
                     onFilterSelected = movementViewModel::selectFilter,
                 )
-                MainDestination.Report -> ReportScreen()
+                MainDestination.Report -> ReportScreen(
+                    uiState = reportUiState,
+                    onPreviousMonth = reportViewModel::goToPreviousMonth,
+                    onNextMonth = reportViewModel::goToNextMonth,
+                )
             }
         }
     }
