@@ -26,16 +26,19 @@ import com.carlos.miflujo.domain.model.Currency
 import com.carlos.miflujo.domain.model.MovementCategory
 import com.carlos.miflujo.domain.model.MovementSubcategory
 import com.carlos.miflujo.domain.model.MovementType
+import java.time.DateTimeException
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 @Composable
 fun AddMovementDialog(
     onDismissRequest: () -> Unit,
-    onValidated: () -> Unit,
+    onSubmit: (AddMovementInput) -> Unit,
 ) {
     var movementType by rememberSaveable { mutableStateOf<MovementType?>(null) }
     var amount by rememberSaveable { mutableStateOf("") }
     var currency by rememberSaveable { mutableStateOf<Currency?>(null) }
-    var date by rememberSaveable { mutableStateOf("") }
+    var date by rememberSaveable { mutableStateOf(LocalDate.now().format(formDateFormatter)) }
     var category by rememberSaveable { mutableStateOf<MovementCategory?>(null) }
     var subcategory by rememberSaveable { mutableStateOf<MovementSubcategory?>(null) }
     var detail by rememberSaveable { mutableStateOf("") }
@@ -95,7 +98,7 @@ fun AddMovementDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    val validationErrors = validateAddMovementForm(
+                    val validationResult = validateAddMovementForm(
                         movementType = movementType,
                         amount = amount,
                         currency = currency,
@@ -103,9 +106,22 @@ fun AddMovementDialog(
                         category = category,
                         subcategory = subcategory,
                     )
-                    errors = validationErrors
-                    if (!validationErrors.hasErrors) {
-                        onValidated()
+                    errors = validationResult.errors
+                    if (!validationResult.errors.hasErrors) {
+                        onSubmit(
+                            AddMovementInput(
+                                type = movementType ?: return@Button,
+                                amountMinor = validationResult.amountMinor ?: return@Button,
+                                currency = currency ?: return@Button,
+                                date = validationResult.date ?: return@Button,
+                                category = movementType.categoryForSubmit(category),
+                                subcategory = movementType.subcategoryForSubmit(
+                                    category = category,
+                                    subcategory = subcategory,
+                                ),
+                                detail = detail.trim().ifBlank { null },
+                            ),
+                        )
                     }
                 },
             ) {
@@ -389,6 +405,12 @@ private data class AddMovementFormErrors(
         get() = listOf(movementType, amount, currency, date, category, subcategory).any { it != null }
 }
 
+private data class AddMovementValidationResult(
+    val errors: AddMovementFormErrors,
+    val amountMinor: Long?,
+    val date: LocalDate?,
+)
+
 private fun validateAddMovementForm(
     movementType: MovementType?,
     amount: String,
@@ -396,33 +418,42 @@ private fun validateAddMovementForm(
     date: String,
     category: MovementCategory?,
     subcategory: MovementSubcategory?,
-): AddMovementFormErrors {
+): AddMovementValidationResult {
     val parsedAmountMinor = parseAmountMinorOrNull(amount)
+    val parsedDate = parseVisibleDateOrNull(date)
 
-    return AddMovementFormErrors(
-        movementType = if (movementType == null) "Seleccione ingreso o egreso." else null,
-        amount = when {
-            amount.isBlank() -> "Ingrese un monto."
-            parsedAmountMinor == null -> "Ingrese un monto válido."
-            parsedAmountMinor <= 0L -> "El monto debe ser mayor que 0."
-            else -> null
-        },
-        currency = if (currency == null) "Seleccione C$ o US$." else null,
-        date = if (date.isBlank()) "Ingrese la fecha del movimiento." else null,
-        category = if (movementType == MovementType.EXPENSE && category == null) {
-            "Seleccione una categoría."
-        } else {
-            null
-        },
-        subcategory = if (
-            movementType == MovementType.EXPENSE &&
-            category == MovementCategory.FIXED_COST &&
-            subcategory == null
-        ) {
-            "Seleccione agua, luz o internet."
-        } else {
-            null
-        },
+    return AddMovementValidationResult(
+        errors = AddMovementFormErrors(
+            movementType = if (movementType == null) "Seleccione ingreso o egreso." else null,
+            amount = when {
+                amount.isBlank() -> "Ingrese un monto."
+                parsedAmountMinor == null -> "Ingrese un monto válido."
+                parsedAmountMinor <= 0L -> "El monto debe ser mayor que 0."
+                else -> null
+            },
+            currency = if (currency == null) "Seleccione C$ o US$." else null,
+            date = when {
+                date.isBlank() -> "Ingrese la fecha del movimiento."
+                parsedDate == null -> "Ingrese una fecha válida en formato dd/MM/yy."
+                else -> null
+            },
+            category = if (movementType == MovementType.EXPENSE && category == null) {
+                "Seleccione una categoría."
+            } else {
+                null
+            },
+            subcategory = if (
+                movementType == MovementType.EXPENSE &&
+                category == MovementCategory.FIXED_COST &&
+                subcategory == null
+            ) {
+                "Seleccione agua, luz o internet."
+            } else {
+                null
+            },
+        ),
+        amountMinor = parsedAmountMinor,
+        date = parsedDate,
     )
 }
 
@@ -450,6 +481,41 @@ private fun parseAmountMinorOrNull(rawAmount: String): Long? {
     }
 }
 
+private fun parseVisibleDateOrNull(rawDate: String): LocalDate? {
+    val parts = rawDate.trim().split('/')
+    if (parts.size != 3) return null
+    if (parts[0].length != 2 || parts[1].length != 2 || parts[2].length != 2) return null
+
+    val day = parts[0].toIntOrNull() ?: return null
+    val month = parts[1].toIntOrNull() ?: return null
+    val twoDigitYear = parts[2].toIntOrNull() ?: return null
+
+    return try {
+        LocalDate.of(2000 + twoDigitYear, month, day)
+    } catch (_: DateTimeException) {
+        null
+    }
+}
+
+private fun MovementType?.categoryForSubmit(category: MovementCategory?): MovementCategory {
+    return when (this) {
+        MovementType.INCOME -> MovementCategory.GENERAL_INCOME
+        MovementType.EXPENSE -> category ?: MovementCategory.OTHER
+        null -> MovementCategory.OTHER
+    }
+}
+
+private fun MovementType?.subcategoryForSubmit(
+    category: MovementCategory?,
+    subcategory: MovementSubcategory?,
+): MovementSubcategory? {
+    return if (this == MovementType.EXPENSE && category == MovementCategory.FIXED_COST) {
+        subcategory
+    } else {
+        null
+    }
+}
+
 private fun MovementType?.signLabel(): String {
     return when (this) {
         MovementType.INCOME -> "+"
@@ -457,3 +523,5 @@ private fun MovementType?.signLabel(): String {
         null -> ""
     }
 }
+
+private val formDateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yy")
