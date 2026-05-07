@@ -13,24 +13,20 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.carlos.miflujo.domain.model.Currency
 import com.carlos.miflujo.domain.model.CurrencySummary
 import com.carlos.miflujo.domain.model.ExpenseBreakdown
-import com.carlos.miflujo.domain.model.MonthlyCashFlowReport
 import java.time.YearMonth
 
 @Composable
-fun ReportScreen(modifier: Modifier = Modifier) {
-    var selectedMonth by remember { mutableStateOf(YearMonth.of(2026, 5)) }
-    val report = localSampleReports[selectedMonth] ?: selectedMonth.emptySampleReport()
-
+fun ReportScreen(
+    uiState: ReportUiState,
+    onPreviousMonth: () -> Unit,
+    onNextMonth: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -44,19 +40,19 @@ fun ReportScreen(modifier: Modifier = Modifier) {
             fontWeight = FontWeight.SemiBold,
         )
         MonthSelector(
-            selectedMonth = selectedMonth,
-            onPreviousMonth = { selectedMonth = selectedMonth.minusMonths(1) },
-            onNextMonth = { selectedMonth = selectedMonth.plusMonths(1) },
+            selectedMonth = uiState.selectedMonth,
+            onPreviousMonth = onPreviousMonth,
+            onNextMonth = onNextMonth,
         )
         CurrencyReportCard(
             title = "Resumen en C$",
             currencySymbol = "C$",
-            summary = report.cordoba,
+            summary = uiState.report.cordoba,
         )
         CurrencyReportCard(
             title = "Resumen en US$",
             currencySymbol = "US$",
-            summary = report.dollar,
+            summary = uiState.report.dollar,
         )
     }
 }
@@ -263,82 +259,3 @@ private fun YearMonth.toSpanishMonthLabel(): String {
     }
     return "$month $year"
 }
-
-private fun YearMonth.emptySampleReport(): MonthlyCashFlowReport {
-    return MonthlyCashFlowReport(
-        month = this,
-        cordoba = CurrencySummary(
-            currency = Currency.CORDOBA,
-            totalIncomeMinor = 0L,
-            totalExpenseMinor = 0L,
-            expenseBreakdown = ExpenseBreakdown(),
-        ),
-        dollar = CurrencySummary(
-            currency = Currency.DOLLAR,
-            totalIncomeMinor = 0L,
-            totalExpenseMinor = 0L,
-            expenseBreakdown = ExpenseBreakdown(),
-        ),
-    )
-}
-
-private val localSampleReports = mapOf(
-    YearMonth.of(2026, 5) to MonthlyCashFlowReport(
-        month = YearMonth.of(2026, 5),
-        cordoba = CurrencySummary(
-            currency = Currency.CORDOBA,
-            totalIncomeMinor = 3_500_000L,
-            totalExpenseMinor = 2_250_000L,
-            expenseBreakdown = ExpenseBreakdown(
-                fixedCostMinor = 650_000L,
-                maintenanceMinor = 1_100_000L,
-                otherMinor = 500_000L,
-                waterMinor = 120_000L,
-                electricityMinor = 180_000L,
-                internetMinor = 350_000L,
-            ),
-        ),
-        dollar = CurrencySummary(
-            currency = Currency.DOLLAR,
-            totalIncomeMinor = 50_000L,
-            totalExpenseMinor = 12_000L,
-            expenseBreakdown = ExpenseBreakdown(
-                fixedCostMinor = 0L,
-                maintenanceMinor = 10_000L,
-                otherMinor = 2_000L,
-                waterMinor = 0L,
-                electricityMinor = 0L,
-                internetMinor = 0L,
-            ),
-        ),
-    ),
-    YearMonth.of(2026, 4) to MonthlyCashFlowReport(
-        month = YearMonth.of(2026, 4),
-        cordoba = CurrencySummary(
-            currency = Currency.CORDOBA,
-            totalIncomeMinor = 1_200_000L,
-            totalExpenseMinor = 1_430_000L,
-            expenseBreakdown = ExpenseBreakdown(
-                fixedCostMinor = 600_000L,
-                maintenanceMinor = 400_000L,
-                otherMinor = 430_000L,
-                waterMinor = 100_000L,
-                electricityMinor = 170_000L,
-                internetMinor = 330_000L,
-            ),
-        ),
-        dollar = CurrencySummary(
-            currency = Currency.DOLLAR,
-            totalIncomeMinor = 0L,
-            totalExpenseMinor = 8_500L,
-            expenseBreakdown = ExpenseBreakdown(
-                fixedCostMinor = 0L,
-                maintenanceMinor = 8_500L,
-                otherMinor = 0L,
-                waterMinor = 0L,
-                electricityMinor = 0L,
-                internetMinor = 0L,
-            ),
-        ),
-    ),
-)
