@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.carlos.miflujo.ui.home.HomeScreen
+import com.carlos.miflujo.ui.movement.AddMovementDialog
 import com.carlos.miflujo.ui.movement.MovementsScreen
 import com.carlos.miflujo.ui.report.ReportScreen
 import kotlinx.coroutines.launch
@@ -42,6 +43,7 @@ private enum class MainDestination(
 @Composable
 fun MiFlujoApp() {
     var selectedDestination by rememberSaveable { mutableStateOf(MainDestination.Home) }
+    var showAddMovementDialog by rememberSaveable { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
 
@@ -72,11 +74,7 @@ fun MiFlujoApp() {
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = {
-                    coroutineScope.launch {
-                        snackbarHostState.showSnackbar(
-                            message = "Formulario de movimiento pendiente",
-                        )
-                    }
+                    showAddMovementDialog = true
                 },
             ) {
                 Text(text = "+ Agregar")
@@ -97,6 +95,22 @@ fun MiFlujoApp() {
                 MainDestination.Report -> ReportScreen()
             }
         }
+    }
+
+    if (showAddMovementDialog) {
+        AddMovementDialog(
+            onDismissRequest = {
+                showAddMovementDialog = false
+            },
+            onValidated = {
+                showAddMovementDialog = false
+                coroutineScope.launch {
+                    snackbarHostState.showSnackbar(
+                        message = "Movimiento listo para guardar en una siguiente etapa",
+                    )
+                }
+            },
+        )
     }
 }
 
