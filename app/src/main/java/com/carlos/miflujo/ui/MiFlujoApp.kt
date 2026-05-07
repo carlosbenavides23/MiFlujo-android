@@ -32,6 +32,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import com.carlos.miflujo.MiFlujoAppProvider
 import com.carlos.miflujo.ui.home.HomeScreen
+import com.carlos.miflujo.ui.home.HomeViewModel
+import com.carlos.miflujo.ui.home.HomeViewModelFactory
 import com.carlos.miflujo.ui.movement.AddMovementDialog
 import com.carlos.miflujo.ui.movement.MovementViewModel
 import com.carlos.miflujo.ui.movement.MovementViewModelFactory
@@ -59,6 +61,12 @@ fun MiFlujoApp() {
     val movementRepository = remember(context) {
         MiFlujoAppProvider.movementRepository(context)
     }
+    val homeViewModel = remember(activity, movementRepository) {
+        ViewModelProvider(
+            activity,
+            HomeViewModelFactory(movementRepository),
+        )[HomeViewModel::class.java]
+    }
     val movementViewModel = remember(activity, movementRepository) {
         ViewModelProvider(
             activity,
@@ -71,6 +79,7 @@ fun MiFlujoApp() {
             ReportViewModelFactory(movementRepository),
         )[ReportViewModel::class.java]
     }
+    val homeUiState by homeViewModel.uiState.collectAsState()
     val movementUiState by movementViewModel.uiState.collectAsState()
     val reportUiState by reportViewModel.uiState.collectAsState()
     val feedbackMessage by movementViewModel.feedbackMessage.collectAsState()
@@ -125,7 +134,7 @@ fun MiFlujoApp() {
                 .padding(innerPadding),
         ) {
             when (selectedDestination) {
-                MainDestination.Home -> HomeScreen()
+                MainDestination.Home -> HomeScreen(uiState = homeUiState)
                 MainDestination.Movements -> MovementsScreen(
                     uiState = movementUiState,
                     onPreviousMonth = movementViewModel::goToPreviousMonth,
