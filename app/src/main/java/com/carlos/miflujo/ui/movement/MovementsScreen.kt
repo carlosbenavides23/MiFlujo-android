@@ -40,6 +40,7 @@ fun MovementsScreen(
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
     onFilterSelected: (MovementFilter) -> Unit,
+    onDeleteMovement: (Movement, onDeleted: () -> Unit) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var selectedMovement by remember { mutableStateOf<Movement?>(null) }
@@ -104,9 +105,11 @@ fun MovementsScreen(
         DeleteMovementConfirmationDialog(
             movement = movement,
             onDismissRequest = { movementPendingDelete = null },
-            onConfirmPlaceholder = {
-                movementPendingDelete = null
-                selectedMovement = null
+            onConfirmDelete = {
+                onDeleteMovement(movement) {
+                    movementPendingDelete = null
+                    selectedMovement = null
+                }
             },
         )
     }
@@ -287,21 +290,21 @@ private fun MovementDetailDialog(
 private fun DeleteMovementConfirmationDialog(
     movement: Movement,
     onDismissRequest: () -> Unit,
-    onConfirmPlaceholder: () -> Unit,
+    onConfirmDelete: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismissRequest,
         title = {
-            Text(text = "Eliminar pendiente")
+            Text(text = "Eliminar movimiento")
         },
         text = {
             Text(
-                text = "La eliminación de ${movement.formattedSignedAmount()} del ${movement.date.format(movementDateFormatter)} se implementará en una siguiente etapa. No se borrará nada ahora.",
+                text = "Esta acción eliminará ${movement.formattedSignedAmount()} del ${movement.date.format(movementDateFormatter)}.",
             )
         },
         confirmButton = {
-            Button(onClick = onConfirmPlaceholder) {
-                Text(text = "Entendido")
+            Button(onClick = onConfirmDelete) {
+                Text(text = "Eliminar")
             }
         },
         dismissButton = {
