@@ -9,7 +9,7 @@ import com.carlos.miflujo.domain.usecase.CalculateMonthlyCashFlowReportUseCase
 import java.time.YearMonth
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
 class HomeViewModel(
@@ -18,25 +18,24 @@ class HomeViewModel(
 ) : ViewModel() {
     private val currentMonth = YearMonth.now()
 
-    val uiState: StateFlow<HomeUiState> = combine(
-        movementRepository.getMovementsByDateRange(
+    val uiState: StateFlow<HomeUiState> = movementRepository
+        .getMovementsByDateRange(
             startDate = currentMonth.atDay(1),
             endDate = currentMonth.atEndOfMonth(),
-        ),
-        movementRepository.getRecentMovements(RECENT_MOVEMENT_LIMIT),
-    ) { monthMovements, recentMovements ->
-        currentMonth.toUiState(
-            monthMovements = monthMovements,
-            recentMovements = recentMovements,
         )
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = currentMonth.toUiState(
-            monthMovements = emptyList(),
-            recentMovements = emptyList(),
-        ),
-    )
+        .map { monthMovements ->
+            currentMonth.toUiState(
+                monthMovements = monthMovements,
+                recentMovements = monthMovements.take(RECENT_MOVEMENT_LIMIT),
+            )
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = currentMonth.toUiState(
+                monthMovements = emptyList(),
+                recentMovements = emptyList(),
+            ),
+        )
 
     private fun YearMonth.toUiState(
         monthMovements: List<Movement>,
