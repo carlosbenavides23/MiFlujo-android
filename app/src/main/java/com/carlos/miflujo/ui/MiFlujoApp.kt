@@ -6,10 +6,13 @@ import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
+import androidx.compose.material.icons.filled.Assessment
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -25,10 +28,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import com.carlos.miflujo.MiFlujoAppProvider
 import com.carlos.miflujo.ui.home.HomeScreen
@@ -44,11 +46,11 @@ import com.carlos.miflujo.ui.report.ReportViewModelFactory
 
 private enum class MainDestination(
     val label: String,
-    val iconText: String,
+    val icon: ImageVector,
 ) {
-    Home(label = "Inicio", iconText = "I"),
-    Movements(label = "Movimientos", iconText = "M"),
-    Report(label = "Reporte", iconText = "R"),
+    Home(label = "Inicio", icon = Icons.Filled.Home),
+    Movements(label = "Movimientos", icon = Icons.AutoMirrored.Filled.ReceiptLong),
+    Report(label = "Reporte", icon = Icons.Filled.Assessment),
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -106,7 +108,10 @@ fun MiFlujoApp() {
                         selected = selectedDestination == destination,
                         onClick = { selectedDestination = destination },
                         icon = {
-                            DestinationIcon(text = destination.iconText)
+                            Icon(
+                                imageVector = destination.icon,
+                                contentDescription = destination.label,
+                            )
                         },
                         label = {
                             Text(text = destination.label)
@@ -164,19 +169,6 @@ fun MiFlujoApp() {
                     },
                 )
             },
-        )
-    }
-}
-
-@Composable
-private fun DestinationIcon(text: String) {
-    Box(
-        modifier = Modifier.size(24.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelMedium,
         )
     }
 }
