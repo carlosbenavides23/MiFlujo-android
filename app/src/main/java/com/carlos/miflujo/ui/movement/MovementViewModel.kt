@@ -102,6 +102,23 @@ class MovementViewModel(
         }
     }
 
+    fun updateMovement(
+        movement: Movement,
+        input: AddMovementInput,
+        onUpdated: () -> Unit,
+    ) {
+        viewModelScope.launch {
+            try {
+                movementRepository.updateMovement(movement.updatedWith(input))
+                _feedbackMessage.value = "Movimiento actualizado"
+                onUpdated()
+            } catch (exception: Exception) {
+                if (exception is CancellationException) throw exception
+                _feedbackMessage.value = "No se pudo actualizar el movimiento"
+            }
+        }
+    }
+
     fun clearFeedbackMessage() {
         _feedbackMessage.value = null
     }
@@ -119,6 +136,19 @@ class MovementViewModel(
             detail = detail,
             createdAt = now,
             updatedAt = now,
+        )
+    }
+
+    private fun Movement.updatedWith(input: AddMovementInput): Movement {
+        return copy(
+            type = input.type,
+            amountMinor = input.amountMinor,
+            currency = input.currency,
+            date = input.date,
+            category = input.category,
+            subcategory = input.subcategory,
+            detail = input.detail,
+            updatedAt = LocalDateTime.now(),
         )
     }
 

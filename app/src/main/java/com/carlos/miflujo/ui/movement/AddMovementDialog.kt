@@ -34,6 +34,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.carlos.miflujo.domain.model.Currency
+import com.carlos.miflujo.domain.model.Movement
 import com.carlos.miflujo.domain.model.MovementCategory
 import com.carlos.miflujo.domain.model.MovementSubcategory
 import com.carlos.miflujo.domain.model.MovementType
@@ -43,14 +44,24 @@ import java.time.format.DateTimeFormatter
 
 @Composable
 fun AddMovementDialog(
+    initialMovement: Movement? = null,
     onDismissRequest: () -> Unit,
     onSubmit: (AddMovementInput) -> Unit,
 ) {
-    var movementType by rememberSaveable { mutableStateOf<MovementType?>(null) }
-    var amount by rememberSaveable { mutableStateOf("") }
-    var currency by rememberSaveable { mutableStateOf<Currency?>(null) }
-    val initialDate = LocalDate.now().format(formDateFormatter)
-    var date by rememberSaveable(stateSaver = TextFieldValue.Saver) {
+    val formStateKey = initialMovement?.id
+    val initialDate = (initialMovement?.date ?: LocalDate.now()).format(formDateFormatter)
+    val dialogTitle = if (initialMovement == null) "Agregar movimiento" else "Editar movimiento"
+    val confirmText = if (initialMovement == null) "Continuar" else "Guardar"
+    var movementType by rememberSaveable(formStateKey) {
+        mutableStateOf(initialMovement?.type)
+    }
+    var amount by rememberSaveable(formStateKey) {
+        mutableStateOf(initialMovement?.amountMinor?.formatAmountInput().orEmpty())
+    }
+    var currency by rememberSaveable(formStateKey) {
+        mutableStateOf(initialMovement?.currency)
+    }
+    var date by rememberSaveable(formStateKey, stateSaver = TextFieldValue.Saver) {
         mutableStateOf(
             TextFieldValue(
                 text = initialDate,
@@ -58,15 +69,21 @@ fun AddMovementDialog(
             ),
         )
     }
-    var category by rememberSaveable { mutableStateOf<MovementCategory?>(null) }
-    var subcategory by rememberSaveable { mutableStateOf<MovementSubcategory?>(null) }
-    var detail by rememberSaveable { mutableStateOf("") }
+    var category by rememberSaveable(formStateKey) {
+        mutableStateOf(initialMovement?.categoryForForm())
+    }
+    var subcategory by rememberSaveable(formStateKey) {
+        mutableStateOf(initialMovement?.subcategoryForForm())
+    }
+    var detail by rememberSaveable(formStateKey) {
+        mutableStateOf(initialMovement?.detail.orEmpty())
+    }
     var errors by remember { mutableStateOf(AddMovementFormErrors()) }
 
     AlertDialog(
         onDismissRequest = onDismissRequest,
         title = {
-            Text(text = "Agregar movimiento")
+            Text(text = dialogTitle)
         },
         text = {
             AddMovementFormContent(
@@ -76,6 +93,8 @@ fun AddMovementDialog(
                     if (selectedType == MovementType.INCOME) {
                         category = null
                         subcategory = null
+                    } else if (category == MovementCategory.GENERAL_INCOME) {
+                        category = null
                     }
                     errors = errors.copy(movementType = null)
                 },
@@ -144,7 +163,7 @@ fun AddMovementDialog(
                     }
                 },
             ) {
-                Text(text = "Continuar")
+                Text(text = confirmText)
             }
         },
         dismissButton = {
@@ -597,6 +616,12 @@ private fun String.dateDigits(): String {
 
 private const val MAX_DATE_DIGITS = 6
 
+private fun Long.formatAmountInput(): String {
+    val whole = this / 100L
+    val cents = this % 100L
+    return "$whole.${cents.toString().padStart(2, '0')}"
+}
+
 private fun parseVisibleDateOrNull(rawDate: String): LocalDate? {
     val parts = rawDate.trim().split('/')
     if (parts.size != 3) return null
@@ -629,6 +654,16 @@ private fun MovementType?.subcategoryForSubmit(
         subcategory
     } else {
         null
+    }
+}
+
+private fun Movement.categoryForForm(): MovementCategory? {
+    return category.takeIf { type == MovementType.EXPENSE }
+}
+
+private fun Movement.subcategoryForForm(): MovementSubcategory? {
+    return subcategory.takeIf {
+        type == MovementType.EXPENSE && category == MovementCategory.FIXED_COST
     }
 }
 
