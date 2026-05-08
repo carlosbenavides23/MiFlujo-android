@@ -1,16 +1,22 @@
 package com.carlos.miflujo.ui.movement
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -19,8 +25,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.carlos.miflujo.domain.model.Currency
 import com.carlos.miflujo.domain.model.MovementCategory
@@ -38,7 +49,15 @@ fun AddMovementDialog(
     var movementType by rememberSaveable { mutableStateOf<MovementType?>(null) }
     var amount by rememberSaveable { mutableStateOf("") }
     var currency by rememberSaveable { mutableStateOf<Currency?>(null) }
-    var date by rememberSaveable { mutableStateOf(LocalDate.now().format(formDateFormatter)) }
+    val initialDate = LocalDate.now().format(formDateFormatter)
+    var date by rememberSaveable(stateSaver = TextFieldValue.Saver) {
+        mutableStateOf(
+            TextFieldValue(
+                text = initialDate,
+                selection = TextRange(initialDate.length),
+            ),
+        )
+    }
     var category by rememberSaveable { mutableStateOf<MovementCategory?>(null) }
     var subcategory by rememberSaveable { mutableStateOf<MovementSubcategory?>(null) }
     var detail by rememberSaveable { mutableStateOf("") }
@@ -71,8 +90,8 @@ fun AddMovementDialog(
                     errors = errors.copy(currency = null)
                 },
                 date = date,
-                onDateChange = {
-                    date = it
+                onDateChange = { updatedDate ->
+                    date = updatedDate.formatVisibleDateInput(previousFormattedText = date.text)
                     errors = errors.copy(date = null)
                 },
                 category = category,
@@ -102,7 +121,7 @@ fun AddMovementDialog(
                         movementType = movementType,
                         amount = amount,
                         currency = currency,
-                        date = date,
+                        date = date.text,
                         category = category,
                         subcategory = subcategory,
                     )
@@ -144,8 +163,8 @@ private fun AddMovementFormContent(
     onAmountChange: (String) -> Unit,
     currency: Currency?,
     onCurrencyChange: (Currency) -> Unit,
-    date: String,
-    onDateChange: (String) -> Unit,
+    date: TextFieldValue,
+    onDateChange: (TextFieldValue) -> Unit,
     category: MovementCategory?,
     onCategoryChange: (MovementCategory) -> Unit,
     subcategory: MovementSubcategory?,
@@ -158,167 +177,184 @@ private fun AddMovementFormContent(
         modifier = Modifier
             .fillMaxWidth()
             .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        ChipGroup(
-            title = "¿Qué desea registrar?",
+        FormSection(
+            title = "Tipo de movimiento",
             error = errors.movementType,
         ) {
-            ChoiceChip(
-                text = "Ingreso",
-                selected = movementType == MovementType.INCOME,
-                onClick = { onMovementTypeChange(MovementType.INCOME) },
-            )
-            ChoiceChip(
-                text = "Egreso",
-                selected = movementType == MovementType.EXPENSE,
-                onClick = { onMovementTypeChange(MovementType.EXPENSE) },
-            )
+            SegmentedChoiceGroup {
+                SegmentedChoice(
+                    text = "+ Ingreso",
+                    selected = movementType == MovementType.INCOME,
+                    onClick = { onMovementTypeChange(MovementType.INCOME) },
+                )
+                SegmentedChoice(
+                    text = "- Egreso",
+                    selected = movementType == MovementType.EXPENSE,
+                    onClick = { onMovementTypeChange(MovementType.EXPENSE) },
+                )
+            }
         }
 
-        OutlinedTextField(
-            value = amount,
-            onValueChange = onAmountChange,
-            modifier = Modifier.fillMaxWidth(),
-            label = {
-                Text(text = "Monto")
-            },
-            placeholder = {
-                Text(text = "Ej. 1800.50")
-            },
-            prefix = {
-                Text(text = movementType.signLabel())
-            },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-            singleLine = true,
-            isError = errors.amount != null,
-            supportingText = {
-                FieldSupportingText(
-                    error = errors.amount,
-                    helper = "Use punto o coma para centavos.",
-                )
-            },
-        )
-
-        ChipGroup(
+        FormSection(
             title = "Moneda",
             error = errors.currency,
         ) {
-            ChoiceChip(
-                text = "C$",
-                selected = currency == Currency.CORDOBA,
-                onClick = { onCurrencyChange(Currency.CORDOBA) },
-            )
-            ChoiceChip(
-                text = "US$",
-                selected = currency == Currency.DOLLAR,
-                onClick = { onCurrencyChange(Currency.DOLLAR) },
+            SegmentedChoiceGroup {
+                SegmentedChoice(
+                    text = "C$",
+                    selected = currency == Currency.CORDOBA,
+                    onClick = { onCurrencyChange(Currency.CORDOBA) },
+                )
+                SegmentedChoice(
+                    text = "US$",
+                    selected = currency == Currency.DOLLAR,
+                    onClick = { onCurrencyChange(Currency.DOLLAR) },
+                )
+            }
+        }
+
+        FormSection(title = "Monto") {
+            OutlinedTextField(
+                value = amount,
+                onValueChange = onAmountChange,
+                modifier = Modifier.fillMaxWidth(),
+                label = {
+                    Text(text = "Monto")
+                },
+                placeholder = {
+                    Text(text = "0.00")
+                },
+                prefix = {
+                    currency?.let {
+                        Text(text = it.amountPrefix())
+                    }
+                },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                singleLine = true,
+                isError = errors.amount != null,
+                supportingText = {
+                    FieldSupportingText(
+                        error = errors.amount,
+                        helper = "Use punto o coma para centavos.",
+                    )
+                },
             )
         }
 
-        OutlinedTextField(
-            value = date,
-            onValueChange = onDateChange,
-            modifier = Modifier.fillMaxWidth(),
-            label = {
-                Text(text = "Fecha")
-            },
-            placeholder = {
-                Text(text = "dd/MM/yy")
-            },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
-            singleLine = true,
-            isError = errors.date != null,
-            supportingText = {
-                FieldSupportingText(
-                    error = errors.date,
-                    helper = "Formato visible esperado: dd/MM/yy.",
-                )
-            },
-        )
+        FormSection(title = "Fecha") {
+            OutlinedTextField(
+                value = date,
+                onValueChange = onDateChange,
+                modifier = Modifier.fillMaxWidth(),
+                label = {
+                    Text(text = "Fecha")
+                },
+                placeholder = {
+                    Text(text = "dd/MM/yy")
+                },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                singleLine = true,
+                isError = errors.date != null,
+                supportingText = {
+                    FieldSupportingText(
+                        error = errors.date,
+                        helper = "Formato visible esperado: dd/MM/yy.",
+                    )
+                },
+            )
+        }
 
         if (movementType == MovementType.EXPENSE) {
-            ChipGroup(
-                title = "Categoría del egreso",
+            FormSection(
+                title = "Categoría",
                 error = errors.category,
             ) {
-                ExpenseCategoryChip(
-                    text = "Costos fijos",
-                    category = MovementCategory.FIXED_COST,
-                    selectedCategory = category,
-                    onCategoryChange = onCategoryChange,
-                )
-                ExpenseCategoryChip(
-                    text = "Mantenimiento",
-                    category = MovementCategory.MAINTENANCE,
-                    selectedCategory = category,
-                    onCategoryChange = onCategoryChange,
-                )
-                ExpenseCategoryChip(
-                    text = "Otros",
-                    category = MovementCategory.OTHER,
-                    selectedCategory = category,
-                    onCategoryChange = onCategoryChange,
-                )
+                SegmentedChoiceGroup {
+                    ExpenseCategoryChip(
+                        text = "Costos fijos",
+                        category = MovementCategory.FIXED_COST,
+                        selectedCategory = category,
+                        onCategoryChange = onCategoryChange,
+                    )
+                    ExpenseCategoryChip(
+                        text = "Mantenimiento",
+                        category = MovementCategory.MAINTENANCE,
+                        selectedCategory = category,
+                        onCategoryChange = onCategoryChange,
+                    )
+                    ExpenseCategoryChip(
+                        text = "Otros",
+                        category = MovementCategory.OTHER,
+                        selectedCategory = category,
+                        onCategoryChange = onCategoryChange,
+                    )
+                }
             }
         }
 
         if (movementType == MovementType.EXPENSE && category == MovementCategory.FIXED_COST) {
-            ChipGroup(
+            FormSection(
                 title = "Subcategoría",
                 error = errors.subcategory,
             ) {
-                FixedCostSubcategoryChip(
-                    text = "Agua",
-                    subcategory = MovementSubcategory.WATER,
-                    selectedSubcategory = subcategory,
-                    onSubcategoryChange = onSubcategoryChange,
-                )
-                FixedCostSubcategoryChip(
-                    text = "Luz",
-                    subcategory = MovementSubcategory.ELECTRICITY,
-                    selectedSubcategory = subcategory,
-                    onSubcategoryChange = onSubcategoryChange,
-                )
-                FixedCostSubcategoryChip(
-                    text = "Internet",
-                    subcategory = MovementSubcategory.INTERNET,
-                    selectedSubcategory = subcategory,
-                    onSubcategoryChange = onSubcategoryChange,
-                )
+                SegmentedChoiceGroup {
+                    FixedCostSubcategoryChip(
+                        text = "Agua",
+                        subcategory = MovementSubcategory.WATER,
+                        selectedSubcategory = subcategory,
+                        onSubcategoryChange = onSubcategoryChange,
+                    )
+                    FixedCostSubcategoryChip(
+                        text = "Luz",
+                        subcategory = MovementSubcategory.ELECTRICITY,
+                        selectedSubcategory = subcategory,
+                        onSubcategoryChange = onSubcategoryChange,
+                    )
+                    FixedCostSubcategoryChip(
+                        text = "Internet",
+                        subcategory = MovementSubcategory.INTERNET,
+                        selectedSubcategory = subcategory,
+                        onSubcategoryChange = onSubcategoryChange,
+                    )
+                }
             }
         }
 
-        OutlinedTextField(
-            value = detail,
-            onValueChange = onDetailChange,
-            modifier = Modifier.fillMaxWidth(),
-            label = {
-                Text(text = "Detalle")
-            },
-            placeholder = {
-                Text(text = "Opcional, recomendado")
-            },
-            minLines = 2,
-            supportingText = {
-                Text(text = "Puede dejarlo vacío si no aplica.")
-            },
-        )
+        FormSection(title = "Detalle") {
+            OutlinedTextField(
+                value = detail,
+                onValueChange = onDetailChange,
+                modifier = Modifier.fillMaxWidth(),
+                label = {
+                    Text(text = "Detalle")
+                },
+                placeholder = {
+                    Text(text = "Opcional, recomendado")
+                },
+                minLines = 2,
+                supportingText = {
+                    Text(text = "Puede dejarlo vacío si no aplica.")
+                },
+            )
+        }
     }
 }
 
 @Composable
-private fun ChipGroup(
+private fun FormSection(
     title: String,
-    error: String?,
+    error: String? = null,
     content: @Composable () -> Unit,
 ) {
     Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Text(
             text = title,
-            style = MaterialTheme.typography.labelLarge,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
         )
         Column(
             verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -336,18 +372,63 @@ private fun ChipGroup(
 }
 
 @Composable
-private fun ChoiceChip(
+private fun SegmentedChoiceGroup(
+    content: @Composable () -> Unit,
+) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        content()
+    }
+}
+
+@Composable
+private fun SegmentedChoice(
+    modifier: Modifier = Modifier,
     text: String,
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    FilterChip(
-        selected = selected,
-        onClick = onClick,
-        label = {
-            Text(text = text)
-        },
-    )
+    val containerColor = if (selected) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        MaterialTheme.colorScheme.surfaceVariant
+    }
+    val contentColor = if (selected) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    val borderColor = if (selected) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.outlineVariant
+    }
+
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.medium,
+        color = containerColor,
+        contentColor = contentColor,
+        border = BorderStroke(width = 1.dp, color = borderColor),
+    ) {
+        Box(
+            modifier = Modifier
+                .heightIn(min = 44.dp)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
 }
 
 @Composable
@@ -357,7 +438,7 @@ private fun ExpenseCategoryChip(
     selectedCategory: MovementCategory?,
     onCategoryChange: (MovementCategory) -> Unit,
 ) {
-    ChoiceChip(
+    SegmentedChoice(
         text = text,
         selected = selectedCategory == category,
         onClick = { onCategoryChange(category) },
@@ -371,7 +452,7 @@ private fun FixedCostSubcategoryChip(
     selectedSubcategory: MovementSubcategory?,
     onSubcategoryChange: (MovementSubcategory) -> Unit,
 ) {
-    ChoiceChip(
+    SegmentedChoice(
         text = text,
         selected = selectedSubcategory == subcategory,
         onClick = { onSubcategoryChange(subcategory) },
@@ -481,6 +562,41 @@ private fun parseAmountMinorOrNull(rawAmount: String): Long? {
     }
 }
 
+private fun TextFieldValue.formatVisibleDateInput(previousFormattedText: String): TextFieldValue {
+    val previousDigits = previousFormattedText.dateDigits()
+    val rawDigits = text.dateDigits()
+    val isDeletionFromEnd = text.length < previousFormattedText.length &&
+        previousFormattedText.startsWith(text)
+    val formattedText = when {
+        text.isEmpty() -> ""
+        isDeletionFromEnd -> previousDigits.dropLast(1).formatVisibleDateInput()
+        else -> rawDigits.formatVisibleDateInput()
+    }
+
+    return TextFieldValue(
+        text = formattedText,
+        selection = TextRange(formattedText.length),
+    )
+}
+
+private fun String.formatVisibleDateInput(): String {
+    val digits = take(MAX_DATE_DIGITS)
+    return buildString {
+        digits.forEachIndexed { index, digit ->
+            append(digit)
+            if ((index == 1 || index == 3) && index != MAX_DATE_DIGITS - 1) {
+                append('/')
+            }
+        }
+    }
+}
+
+private fun String.dateDigits(): String {
+    return filter { it.isDigit() }.take(MAX_DATE_DIGITS)
+}
+
+private const val MAX_DATE_DIGITS = 6
+
 private fun parseVisibleDateOrNull(rawDate: String): LocalDate? {
     val parts = rawDate.trim().split('/')
     if (parts.size != 3) return null
@@ -516,11 +632,10 @@ private fun MovementType?.subcategoryForSubmit(
     }
 }
 
-private fun MovementType?.signLabel(): String {
+private fun Currency.amountPrefix(): String {
     return when (this) {
-        MovementType.INCOME -> "+"
-        MovementType.EXPENSE -> "-"
-        null -> ""
+        Currency.CORDOBA -> "C$"
+        Currency.DOLLAR -> "US$"
     }
 }
 
