@@ -145,6 +145,7 @@ fun MiFlujoApp() {
                     onPreviousMonth = movementViewModel::goToPreviousMonth,
                     onNextMonth = movementViewModel::goToNextMonth,
                     onFilterSelected = movementViewModel::selectFilter,
+                    onEditMovement = movementViewModel::updateMovement,
                     onDeleteMovement = movementViewModel::deleteMovement,
                 )
                 MainDestination.Report -> ReportScreen(

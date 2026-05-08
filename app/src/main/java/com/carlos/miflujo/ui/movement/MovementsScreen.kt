@@ -41,10 +41,12 @@ fun MovementsScreen(
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
     onFilterSelected: (MovementFilter) -> Unit,
+    onEditMovement: (Movement, AddMovementInput, onUpdated: () -> Unit) -> Unit,
     onDeleteMovement: (Movement, onDeleted: () -> Unit) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var selectedMovement by remember { mutableStateOf<Movement?>(null) }
+    var movementPendingEdit by remember { mutableStateOf<Movement?>(null) }
     var movementPendingDelete by remember { mutableStateOf<Movement?>(null) }
 
     LazyColumn(
@@ -102,8 +104,24 @@ fun MovementsScreen(
         MovementDetailDialog(
             movement = movement,
             onDismissRequest = { selectedMovement = null },
-            onEditClick = { selectedMovement = null },
+            onEditClick = {
+                movementPendingEdit = movement
+                selectedMovement = null
+            },
             onDeleteClick = { movementPendingDelete = movement },
+        )
+    }
+
+    movementPendingEdit?.let { movement ->
+        AddMovementDialog(
+            initialMovement = movement,
+            onDismissRequest = { movementPendingEdit = null },
+            onSubmit = { input ->
+                onEditMovement(movement, input) {
+                    movementPendingEdit = null
+                    selectedMovement = null
+                }
+            },
         )
     }
 
