@@ -30,6 +30,8 @@ import com.carlos.miflujo.domain.model.Movement
 import com.carlos.miflujo.domain.model.MovementCategory
 import com.carlos.miflujo.domain.model.MovementSubcategory
 import com.carlos.miflujo.domain.model.MovementType
+import com.carlos.miflujo.ui.theme.financeNegativeColor
+import com.carlos.miflujo.ui.theme.financePositiveColor
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 
@@ -361,8 +363,8 @@ private fun DetailLine(
 
 @Composable
 private fun Movement.amountColor() = when (type) {
-    MovementType.INCOME -> MaterialTheme.colorScheme.primary
-    MovementType.EXPENSE -> MaterialTheme.colorScheme.error
+    MovementType.INCOME -> financePositiveColor()
+    MovementType.EXPENSE -> financeNegativeColor()
 }
 
 private fun Movement.formattedSignedAmount(): String {

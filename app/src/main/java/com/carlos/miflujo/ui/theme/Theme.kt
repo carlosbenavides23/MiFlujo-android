@@ -1,8 +1,8 @@
 package com.carlos.miflujo.ui.theme
 
-import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -20,17 +20,22 @@ private val DarkColorScheme = darkColorScheme(
 private val LightColorScheme = lightColorScheme(
     primary = Purple40,
     secondary = PurpleGrey40,
-    tertiary = Pink40
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+    tertiary = Pink40,
+    background = LightBackground,
+    onBackground = LightOnBackground,
+    surface = LightSurface,
+    onSurface = LightOnSurface,
+    surfaceVariant = LightSurfaceVariant,
+    onSurfaceVariant = LightOnSurfaceVariant,
+    outline = LightOutline,
+    outlineVariant = LightOutlineVariant,
+    surfaceDim = LightSurfaceDim,
+    surfaceBright = LightSurfaceBright,
+    surfaceContainerLowest = LightSurfaceContainerLowest,
+    surfaceContainerLow = LightSurfaceContainerLow,
+    surfaceContainer = LightSurfaceContainer,
+    surfaceContainerHigh = LightSurfaceContainerHigh,
+    surfaceContainerHighest = LightSurfaceContainerHighest,
 )
 
 @Composable
@@ -43,7 +48,11 @@ fun MiFlujoTheme(
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            if (darkTheme) {
+                dynamicDarkColorScheme(context)
+            } else {
+                dynamicLightColorScheme(context).withCleanLightSurfaces()
+            }
         }
 
         darkTheme -> DarkColorScheme
@@ -54,5 +63,21 @@ fun MiFlujoTheme(
         colorScheme = colorScheme,
         typography = Typography,
         content = content
+    )
+}
+
+private fun ColorScheme.withCleanLightSurfaces(): ColorScheme {
+    return copy(
+        background = LightBackground,
+        surface = LightSurface,
+        surfaceVariant = LightSurfaceVariant,
+        outlineVariant = LightOutlineVariant,
+        surfaceDim = LightSurfaceDim,
+        surfaceBright = LightSurfaceBright,
+        surfaceContainerLowest = LightSurfaceContainerLowest,
+        surfaceContainerLow = LightSurfaceContainerLow,
+        surfaceContainer = LightSurfaceContainer,
+        surfaceContainerHigh = LightSurfaceContainerHigh,
+        surfaceContainerHighest = LightSurfaceContainerHighest,
     )
 }

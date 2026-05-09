@@ -22,6 +22,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.carlos.miflujo.domain.model.CurrencySummary
 import com.carlos.miflujo.domain.model.ExpenseBreakdown
+import com.carlos.miflujo.ui.theme.financeNegativeColor
+import com.carlos.miflujo.ui.theme.financePositiveColor
 import java.time.YearMonth
 
 @Composable
@@ -182,12 +184,12 @@ private fun CurrencyStatementSection(
         StatementLine(
             label = "Ingresos",
             value = "+ $currencySymbol ${summary.totalIncomeMinor.formatMinorAmount()}",
-            valueColor = MaterialTheme.colorScheme.primary,
+            valueColor = financePositiveColor(),
         )
         StatementLine(
             label = "Egresos",
             value = "- $currencySymbol ${summary.totalExpenseMinor.formatMinorAmount()}",
-            valueColor = MaterialTheme.colorScheme.error,
+            valueColor = financeNegativeColor(),
         )
     }
 }
@@ -253,7 +255,7 @@ private fun ExpenseDetailCurrencySection(
                 text = "$currencySymbol ${summary.totalExpenseMinor.formatMinorAmount()}",
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.error,
+                color = financeNegativeColor(),
                 textAlign = TextAlign.End,
             )
         }
@@ -364,9 +366,9 @@ private fun BreakdownLine(
 
 @Composable
 private fun CurrencySummary.netFlowColor() = if (netCashFlowMinor < 0L) {
-    MaterialTheme.colorScheme.error
+    financeNegativeColor()
 } else {
-    MaterialTheme.colorScheme.primary
+    financePositiveColor()
 }
 
 private fun CurrencySummary.statusLabel(): String {
