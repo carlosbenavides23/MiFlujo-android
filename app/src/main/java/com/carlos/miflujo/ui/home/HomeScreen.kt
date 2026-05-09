@@ -30,6 +30,8 @@ import com.carlos.miflujo.domain.model.Movement
 import com.carlos.miflujo.domain.model.MovementCategory
 import com.carlos.miflujo.domain.model.MovementSubcategory
 import com.carlos.miflujo.domain.model.MovementType
+import com.carlos.miflujo.ui.theme.financeNegativeColor
+import com.carlos.miflujo.ui.theme.financePositiveColor
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 
@@ -152,13 +154,13 @@ private fun DashboardCurrencySection(
                 modifier = Modifier.weight(1f),
                 label = "Ingresos",
                 value = "+ $currencySymbol ${summary.totalIncomeMinor.formatMinorAmount()}",
-                valueColor = MaterialTheme.colorScheme.primary,
+                valueColor = financePositiveColor(),
             )
             InlineMetric(
                 modifier = Modifier.weight(1f),
                 label = "Egresos",
                 value = "- $currencySymbol ${summary.totalExpenseMinor.formatMinorAmount()}",
-                valueColor = MaterialTheme.colorScheme.error,
+                valueColor = financeNegativeColor(),
                 horizontalAlignment = Alignment.End,
             )
         }
@@ -469,15 +471,15 @@ private fun MovementSignBadge(movement: Movement) {
 
 @Composable
 private fun Movement.amountColor() = when (type) {
-    MovementType.INCOME -> MaterialTheme.colorScheme.primary
-    MovementType.EXPENSE -> MaterialTheme.colorScheme.error
+    MovementType.INCOME -> financePositiveColor()
+    MovementType.EXPENSE -> financeNegativeColor()
 }
 
 @Composable
 private fun CurrencySummary.netFlowColor() = if (netCashFlowMinor < 0L) {
-    MaterialTheme.colorScheme.error
+    financeNegativeColor()
 } else {
-    MaterialTheme.colorScheme.primary
+    financePositiveColor()
 }
 
 private fun Movement.formattedSignedAmount(): String {
