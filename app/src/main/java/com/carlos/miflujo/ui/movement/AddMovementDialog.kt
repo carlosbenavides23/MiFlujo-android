@@ -33,6 +33,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import com.carlos.miflujo.domain.model.Currency
 import com.carlos.miflujo.domain.model.Movement
 import com.carlos.miflujo.domain.model.MovementCategory
@@ -82,6 +83,7 @@ fun AddMovementDialog(
 
     AlertDialog(
         onDismissRequest = onDismissRequest,
+        properties = DialogProperties(dismissOnClickOutside = false),
         title = {
             Text(text = dialogTitle)
         },
