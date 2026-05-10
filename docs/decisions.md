@@ -1,10 +1,10 @@
 # Decisions
 
-Este documento registra decisiones importantes del proyecto.
+Este documento registra decisiones importantes del proyecto MiFlujo.
 
 ## 001 - Nombre de la app
 
-La app se llamará:
+La app se llama:
 
 ```text
 MiFlujo
@@ -12,7 +12,7 @@ MiFlujo
 
 ## 002 - Subtítulo
 
-El subtítulo será:
+El subtítulo visible de la app es:
 
 ```text
 Flujo de efectivo mensual
@@ -20,7 +20,7 @@ Flujo de efectivo mensual
 
 ## 003 - Nombre del repositorio
 
-El repositorio se llamará:
+El repositorio se llama:
 
 ```text
 MiFlujo-android
@@ -28,7 +28,7 @@ MiFlujo-android
 
 ## 004 - Package name
 
-El package name será:
+El package name es:
 
 ```text
 com.carlos.miflujo
@@ -36,44 +36,44 @@ com.carlos.miflujo
 
 ## 005 - App local-first
 
-El MVP será local-first.
+MiFlujo es una app local-first.
 
-Los datos se guardarán en el dispositivo.
+Los datos se guardan en el dispositivo usando Room.
 
-No habrá nube ni sincronización en la primera versión.
+No hay nube, backend, login ni sincronización en el MVP.
 
-## 006 - Repositorio privado durante desarrollo
+## 006 - Repositorio público después del MVP
 
-El repositorio será privado durante el desarrollo.
+Durante el desarrollo inicial, el repositorio se mantuvo privado.
 
-Cuando el MVP esté funcional, limpio y usable, se evaluará hacerlo público como proyecto de portafolio.
+Después de completar y entregar el MVP, el repositorio pasó a ser público como proyecto real y posible pieza de portafolio.
 
 ## 007 - Soporte de córdobas y dólares
 
-El MVP soportará movimientos en:
+MiFlujo soporta movimientos en:
 
 ```text
 C$
 US$
 ```
 
-Cada movimiento tendrá una moneda asociada.
+Cada movimiento tiene una moneda asociada.
 
 ## 008 - No conversión automática entre monedas
 
-No habrá conversión automática entre córdobas y dólares en el MVP.
+No hay conversión automática entre córdobas y dólares.
 
-La app no manejará tipo de cambio.
+La app no maneja tipo de cambio.
 
 ## 009 - Totales separados por moneda
 
-Los reportes mostrarán totales separados por moneda.
+Los reportes muestran totales separados por moneda.
 
-No se debe calcular un único flujo neto mezclando C$ y US$.
+No se calcula un único flujo neto mezclando C$ y US$.
 
 ## 010 - Formato visible de fecha
 
-El formato visible de fecha será:
+El formato visible de fecha es:
 
 ```text
 dd/MM/yy
@@ -87,31 +87,38 @@ Ejemplo:
 
 ## 011 - Detalle recomendado, no obligatorio
 
-El detalle de un movimiento será recomendado, pero no obligatorio.
+El detalle de un movimiento es recomendado, pero no obligatorio.
 
-La app debe permitir guardar movimientos sin detalle.
+La app permite guardar movimientos sin detalle.
 
 ## 012 - Dinero como Long en unidades menores
 
-Los montos se guardarán internamente como `Long` en centavos o unidades menores.
+Los montos se guardan internamente como `Long` en centavos o unidades menores.
 
-No se usará `Double` ni `Float` para almacenar dinero.
+No se usa `Double` ni `Float` para almacenar dinero.
+
+Ejemplos:
+
+```text
+C$ 1,800.50 -> 180050
+US$ 100.00 -> 10000
+```
 
 ## 013 - Categorías controladas en el MVP
 
-Las categorías serán controladas por código en el MVP.
+Las categorías son controladas por código en el MVP.
 
-No se implementarán categorías dinámicas todavía.
+No se implementan categorías dinámicas todavía.
 
 ## 014 - Reportes calculados desde movimientos
 
-El reporte mensual se calculará desde los movimientos guardados.
+El reporte mensual se calcula desde los movimientos guardados.
 
-No se guardará como entidad independiente en el MVP.
+No se guarda como entidad independiente en el MVP.
 
 ## 015 - Stack visual
 
-Se usará:
+Se usa:
 
 ```text
 Jetpack Compose + Material Design 3
@@ -119,38 +126,147 @@ Jetpack Compose + Material Design 3
 
 ## 016 - Persistencia
 
-Se usará Room para persistencia local.
+Se usa Room para persistencia local.
 
 ## 017 - Arquitectura
 
-Se usará:
+Se usa:
 
 ```text
 MVVM + Repository Pattern
 ```
 
+Flujo conceptual:
+
+```text
+UI
+↓
+ViewModel
+↓
+Repository
+↓
+Room Database
+```
+
+La UI no debe acceder directamente al DAO.
+
 ## 018 - Entorno principal de desarrollo
 
-El entorno principal de desarrollo será Linux, específicamente Fedora.
+El entorno principal de desarrollo es Linux, específicamente Fedora.
 
-Android Studio será el IDE principal para el proyecto Android.
+Android Studio es el IDE principal para el proyecto Android.
 
-Git y GitHub se usarán para control de versiones, documentación, issues y organización del trabajo.
+Git y GitHub se usan para control de versiones, documentación, issues, pull requests y releases.
 
 ## 019 - Estrategia de ramas simple
 
-No se usará GitFlow completo.
+No se usa GitFlow completo.
 
-Estrategia recomendada:
+Estrategia actual:
 
 ```text
-main
-dev
-feature/nombre-de-la-tarea
+main      -> releases estables
+dev       -> integración de cambios post-MVP
+feature/* -> nuevas funcionalidades
+fix/*     -> correcciones de bugs
+style/*   -> cambios visuales o de UI
+chore/*   -> tareas de mantenimiento
 ```
 
-`main` representará la versión estable.
+Los cambios deben trabajarse en ramas pequeñas y luego integrarse mediante Pull Request.
 
-`dev` se usará para integración.
+## 020 - Release v0.1 MVP
 
-Las ramas `feature/*` se usarán para tareas específicas.
+`v0.1.0` representa el primer MVP funcional entregado al usuario principal.
+
+Incluyó:
+
+- Registro de ingresos y egresos.
+- Soporte separado para C$ y US$.
+- Dashboard del mes actual.
+- Historial de movimientos.
+- Edición y eliminación.
+- Reporte mensual.
+- Persistencia local con Room.
+- Ícono propio de app.
+
+## 021 - Release v0.1.1 post-MVP
+
+`v0.1.1` fue una release de correcciones y polish después de la primera prueba real.
+
+Incluyó:
+
+- Evitar que el diálogo de agregar/editar movimiento se cierre al tocar fuera.
+- Corregir la apariencia del snackbar en modo oscuro.
+- Mejorar el modo claro.
+- Separar colores de identidad de app y colores financieros semánticos.
+
+## 022 - Dynamic color y colores financieros semánticos
+
+MiFlujo mantiene Android dynamic color para la identidad general de la app cuando está disponible.
+
+Esto aplica a elementos como:
+
+- FAB.
+- Botones.
+- Navegación.
+- Selecciones.
+- Componentes Material generales.
+
+Los colores financieros no deben depender completamente del dynamic color.
+
+Regla visual:
+
+```text
+Dynamic color -> identidad general de la app
+Verde suave   -> ingresos, montos positivos y flujo positivo
+Rojo suave    -> egresos, montos negativos y flujo negativo
+```
+
+## 023 - APK firmado y keystore
+
+Las releases se distribuyen como APK firmado.
+
+El archivo `.jks` del keystore no debe subirse al repositorio.
+
+Debe guardarse fuera del repo y respaldarse de forma segura.
+
+## 024 - Datos locales y actualización
+
+Room conserva los datos locales cuando se instala una nueva release firmada con el mismo keystore y el mismo `applicationId`, siempre que la app no sea desinstalada.
+
+La actualización de `v0.1.0` a `v0.1.1` fue probada sin pérdida de datos.
+
+## 025 - Versionado de app
+
+Antes de generar cada APK release se debe actualizar:
+
+```kotlin
+versionCode
+versionName
+```
+
+Regla:
+
+- `versionCode` debe aumentar en cada APK release.
+- `versionName` debe coincidir con la versión publicada en GitHub Release.
+
+Ejemplo:
+
+```text
+v0.1.0 -> versionCode 1, versionName "0.1.0"
+v0.1.1 -> versionCode 2, versionName "0.1.1"
+v0.1.2 -> versionCode 3, versionName "0.1.2"
+```
+
+## 026 - Post-MVP guiado por feedback real
+
+Después del MVP, las mejoras deben priorizar feedback real del usuario principal.
+
+Regla de trabajo:
+
+```text
+Feedback real -> issue pequeña -> rama -> implementación -> revisión -> PR -> dev -> main -> release
+```
+
+No se deben agregar features grandes sin validar necesidad real.
