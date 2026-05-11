@@ -31,6 +31,7 @@ import com.carlos.miflujo.domain.model.MovementCategory
 import com.carlos.miflujo.domain.model.MovementSubcategory
 import com.carlos.miflujo.domain.model.MovementType
 import com.carlos.miflujo.ui.formatVisibleDate
+import com.carlos.miflujo.ui.formatVisibleMoney
 import com.carlos.miflujo.ui.theme.financeNegativeColor
 import com.carlos.miflujo.ui.theme.financePositiveColor
 import java.time.YearMonth
@@ -370,7 +371,7 @@ private fun Movement.formattedSignedAmount(): String {
         MovementType.INCOME -> "+"
         MovementType.EXPENSE -> "-"
     }
-    return "$sign ${currency.symbol()} ${amountMinor.formatMinorAmount()}"
+    return "$sign ${amountMinor.formatVisibleMoney(currency.symbol())}"
 }
 
 private fun Movement.typeLabel(): String {
@@ -402,12 +403,6 @@ private fun MovementSubcategory.label(): String {
         MovementSubcategory.ELECTRICITY -> "Luz"
         MovementSubcategory.INTERNET -> "Internet"
     }
-}
-
-private fun Long.formatMinorAmount(): String {
-    val whole = this / 100L
-    val cents = this % 100L
-    return "$whole.${cents.toString().padStart(2, '0')}"
 }
 
 private fun YearMonth.toSpanishMonthLabel(): String {
