@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Assessment
@@ -18,8 +19,10 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarVisuals
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -33,12 +36,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import com.carlos.miflujo.MiFlujoAppProvider
 import com.carlos.miflujo.ui.home.HomeScreen
 import com.carlos.miflujo.ui.home.HomeViewModel
 import com.carlos.miflujo.ui.home.HomeViewModelFactory
 import com.carlos.miflujo.ui.movement.AddMovementDialog
+import com.carlos.miflujo.ui.movement.MovementFeedback
+import com.carlos.miflujo.ui.movement.MovementFeedbackType
 import com.carlos.miflujo.ui.movement.MovementViewModel
 import com.carlos.miflujo.ui.movement.MovementViewModelFactory
 import com.carlos.miflujo.ui.movement.MovementsScreen
@@ -86,13 +93,15 @@ fun MiFlujoApp() {
     val homeUiState by homeViewModel.uiState.collectAsState()
     val movementUiState by movementViewModel.uiState.collectAsState()
     val reportUiState by reportViewModel.uiState.collectAsState()
-    val feedbackMessage by movementViewModel.feedbackMessage.collectAsState()
+    val feedback by movementViewModel.feedback.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    LaunchedEffect(feedbackMessage) {
-        val message = feedbackMessage ?: return@LaunchedEffect
-        snackbarHostState.showSnackbar(message)
-        movementViewModel.clearFeedbackMessage()
+    LaunchedEffect(feedback) {
+        val currentFeedback = feedback ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(
+            MovementSnackbarVisuals(feedback = currentFeedback),
+        )
+        movementViewModel.clearFeedback()
     }
 
     Scaffold(
@@ -133,11 +142,30 @@ fun MiFlujoApp() {
         },
         snackbarHost = {
             SnackbarHost(hostState = snackbarHostState) { snackbarData ->
+                val message = snackbarData.visuals.message
+                val feedbackType = snackbarData.visuals.feedbackType()
                 Snackbar(
-                    snackbarData = snackbarData,
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                    modifier = Modifier
+                        .padding(horizontal = 24.dp)
+                        .widthIn(max = 360.dp),
+                    shape = MaterialTheme.shapes.medium,
+                    containerColor = if (feedbackType == MovementFeedbackType.ERROR) {
+                        MaterialTheme.colorScheme.errorContainer
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant
+                    },
+                    contentColor = if (feedbackType == MovementFeedbackType.ERROR) {
+                        MaterialTheme.colorScheme.onErrorContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                ) {
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
             }
         },
     ) { innerPadding ->
@@ -188,4 +216,25 @@ private tailrec fun Context.findComponentActivity(): ComponentActivity {
         is ContextWrapper -> baseContext.findComponentActivity()
         else -> error("MiFlujoApp must run inside a ComponentActivity.")
     }
+}
+
+private data class MovementSnackbarVisuals(
+    val feedback: MovementFeedback,
+) : SnackbarVisuals {
+    override val message: String = feedback.message
+    override val actionLabel: String? = null
+    override val withDismissAction: Boolean = false
+    override val duration: SnackbarDuration = feedback.type.snackbarDuration()
+}
+
+private fun MovementFeedbackType.snackbarDuration(): SnackbarDuration {
+    return if (this == MovementFeedbackType.ERROR) {
+        SnackbarDuration.Long
+    } else {
+        SnackbarDuration.Short
+    }
+}
+
+private fun SnackbarVisuals.feedbackType(): MovementFeedbackType {
+    return (this as? MovementSnackbarVisuals)?.feedback?.type ?: MovementFeedbackType.SUCCESS
 }
