@@ -30,10 +30,10 @@ import com.carlos.miflujo.domain.model.Movement
 import com.carlos.miflujo.domain.model.MovementCategory
 import com.carlos.miflujo.domain.model.MovementSubcategory
 import com.carlos.miflujo.domain.model.MovementType
+import com.carlos.miflujo.ui.formatVisibleDate
 import com.carlos.miflujo.ui.theme.financeNegativeColor
 import com.carlos.miflujo.ui.theme.financePositiveColor
 import java.time.YearMonth
-import java.time.format.DateTimeFormatter
 
 @Composable
 fun HomeScreen(
@@ -426,7 +426,7 @@ private fun RecentMovementRow(movement: Movement) {
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = "${movement.date.format(visibleDateFormatter)} · ${movement.categoryLabel()}",
+                text = "${movement.date.formatVisibleDate()} · ${movement.categoryLabel()}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -547,8 +547,6 @@ private fun YearMonth.toSpanishMonthLabel(): String {
     }
     return "$month $year"
 }
-
-private val visibleDateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yy")
 
 private val HomeHorizontalPadding = 20.dp
 private val HomeBottomPadding = 128.dp
