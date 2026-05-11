@@ -25,11 +25,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.carlos.miflujo.domain.model.Currency
 import com.carlos.miflujo.domain.model.Movement
 import com.carlos.miflujo.domain.model.MovementCategory
 import com.carlos.miflujo.domain.model.MovementSubcategory
 import com.carlos.miflujo.domain.model.MovementType
+import com.carlos.miflujo.ui.formatSignedMoney
 import com.carlos.miflujo.ui.theme.financeNegativeColor
 import com.carlos.miflujo.ui.theme.financePositiveColor
 import java.time.YearMonth
@@ -223,7 +223,7 @@ private fun MovementRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    text = movement.formattedSignedAmount(),
+                    text = movement.formatSignedMoney(),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = movement.amountColor(),
@@ -283,7 +283,7 @@ private fun MovementDetailDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 DetailLine(label = "Tipo", value = movement.typeLabel())
-                DetailLine(label = "Monto", value = movement.formattedSignedAmount())
+                DetailLine(label = "Monto", value = movement.formatSignedMoney())
                 DetailLine(label = "Fecha", value = movement.date.format(movementDateFormatter))
                 DetailLine(label = "Detalle", value = movement.detail.orEmpty().ifBlank { "Sin detalle" })
                 DetailLine(label = "Clasificación", value = movement.categoryLabel())
@@ -325,7 +325,7 @@ private fun DeleteMovementConfirmationDialog(
         },
         text = {
             Text(
-                text = "Esta acción eliminará ${movement.formattedSignedAmount()} del ${movement.date.format(movementDateFormatter)}.",
+                text = "Esta acción eliminará ${movement.formatSignedMoney()} del ${movement.date.format(movementDateFormatter)}.",
             )
         },
         confirmButton = {
@@ -367,14 +367,6 @@ private fun Movement.amountColor() = when (type) {
     MovementType.EXPENSE -> financeNegativeColor()
 }
 
-private fun Movement.formattedSignedAmount(): String {
-    val sign = when (type) {
-        MovementType.INCOME -> "+"
-        MovementType.EXPENSE -> "-"
-    }
-    return "$sign ${currency.symbol()} ${amountMinor.formatMinorAmount()}"
-}
-
 private fun Movement.typeLabel(): String {
     return when (type) {
         MovementType.INCOME -> "Ingreso"
@@ -391,25 +383,12 @@ private fun Movement.categoryLabel(): String {
     }
 }
 
-private fun Currency.symbol(): String {
-    return when (this) {
-        Currency.CORDOBA -> "C$"
-        Currency.DOLLAR -> "US$"
-    }
-}
-
 private fun MovementSubcategory.label(): String {
     return when (this) {
         MovementSubcategory.WATER -> "Agua"
         MovementSubcategory.ELECTRICITY -> "Luz"
         MovementSubcategory.INTERNET -> "Internet"
     }
-}
-
-private fun Long.formatMinorAmount(): String {
-    val whole = this / 100L
-    val cents = this % 100L
-    return "$whole.${cents.toString().padStart(2, '0')}"
 }
 
 private fun YearMonth.toSpanishMonthLabel(): String {

@@ -23,13 +23,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.carlos.miflujo.domain.model.Currency
 import com.carlos.miflujo.domain.model.CurrencySummary
 import com.carlos.miflujo.domain.model.ExpenseBreakdown
 import com.carlos.miflujo.domain.model.Movement
 import com.carlos.miflujo.domain.model.MovementCategory
 import com.carlos.miflujo.domain.model.MovementSubcategory
 import com.carlos.miflujo.domain.model.MovementType
+import com.carlos.miflujo.ui.formatMoneyMinor
+import com.carlos.miflujo.ui.formatSignedMoney
 import com.carlos.miflujo.ui.theme.financeNegativeColor
 import com.carlos.miflujo.ui.theme.financePositiveColor
 import java.time.YearMonth
@@ -139,7 +140,7 @@ private fun DashboardCurrencySection(
                 modifier = Modifier
                     .padding(start = 16.dp)
                     .widthIn(min = NetAmountMinWidth),
-                text = summary.netCashFlowMinor.formatSignedAmount(currencySymbol),
+                text = summary.netCashFlowMinor.formatSignedMoney(currencySymbol),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
                 color = summary.netFlowColor(),
@@ -153,13 +154,13 @@ private fun DashboardCurrencySection(
             InlineMetric(
                 modifier = Modifier.weight(1f),
                 label = "Ingresos",
-                value = "+ $currencySymbol ${summary.totalIncomeMinor.formatMinorAmount()}",
+                value = "+ $currencySymbol ${summary.totalIncomeMinor.formatMoneyMinor()}",
                 valueColor = financePositiveColor(),
             )
             InlineMetric(
                 modifier = Modifier.weight(1f),
                 label = "Egresos",
-                value = "- $currencySymbol ${summary.totalExpenseMinor.formatMinorAmount()}",
+                value = "- $currencySymbol ${summary.totalExpenseMinor.formatMoneyMinor()}",
                 valueColor = financeNegativeColor(),
                 horizontalAlignment = Alignment.End,
             )
@@ -266,7 +267,7 @@ private fun ExpenseBreakdownSection(
                 modifier = Modifier
                     .padding(start = 16.dp)
                     .widthIn(min = SummaryAmountMinWidth),
-                text = "$currencySymbol ${summary.totalExpenseMinor.formatMinorAmount()}",
+                text = "$currencySymbol ${summary.totalExpenseMinor.formatMoneyMinor()}",
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.SemiBold,
                 textAlign = TextAlign.End,
@@ -277,15 +278,15 @@ private fun ExpenseBreakdownSection(
         ) {
             SummaryLine(
                 label = "Costos fijos",
-                value = "$currencySymbol ${breakdown.fixedCostMinor.formatMinorAmount()}",
+                value = "$currencySymbol ${breakdown.fixedCostMinor.formatMoneyMinor()}",
             )
             SummaryLine(
                 label = "Mantenimiento",
-                value = "$currencySymbol ${breakdown.maintenanceMinor.formatMinorAmount()}",
+                value = "$currencySymbol ${breakdown.maintenanceMinor.formatMoneyMinor()}",
             )
             SummaryLine(
                 label = "Otros",
-                value = "$currencySymbol ${breakdown.otherMinor.formatMinorAmount()}",
+                value = "$currencySymbol ${breakdown.otherMinor.formatMoneyMinor()}",
             )
         }
         if (breakdown.hasFixedCostDetails()) {
@@ -328,7 +329,7 @@ private fun FixedCostDetailLine(
 
     SummaryLine(
         label = label,
-        value = "$currencySymbol ${value.formatMinorAmount()}",
+        value = "$currencySymbol ${value.formatMoneyMinor()}",
         compact = true,
         indented = true,
     )
@@ -435,7 +436,7 @@ private fun RecentMovementRow(movement: Movement) {
         }
         Text(
             modifier = Modifier.width(116.dp),
-            text = movement.formattedSignedAmount(),
+            text = movement.formatSignedMoney(),
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.SemiBold,
             color = movement.amountColor(),
@@ -482,21 +483,6 @@ private fun CurrencySummary.netFlowColor() = if (netCashFlowMinor < 0L) {
     financePositiveColor()
 }
 
-private fun Movement.formattedSignedAmount(): String {
-    val sign = when (type) {
-        MovementType.INCOME -> "+"
-        MovementType.EXPENSE -> "-"
-    }
-    return "$sign ${currency.symbol()} ${amountMinor.formatMinorAmount()}"
-}
-
-private fun Currency.symbol(): String {
-    return when (this) {
-        Currency.CORDOBA -> "C$"
-        Currency.DOLLAR -> "US$"
-    }
-}
-
 private fun Movement.categoryLabel(): String {
     return when (category) {
         MovementCategory.GENERAL_INCOME -> "Ingreso"
@@ -516,18 +502,6 @@ private fun MovementSubcategory.label(): String {
 
 private fun ExpenseBreakdown.hasFixedCostDetails(): Boolean {
     return waterMinor > 0L || electricityMinor > 0L || internetMinor > 0L
-}
-
-private fun Long.formatMinorAmount(): String {
-    val absoluteAmount = kotlin.math.abs(this)
-    val whole = absoluteAmount / 100L
-    val cents = absoluteAmount % 100L
-    return "$whole.${cents.toString().padStart(2, '0')}"
-}
-
-private fun Long.formatSignedAmount(currencySymbol: String): String {
-    val sign = if (this < 0L) "-" else "+"
-    return "$sign $currencySymbol ${formatMinorAmount()}"
 }
 
 private fun YearMonth.toSpanishMonthLabel(): String {
