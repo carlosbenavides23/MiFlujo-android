@@ -352,11 +352,11 @@ private fun AddMovementFormContent(
                     Text(text = "Detalle")
                 },
                 placeholder = {
-                    Text(text = "Opcional, recomendado")
+                    Text(text = "Ej.: pago de luz, venta del día")
                 },
                 minLines = 2,
                 supportingText = {
-                    Text(text = "Puede dejarlo vacío si no aplica.")
+                    Text(text = "Opcional, pero ayuda a recordar el movimiento.")
                 },
             )
         }
