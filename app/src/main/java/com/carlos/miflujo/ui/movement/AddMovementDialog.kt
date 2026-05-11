@@ -52,7 +52,7 @@ fun AddMovementDialog(
     val formStateKey = initialMovement?.id
     val initialDate = (initialMovement?.date ?: LocalDate.now()).format(formDateFormatter)
     val dialogTitle = if (initialMovement == null) "Agregar movimiento" else "Editar movimiento"
-    val confirmText = if (initialMovement == null) "Continuar" else "Guardar"
+    val confirmText = "Guardar"
     var movementType by rememberSaveable(formStateKey) {
         mutableStateOf(initialMovement?.type)
     }
