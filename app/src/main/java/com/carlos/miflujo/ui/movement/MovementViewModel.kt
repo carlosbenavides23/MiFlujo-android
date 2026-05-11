@@ -23,9 +23,9 @@ class MovementViewModel(
     private val selectedMonth = MutableStateFlow(YearMonth.now())
     private val selectedFilter = MutableStateFlow(MovementFilter.All)
     private val monthMovements = MutableStateFlow<List<Movement>>(emptyList())
-    private val _feedbackMessage = MutableStateFlow<String?>(null)
+    private val _feedback = MutableStateFlow<MovementFeedback?>(null)
 
-    val feedbackMessage: StateFlow<String?> = _feedbackMessage
+    val feedback: StateFlow<MovementFeedback?> = _feedback
 
     val uiState: StateFlow<MovementUiState> = combine(
         selectedMonth,
@@ -77,11 +77,17 @@ class MovementViewModel(
         viewModelScope.launch {
             try {
                 movementRepository.insertMovement(input.toMovement())
-                _feedbackMessage.value = "Movimiento guardado"
+                _feedback.value = MovementFeedback(
+                    message = "Movimiento guardado",
+                    type = MovementFeedbackType.SUCCESS,
+                )
                 onInserted()
             } catch (exception: Exception) {
                 if (exception is CancellationException) throw exception
-                _feedbackMessage.value = "No se pudo guardar el movimiento"
+                _feedback.value = MovementFeedback(
+                    message = "No se pudo guardar el movimiento",
+                    type = MovementFeedbackType.ERROR,
+                )
             }
         }
     }
@@ -93,11 +99,17 @@ class MovementViewModel(
         viewModelScope.launch {
             try {
                 movementRepository.deleteMovement(movement)
-                _feedbackMessage.value = "Movimiento eliminado"
+                _feedback.value = MovementFeedback(
+                    message = "Movimiento eliminado",
+                    type = MovementFeedbackType.SUCCESS,
+                )
                 onDeleted()
             } catch (exception: Exception) {
                 if (exception is CancellationException) throw exception
-                _feedbackMessage.value = "No se pudo eliminar el movimiento"
+                _feedback.value = MovementFeedback(
+                    message = "No se pudo eliminar el movimiento",
+                    type = MovementFeedbackType.ERROR,
+                )
             }
         }
     }
@@ -110,17 +122,23 @@ class MovementViewModel(
         viewModelScope.launch {
             try {
                 movementRepository.updateMovement(movement.updatedWith(input))
-                _feedbackMessage.value = "Movimiento actualizado"
+                _feedback.value = MovementFeedback(
+                    message = "Movimiento actualizado",
+                    type = MovementFeedbackType.SUCCESS,
+                )
                 onUpdated()
             } catch (exception: Exception) {
                 if (exception is CancellationException) throw exception
-                _feedbackMessage.value = "No se pudo actualizar el movimiento"
+                _feedback.value = MovementFeedback(
+                    message = "No se pudo actualizar el movimiento",
+                    type = MovementFeedbackType.ERROR,
+                )
             }
         }
     }
 
-    fun clearFeedbackMessage() {
-        _feedbackMessage.value = null
+    fun clearFeedback() {
+        _feedback.value = null
     }
 
     private fun AddMovementInput.toMovement(): Movement {
