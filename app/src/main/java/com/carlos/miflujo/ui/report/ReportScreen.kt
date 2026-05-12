@@ -373,7 +373,7 @@ private fun MonthlyMovementRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    text = movement.typeLabel(),
+                    text = movement.classificationLabel(),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -393,11 +393,6 @@ private fun MonthlyMovementRow(
             text = movement.detail.orEmpty().ifBlank { "Sin detalle" },
             style = MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.Medium,
-        )
-        Text(
-            text = movement.categoryLabel(),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -523,6 +518,13 @@ private fun Movement.categoryLabel(): String {
         MovementCategory.FIXED_COST -> "Costo fijo${subcategory?.let { " · ${it.label()}" }.orEmpty()}"
         MovementCategory.MAINTENANCE -> "Mantenimiento"
         MovementCategory.OTHER -> "Otros"
+    }
+}
+
+private fun Movement.classificationLabel(): String {
+    return when (type) {
+        MovementType.INCOME -> typeLabel()
+        MovementType.EXPENSE -> "${typeLabel()} · ${categoryLabel()}"
     }
 }
 
