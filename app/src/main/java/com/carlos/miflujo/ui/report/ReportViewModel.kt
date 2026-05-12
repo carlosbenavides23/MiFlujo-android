@@ -63,6 +63,7 @@ class ReportViewModel(
                 movements = movements,
                 month = this,
             ),
+            movements = movements,
         )
     }
 }
