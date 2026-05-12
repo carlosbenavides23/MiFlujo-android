@@ -22,6 +22,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.carlos.miflujo.domain.model.CurrencySummary
 import com.carlos.miflujo.domain.model.ExpenseBreakdown
+import com.carlos.miflujo.ui.formatSignedVisibleMoney
+import com.carlos.miflujo.ui.formatVisibleMoney
 import com.carlos.miflujo.ui.theme.financeNegativeColor
 import com.carlos.miflujo.ui.theme.financePositiveColor
 import java.time.YearMonth
@@ -174,7 +176,7 @@ private fun CurrencyStatementSection(
                 modifier = Modifier
                     .padding(start = 16.dp)
                     .widthIn(min = ReportNetAmountMinWidth),
-                text = summary.netCashFlowMinor.formatSignedAmount(currencySymbol),
+                text = summary.netCashFlowMinor.formatSignedVisibleMoney(currencySymbol),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
                 color = summary.netFlowColor(),
@@ -183,12 +185,12 @@ private fun CurrencyStatementSection(
         }
         StatementLine(
             label = "Ingresos",
-            value = "+ $currencySymbol ${summary.totalIncomeMinor.formatMinorAmount()}",
+            value = "+ ${summary.totalIncomeMinor.formatVisibleMoney(currencySymbol)}",
             valueColor = financePositiveColor(),
         )
         StatementLine(
             label = "Egresos",
-            value = "- $currencySymbol ${summary.totalExpenseMinor.formatMinorAmount()}",
+            value = "- ${summary.totalExpenseMinor.formatVisibleMoney(currencySymbol)}",
             valueColor = financeNegativeColor(),
         )
     }
@@ -252,7 +254,7 @@ private fun ExpenseDetailCurrencySection(
                 modifier = Modifier
                     .padding(start = 16.dp)
                     .widthIn(min = ReportAmountMinWidth),
-                text = "$currencySymbol ${summary.totalExpenseMinor.formatMinorAmount()}",
+                text = summary.totalExpenseMinor.formatVisibleMoney(currencySymbol),
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.SemiBold,
                 color = financeNegativeColor(),
@@ -264,15 +266,15 @@ private fun ExpenseDetailCurrencySection(
         ) {
             BreakdownLine(
                 label = "Costos fijos",
-                value = "$currencySymbol ${breakdown.fixedCostMinor.formatMinorAmount()}",
+                value = breakdown.fixedCostMinor.formatVisibleMoney(currencySymbol),
             )
             BreakdownLine(
                 label = "Mantenimiento",
-                value = "$currencySymbol ${breakdown.maintenanceMinor.formatMinorAmount()}",
+                value = breakdown.maintenanceMinor.formatVisibleMoney(currencySymbol),
             )
             BreakdownLine(
                 label = "Otros",
-                value = "$currencySymbol ${breakdown.otherMinor.formatMinorAmount()}",
+                value = breakdown.otherMinor.formatVisibleMoney(currencySymbol),
             )
         }
         HorizontalDivider()
@@ -286,17 +288,17 @@ private fun ExpenseDetailCurrencySection(
             )
             BreakdownLine(
                 label = "Agua",
-                value = "$currencySymbol ${breakdown.waterMinor.formatMinorAmount()}",
+                value = breakdown.waterMinor.formatVisibleMoney(currencySymbol),
                 indented = true,
             )
             BreakdownLine(
                 label = "Luz",
-                value = "$currencySymbol ${breakdown.electricityMinor.formatMinorAmount()}",
+                value = breakdown.electricityMinor.formatVisibleMoney(currencySymbol),
                 indented = true,
             )
             BreakdownLine(
                 label = "Internet",
-                value = "$currencySymbol ${breakdown.internetMinor.formatMinorAmount()}",
+                value = breakdown.internetMinor.formatVisibleMoney(currencySymbol),
                 indented = true,
             )
         }
@@ -392,18 +394,6 @@ private fun ExpenseBreakdown.isZero(): Boolean {
         waterMinor == 0L &&
         electricityMinor == 0L &&
         internetMinor == 0L
-}
-
-private fun Long.formatMinorAmount(): String {
-    val absoluteAmount = kotlin.math.abs(this)
-    val whole = absoluteAmount / 100L
-    val cents = absoluteAmount % 100L
-    return "$whole.${cents.toString().padStart(2, '0')}"
-}
-
-private fun Long.formatSignedAmount(currencySymbol: String): String {
-    val sign = if (this < 0L) "-" else "+"
-    return "$sign $currencySymbol ${formatMinorAmount()}"
 }
 
 private fun YearMonth.toSpanishMonthLabel(): String {

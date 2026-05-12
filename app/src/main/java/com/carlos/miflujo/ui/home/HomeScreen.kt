@@ -30,10 +30,12 @@ import com.carlos.miflujo.domain.model.Movement
 import com.carlos.miflujo.domain.model.MovementCategory
 import com.carlos.miflujo.domain.model.MovementSubcategory
 import com.carlos.miflujo.domain.model.MovementType
+import com.carlos.miflujo.ui.formatVisibleDate
+import com.carlos.miflujo.ui.formatSignedVisibleMoney
+import com.carlos.miflujo.ui.formatVisibleMoney
 import com.carlos.miflujo.ui.theme.financeNegativeColor
 import com.carlos.miflujo.ui.theme.financePositiveColor
 import java.time.YearMonth
-import java.time.format.DateTimeFormatter
 
 @Composable
 fun HomeScreen(
@@ -139,7 +141,7 @@ private fun DashboardCurrencySection(
                 modifier = Modifier
                     .padding(start = 16.dp)
                     .widthIn(min = NetAmountMinWidth),
-                text = summary.netCashFlowMinor.formatSignedAmount(currencySymbol),
+                text = summary.netCashFlowMinor.formatSignedVisibleMoney(currencySymbol),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
                 color = summary.netFlowColor(),
@@ -153,13 +155,13 @@ private fun DashboardCurrencySection(
             InlineMetric(
                 modifier = Modifier.weight(1f),
                 label = "Ingresos",
-                value = "+ $currencySymbol ${summary.totalIncomeMinor.formatMinorAmount()}",
+                value = "+ ${summary.totalIncomeMinor.formatVisibleMoney(currencySymbol)}",
                 valueColor = financePositiveColor(),
             )
             InlineMetric(
                 modifier = Modifier.weight(1f),
                 label = "Egresos",
-                value = "- $currencySymbol ${summary.totalExpenseMinor.formatMinorAmount()}",
+                value = "- ${summary.totalExpenseMinor.formatVisibleMoney(currencySymbol)}",
                 valueColor = financeNegativeColor(),
                 horizontalAlignment = Alignment.End,
             )
@@ -266,7 +268,7 @@ private fun ExpenseBreakdownSection(
                 modifier = Modifier
                     .padding(start = 16.dp)
                     .widthIn(min = SummaryAmountMinWidth),
-                text = "$currencySymbol ${summary.totalExpenseMinor.formatMinorAmount()}",
+                text = summary.totalExpenseMinor.formatVisibleMoney(currencySymbol),
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.SemiBold,
                 textAlign = TextAlign.End,
@@ -277,15 +279,15 @@ private fun ExpenseBreakdownSection(
         ) {
             SummaryLine(
                 label = "Costos fijos",
-                value = "$currencySymbol ${breakdown.fixedCostMinor.formatMinorAmount()}",
+                value = breakdown.fixedCostMinor.formatVisibleMoney(currencySymbol),
             )
             SummaryLine(
                 label = "Mantenimiento",
-                value = "$currencySymbol ${breakdown.maintenanceMinor.formatMinorAmount()}",
+                value = breakdown.maintenanceMinor.formatVisibleMoney(currencySymbol),
             )
             SummaryLine(
                 label = "Otros",
-                value = "$currencySymbol ${breakdown.otherMinor.formatMinorAmount()}",
+                value = breakdown.otherMinor.formatVisibleMoney(currencySymbol),
             )
         }
         if (breakdown.hasFixedCostDetails()) {
@@ -328,7 +330,7 @@ private fun FixedCostDetailLine(
 
     SummaryLine(
         label = label,
-        value = "$currencySymbol ${value.formatMinorAmount()}",
+        value = value.formatVisibleMoney(currencySymbol),
         compact = true,
         indented = true,
     )
@@ -426,7 +428,7 @@ private fun RecentMovementRow(movement: Movement) {
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = "${movement.date.format(visibleDateFormatter)} · ${movement.categoryLabel()}",
+                text = "${movement.date.formatVisibleDate()} · ${movement.categoryLabel()}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -487,7 +489,7 @@ private fun Movement.formattedSignedAmount(): String {
         MovementType.INCOME -> "+"
         MovementType.EXPENSE -> "-"
     }
-    return "$sign ${currency.symbol()} ${amountMinor.formatMinorAmount()}"
+    return "$sign ${amountMinor.formatVisibleMoney(currency.symbol())}"
 }
 
 private fun Currency.symbol(): String {
@@ -518,18 +520,6 @@ private fun ExpenseBreakdown.hasFixedCostDetails(): Boolean {
     return waterMinor > 0L || electricityMinor > 0L || internetMinor > 0L
 }
 
-private fun Long.formatMinorAmount(): String {
-    val absoluteAmount = kotlin.math.abs(this)
-    val whole = absoluteAmount / 100L
-    val cents = absoluteAmount % 100L
-    return "$whole.${cents.toString().padStart(2, '0')}"
-}
-
-private fun Long.formatSignedAmount(currencySymbol: String): String {
-    val sign = if (this < 0L) "-" else "+"
-    return "$sign $currencySymbol ${formatMinorAmount()}"
-}
-
 private fun YearMonth.toSpanishMonthLabel(): String {
     val month = when (monthValue) {
         1 -> "Enero"
@@ -547,8 +537,6 @@ private fun YearMonth.toSpanishMonthLabel(): String {
     }
     return "$month $year"
 }
-
-private val visibleDateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yy")
 
 private val HomeHorizontalPadding = 20.dp
 private val HomeBottomPadding = 128.dp

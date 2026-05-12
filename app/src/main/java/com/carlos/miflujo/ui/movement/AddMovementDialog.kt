@@ -39,9 +39,9 @@ import com.carlos.miflujo.domain.model.Movement
 import com.carlos.miflujo.domain.model.MovementCategory
 import com.carlos.miflujo.domain.model.MovementSubcategory
 import com.carlos.miflujo.domain.model.MovementType
+import com.carlos.miflujo.ui.formatVisibleDate
 import java.time.DateTimeException
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 
 @Composable
 fun AddMovementDialog(
@@ -50,9 +50,9 @@ fun AddMovementDialog(
     onSubmit: (AddMovementInput) -> Unit,
 ) {
     val formStateKey = initialMovement?.id
-    val initialDate = (initialMovement?.date ?: LocalDate.now()).format(formDateFormatter)
+    val initialDate = (initialMovement?.date ?: LocalDate.now()).formatVisibleDate()
     val dialogTitle = if (initialMovement == null) "Agregar movimiento" else "Editar movimiento"
-    val confirmText = if (initialMovement == null) "Continuar" else "Guardar"
+    val confirmText = "Guardar"
     var movementType by rememberSaveable(formStateKey) {
         mutableStateOf(initialMovement?.type)
     }
@@ -352,11 +352,11 @@ private fun AddMovementFormContent(
                     Text(text = "Detalle")
                 },
                 placeholder = {
-                    Text(text = "Opcional, recomendado")
+                    Text(text = "Ej.: pago de luz, venta del día")
                 },
                 minLines = 2,
                 supportingText = {
-                    Text(text = "Puede dejarlo vacío si no aplica.")
+                    Text(text = "Opcional, pero ayuda a recordar el movimiento.")
                 },
             )
         }
@@ -675,5 +675,3 @@ private fun Currency.amountPrefix(): String {
         Currency.DOLLAR -> "US$"
     }
 }
-
-private val formDateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yy")

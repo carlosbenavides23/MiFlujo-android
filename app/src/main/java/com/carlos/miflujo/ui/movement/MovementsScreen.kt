@@ -30,12 +30,11 @@ import com.carlos.miflujo.domain.model.Movement
 import com.carlos.miflujo.domain.model.MovementCategory
 import com.carlos.miflujo.domain.model.MovementSubcategory
 import com.carlos.miflujo.domain.model.MovementType
+import com.carlos.miflujo.ui.formatVisibleDate
+import com.carlos.miflujo.ui.formatVisibleMoney
 import com.carlos.miflujo.ui.theme.financeNegativeColor
 import com.carlos.miflujo.ui.theme.financePositiveColor
 import java.time.YearMonth
-import java.time.format.DateTimeFormatter
-
-private val movementDateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yy")
 
 @Composable
 fun MovementsScreen(
@@ -218,7 +217,7 @@ private fun MovementRow(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
-                    text = movement.date.format(movementDateFormatter),
+                    text = movement.date.formatVisibleDate(),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -284,7 +283,7 @@ private fun MovementDetailDialog(
             ) {
                 DetailLine(label = "Tipo", value = movement.typeLabel())
                 DetailLine(label = "Monto", value = movement.formattedSignedAmount())
-                DetailLine(label = "Fecha", value = movement.date.format(movementDateFormatter))
+                DetailLine(label = "Fecha", value = movement.date.formatVisibleDate())
                 DetailLine(label = "Detalle", value = movement.detail.orEmpty().ifBlank { "Sin detalle" })
                 DetailLine(label = "Clasificación", value = movement.categoryLabel())
             }
@@ -325,7 +324,7 @@ private fun DeleteMovementConfirmationDialog(
         },
         text = {
             Text(
-                text = "Esta acción eliminará ${movement.formattedSignedAmount()} del ${movement.date.format(movementDateFormatter)}.",
+                text = "Esta acción eliminará ${movement.formattedSignedAmount()} del ${movement.date.formatVisibleDate()}.",
             )
         },
         confirmButton = {
@@ -372,7 +371,7 @@ private fun Movement.formattedSignedAmount(): String {
         MovementType.INCOME -> "+"
         MovementType.EXPENSE -> "-"
     }
-    return "$sign ${currency.symbol()} ${amountMinor.formatMinorAmount()}"
+    return "$sign ${amountMinor.formatVisibleMoney(currency.symbol())}"
 }
 
 private fun Movement.typeLabel(): String {
@@ -404,12 +403,6 @@ private fun MovementSubcategory.label(): String {
         MovementSubcategory.ELECTRICITY -> "Luz"
         MovementSubcategory.INTERNET -> "Internet"
     }
-}
-
-private fun Long.formatMinorAmount(): String {
-    val whole = this / 100L
-    val cents = this % 100L
-    return "$whole.${cents.toString().padStart(2, '0')}"
 }
 
 private fun YearMonth.toSpanishMonthLabel(): String {
