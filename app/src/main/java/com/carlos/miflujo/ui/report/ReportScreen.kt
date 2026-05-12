@@ -20,8 +20,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.carlos.miflujo.domain.model.Currency
 import com.carlos.miflujo.domain.model.CurrencySummary
 import com.carlos.miflujo.domain.model.ExpenseBreakdown
+import com.carlos.miflujo.domain.model.Movement
+import com.carlos.miflujo.domain.model.MovementCategory
+import com.carlos.miflujo.domain.model.MovementSubcategory
+import com.carlos.miflujo.domain.model.MovementType
+import com.carlos.miflujo.ui.formatVisibleDate
 import com.carlos.miflujo.ui.formatSignedVisibleMoney
 import com.carlos.miflujo.ui.formatVisibleMoney
 import com.carlos.miflujo.ui.theme.financeNegativeColor
@@ -60,6 +66,7 @@ fun ReportScreen(
             cordoba = uiState.report.cordoba,
             dollar = uiState.report.dollar,
         )
+        MonthlyMovementsCard(movements = uiState.movements)
     }
 }
 
@@ -306,6 +313,96 @@ private fun ExpenseDetailCurrencySection(
 }
 
 @Composable
+private fun MonthlyMovementsCard(
+    movements: List<Movement>,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = "Movimientos del mes",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+            )
+            if (movements.isEmpty()) {
+                Text(
+                    text = "Sin movimientos registrados para este mes.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                Column {
+                    movements.forEachIndexed { index, movement ->
+                        if (index > 0) {
+                            HorizontalDivider()
+                        }
+                        MonthlyMovementRow(movement = movement)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MonthlyMovementRow(
+    movement: Movement,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top,
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = movement.date.formatVisibleDate(),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = movement.typeLabel(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Text(
+                modifier = Modifier
+                    .padding(start = 16.dp)
+                    .widthIn(min = ReportAmountMinWidth),
+                text = movement.formattedSignedAmount(),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = movement.amountColor(),
+                textAlign = TextAlign.End,
+            )
+        }
+        Text(
+            text = movement.detail.orEmpty().ifBlank { "Sin detalle" },
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Medium,
+        )
+        Text(
+            text = movement.categoryLabel(),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
 private fun StatementLine(
     label: String,
     value: String,
@@ -394,6 +491,54 @@ private fun ExpenseBreakdown.isZero(): Boolean {
         waterMinor == 0L &&
         electricityMinor == 0L &&
         internetMinor == 0L
+}
+
+@Composable
+private fun Movement.amountColor() = when (type) {
+    MovementType.INCOME -> financePositiveColor()
+    MovementType.EXPENSE -> financeNegativeColor()
+}
+
+private fun Movement.formattedSignedAmount(): String {
+    return signedAmountMinor().formatSignedVisibleMoney(currency.symbol())
+}
+
+private fun Movement.signedAmountMinor(): Long {
+    return when (type) {
+        MovementType.INCOME -> amountMinor
+        MovementType.EXPENSE -> -amountMinor
+    }
+}
+
+private fun Movement.typeLabel(): String {
+    return when (type) {
+        MovementType.INCOME -> "Ingreso"
+        MovementType.EXPENSE -> "Egreso"
+    }
+}
+
+private fun Movement.categoryLabel(): String {
+    return when (category) {
+        MovementCategory.GENERAL_INCOME -> "Ingreso"
+        MovementCategory.FIXED_COST -> "Costo fijo${subcategory?.let { " · ${it.label()}" }.orEmpty()}"
+        MovementCategory.MAINTENANCE -> "Mantenimiento"
+        MovementCategory.OTHER -> "Otros"
+    }
+}
+
+private fun Currency.symbol(): String {
+    return when (this) {
+        Currency.CORDOBA -> "C$"
+        Currency.DOLLAR -> "US$"
+    }
+}
+
+private fun MovementSubcategory.label(): String {
+    return when (this) {
+        MovementSubcategory.WATER -> "Agua"
+        MovementSubcategory.ELECTRICITY -> "Luz"
+        MovementSubcategory.INTERNET -> "Internet"
+    }
 }
 
 private fun YearMonth.toSpanishMonthLabel(): String {
