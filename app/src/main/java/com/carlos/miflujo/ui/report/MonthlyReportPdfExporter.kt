@@ -12,7 +12,6 @@ import android.widget.Toast
 import androidx.core.content.FileProvider
 import com.carlos.miflujo.domain.model.Currency
 import com.carlos.miflujo.domain.model.CurrencySummary
-import com.carlos.miflujo.domain.model.ExpenseBreakdown
 import com.carlos.miflujo.domain.model.Movement
 import com.carlos.miflujo.domain.model.MovementCategory
 import com.carlos.miflujo.domain.model.MovementSubcategory
@@ -92,21 +91,25 @@ private class MonthlyReportPdfWriter(
 ) {
     private val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.rgb(25, 34, 45)
-        textSize = 20f
+        textSize = 24f
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+    }
+    private val monthPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(82, 94, 108)
+        textSize = 9f
     }
     private val sectionPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.rgb(25, 34, 45)
-        textSize = 13f
+        textSize = 12f
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
     }
     private val bodyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.rgb(36, 45, 56)
-        textSize = 9.5f
+        textSize = 8.2f
     }
     private val tableHeaderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.rgb(25, 34, 45)
-        textSize = 9f
+        textSize = 8.2f
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
     }
     private val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -120,6 +123,10 @@ private class MonthlyReportPdfWriter(
     }
     private val rowFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.rgb(250, 252, 255)
+        style = Paint.Style.FILL
+    }
+    private val whiteFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
         style = Paint.Style.FILL
     }
 
@@ -140,9 +147,9 @@ private class MonthlyReportPdfWriter(
 
     private fun drawTitle(selectedMonth: YearMonth) {
         canvas.drawText("MiFlujo - Reporte mensual", PageMargin, y, titlePaint)
-        y += 22f
-        canvas.drawText("Mes: ${selectedMonth.toSpanishMonthLabel()}", PageMargin, y, bodyPaint)
-        y += 24f
+        y += 18f
+        canvas.drawText(selectedMonth.toSpanishMonthLabel(), PageMargin, y, monthPaint)
+        y += 14f
     }
 
     private fun drawSummary(uiState: ReportUiState) {
@@ -198,15 +205,16 @@ private class MonthlyReportPdfWriter(
         }
 
         drawTable(
-            headers = listOf("Fecha", "Tipo", "Categoria", "Detalle", "Moneda", "Monto"),
+            headers = listOf("Fecha", "Tipo", "Categoría", "Detalle", "Moneda", "Monto"),
             rows = rows,
-            weights = floatArrayOf(0.8f, 0.8f, 1.35f, 3.25f, 0.75f, 1.45f),
+            weights = floatArrayOf(0.78f, 0.78f, 1.45f, 3.15f, 0.72f, 1.48f),
             rightAlignedColumns = setOf(5),
         )
     }
 
     private fun drawSectionTitle(text: String) {
-        ensureSpace(SectionTitleHeight)
+        y += SectionTopSpacing
+        ensureSpace(SectionTitleHeight + RowHeight)
         canvas.drawText(text, PageMargin, y, sectionPaint)
         y += SectionTitleHeight
     }
@@ -224,17 +232,19 @@ private class MonthlyReportPdfWriter(
             widths = widths,
             yTop = y,
             fillHeader = true,
+            rowIndex = -1,
             rightAlignedColumns = emptySet(),
         )
         y += RowHeight
 
-        rows.forEach { row ->
+        rows.forEachIndexed { rowIndex, row ->
             ensureSpace(RowHeight * 2)
             drawRow(
                 values = row,
                 widths = widths,
                 yTop = y,
                 fillHeader = false,
+                rowIndex = rowIndex,
                 rightAlignedColumns = rightAlignedColumns,
             )
             y += RowHeight
@@ -247,20 +257,26 @@ private class MonthlyReportPdfWriter(
         widths: FloatArray,
         yTop: Float,
         fillHeader: Boolean,
+        rowIndex: Int,
         rightAlignedColumns: Set<Int>,
     ) {
         var x = PageMargin
         val paint = if (fillHeader) tableHeaderPaint else bodyPaint
+        val rowPaint = when {
+            fillHeader -> headerFillPaint
+            rowIndex % 2 == 0 -> rowFillPaint
+            else -> whiteFillPaint
+        }
+
+        canvas.drawRect(
+            PageMargin,
+            yTop,
+            PageWidth - PageMargin,
+            yTop + RowHeight,
+            rowPaint,
+        )
 
         widths.forEachIndexed { index, width ->
-            val fillPaint = if (fillHeader || index % 2 == 0) {
-                if (fillHeader) headerFillPaint else rowFillPaint
-            } else {
-                null
-            }
-            fillPaint?.let {
-                canvas.drawRect(x, yTop, x + width, yTop + RowHeight, it)
-            }
             canvas.drawRect(x, yTop, x + width, yTop + RowHeight, gridPaint)
 
             val rawText = values.getOrNull(index).orEmpty()
@@ -300,7 +316,7 @@ private class MonthlyReportPdfWriter(
     }
 
     private fun finishPage() {
-        canvas.drawText("Pagina $pageNumber", PageWidth - PageMargin - 48f, PageHeight - 18f, bodyPaint)
+        canvas.drawText("Página $pageNumber", PageWidth - PageMargin - 48f, PageHeight - 18f, bodyPaint)
         pdfDocument.finishPage(page)
     }
 }
@@ -351,7 +367,7 @@ private fun MovementType.label(): String {
 private fun Movement.categoryLabel(): String {
     return when (category) {
         MovementCategory.GENERAL_INCOME -> "Ingreso"
-        MovementCategory.FIXED_COST -> "Costo fijo${subcategory?.let { " - ${it.label()}" }.orEmpty()}"
+        MovementCategory.FIXED_COST -> "Costo fijo${subcategory?.let { " / ${it.label()}" }.orEmpty()}"
         MovementCategory.MAINTENANCE -> "Mantenimiento"
         MovementCategory.OTHER -> "Otros"
     }
@@ -412,8 +428,9 @@ private const val SHARED_REPORTS_DIRECTORY = "shared_reports"
 private const val PageWidth = 842f
 private const val PageHeight = 595f
 private const val PageMargin = 28f
-private const val RowHeight = 22f
-private const val RowTextBaseline = 14.5f
-private const val CellPadding = 4f
-private const val SectionTitleHeight = 22f
-private const val TableBottomSpacing = 12f
+private const val RowHeight = 17f
+private const val RowTextBaseline = 11.5f
+private const val CellPadding = 5f
+private const val SectionTopSpacing = 7f
+private const val SectionTitleHeight = 15f
+private const val TableBottomSpacing = 5f
