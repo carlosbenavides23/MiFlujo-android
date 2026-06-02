@@ -91,25 +91,25 @@ private class MonthlyReportPdfWriter(
 ) {
     private val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.rgb(25, 34, 45)
-        textSize = 24f
+        textSize = 25f
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
     }
     private val monthPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.rgb(82, 94, 108)
-        textSize = 9f
+        textSize = 10f
     }
     private val sectionPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.rgb(25, 34, 45)
-        textSize = 12f
+        textSize = 13f
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
     }
     private val bodyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.rgb(36, 45, 56)
-        textSize = 8.2f
+        textSize = 9f
     }
     private val tableHeaderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.rgb(25, 34, 45)
-        textSize = 8.2f
+        textSize = 8.8f
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
     }
     private val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -118,7 +118,7 @@ private class MonthlyReportPdfWriter(
         style = Paint.Style.STROKE
     }
     private val headerFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.rgb(232, 238, 246)
+        color = Color.rgb(226, 234, 244)
         style = Paint.Style.FILL
     }
     private val rowFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -207,7 +207,7 @@ private class MonthlyReportPdfWriter(
         drawTable(
             headers = listOf("Fecha", "Tipo", "Categoría", "Detalle", "Moneda", "Monto"),
             rows = rows,
-            weights = floatArrayOf(0.78f, 0.78f, 1.45f, 3.15f, 0.72f, 1.48f),
+            weights = floatArrayOf(0.8f, 0.78f, 1.55f, 3.35f, 0.7f, 1.55f),
             rightAlignedColumns = setOf(5),
         )
     }
@@ -428,9 +428,9 @@ private const val SHARED_REPORTS_DIRECTORY = "shared_reports"
 private const val PageWidth = 842f
 private const val PageHeight = 595f
 private const val PageMargin = 28f
-private const val RowHeight = 17f
-private const val RowTextBaseline = 11.5f
+private const val RowHeight = 20f
+private const val RowTextBaseline = 13.5f
 private const val CellPadding = 5f
-private const val SectionTopSpacing = 7f
-private const val SectionTitleHeight = 15f
-private const val TableBottomSpacing = 5f
+private const val SectionTopSpacing = 10f
+private const val SectionTitleHeight = 17f
+private const val TableBottomSpacing = 6f
