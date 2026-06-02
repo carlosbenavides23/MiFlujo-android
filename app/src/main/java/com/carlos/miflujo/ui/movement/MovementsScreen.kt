@@ -15,12 +15,14 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -51,6 +53,11 @@ fun MovementsScreen(
     var selectedMovement by remember { mutableStateOf<Movement?>(null) }
     var movementPendingEdit by remember { mutableStateOf<Movement?>(null) }
     var movementPendingDelete by remember { mutableStateOf<Movement?>(null) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    val searchedMovements = remember(uiState.movements, searchQuery) {
+        uiState.movements.filterBySearch(searchQuery)
+    }
+    val hasSearchQuery = searchQuery.trim().isNotEmpty()
 
     LazyColumn(
         modifier = modifier
@@ -80,19 +87,31 @@ fun MovementsScreen(
         }
 
         item {
+            MovementSearchField(
+                query = searchQuery,
+                onQueryChange = { searchQuery = it },
+                onClearQuery = { searchQuery = "" },
+            )
+        }
+
+        item {
             MovementFilters(
                 selectedFilter = uiState.selectedFilter,
                 onFilterSelected = onFilterSelected,
             )
         }
 
-        if (uiState.movements.isEmpty()) {
+        if (searchedMovements.isEmpty()) {
             item {
-                EmptyMovementsCard()
+                if (hasSearchQuery) {
+                    EmptySearchResultsCard()
+                } else {
+                    EmptyMovementsCard()
+                }
             }
         } else {
             items(
-                items = uiState.movements,
+                items = searchedMovements,
                 key = { it.id },
             ) { movement ->
                 MovementRow(
@@ -177,6 +196,33 @@ private fun MonthSelector(
             }
         }
     }
+}
+
+@Composable
+private fun MovementSearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onClearQuery: () -> Unit,
+) {
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        modifier = Modifier.fillMaxWidth(),
+        label = {
+            Text(text = "Buscar movimientos")
+        },
+        placeholder = {
+            Text(text = "Detalle o categoría")
+        },
+        singleLine = true,
+        trailingIcon = {
+            if (query.isNotBlank()) {
+                TextButton(onClick = onClearQuery) {
+                    Text(text = "Limpiar")
+                }
+            }
+        },
+    )
 }
 
 @Composable
@@ -279,6 +325,29 @@ private fun EmptyMovementsCard() {
 }
 
 @Composable
+private fun EmptySearchResultsCard() {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = "No hay resultados",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Medium,
+            )
+            Text(
+                text = "Revise la búsqueda o cambie el filtro para encontrar otros movimientos.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
 private fun MovementDetailDialog(
     movement: Movement,
     onDismissRequest: () -> Unit,
@@ -372,6 +441,16 @@ private fun DetailLine(
             maxLines = 3,
             overflow = TextOverflow.Ellipsis,
         )
+    }
+}
+
+private fun List<Movement>.filterBySearch(query: String): List<Movement> {
+    val normalizedQuery = query.trim()
+    if (normalizedQuery.isEmpty()) return this
+
+    return filter { movement ->
+        movement.detail.orEmpty().contains(normalizedQuery, ignoreCase = true) ||
+            movement.categoryLabel().contains(normalizedQuery, ignoreCase = true)
     }
 }
 
