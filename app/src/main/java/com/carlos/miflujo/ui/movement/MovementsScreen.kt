@@ -122,6 +122,7 @@ fun MovementsScreen(
         item {
             MovementSearchField(
                 query = searchQuery,
+                resultCount = searchedMovements.size,
                 onQueryChange = { searchQuery = it },
                 onClearQuery = { searchQuery = "" },
                 onSearchAction = { focusManager.clearFocus() },
@@ -238,37 +239,68 @@ private fun MonthSelector(
 @Composable
 private fun MovementSearchField(
     query: String,
+    resultCount: Int,
     onQueryChange: (String) -> Unit,
     onClearQuery: () -> Unit,
     onSearchAction: () -> Unit,
     onSearchFieldPositioned: (LayoutCoordinates) -> Unit,
 ) {
-    OutlinedTextField(
-        value = query,
-        onValueChange = onQueryChange,
-        modifier = Modifier
-            .fillMaxWidth()
-            .onGloballyPositioned(onSearchFieldPositioned),
-        label = {
-            Text(text = "Buscar movimientos")
-        },
-        placeholder = {
-            Text(text = "Detalle o categoría")
-        },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-        keyboardActions = KeyboardActions(
-            onSearch = {
-                onSearchAction()
+    Column(
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        OutlinedTextField(
+            value = query,
+            onValueChange = onQueryChange,
+            modifier = Modifier
+                .fillMaxWidth()
+                .onGloballyPositioned(onSearchFieldPositioned),
+            label = {
+                Text(text = "Buscar movimientos")
             },
-        ),
-        trailingIcon = {
-            if (query.isNotBlank()) {
-                TextButton(onClick = onClearQuery) {
-                    Text(text = "Limpiar")
+            placeholder = {
+                Text(text = "Detalle o categoría")
+            },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(
+                onSearch = {
+                    onSearchAction()
+                },
+                onDone = {
+                    onSearchAction()
+                },
+            ),
+            trailingIcon = {
+                if (query.isNotBlank()) {
+                    TextButton(onClick = onClearQuery) {
+                        Text(text = "Limpiar")
+                    }
                 }
-            }
-        },
+            },
+        )
+        if (query.trim().isNotEmpty()) {
+            SearchFeedbackText(resultCount = resultCount)
+        }
+    }
+}
+
+@Composable
+private fun SearchFeedbackText(
+    resultCount: Int,
+) {
+    val text = when (resultCount) {
+        0 -> "No se encontraron movimientos."
+        1 -> "1 resultado encontrado"
+        else -> "$resultCount resultados encontrados"
+    }
+
+    Text(
+        modifier = Modifier.padding(start = 16.dp),
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
     )
 }
 
