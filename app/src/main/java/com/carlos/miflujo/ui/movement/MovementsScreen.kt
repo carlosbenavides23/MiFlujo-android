@@ -1,6 +1,9 @@
 package com.carlos.miflujo.ui.movement
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -10,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -25,7 +30,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -54,6 +67,9 @@ fun MovementsScreen(
     var movementPendingEdit by remember { mutableStateOf<Movement?>(null) }
     var movementPendingDelete by remember { mutableStateOf<Movement?>(null) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
+    var listCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    var searchFieldBounds by remember { mutableStateOf<Rect?>(null) }
+    val focusManager = LocalFocusManager.current
     val searchedMovements = remember(uiState.movements, searchQuery) {
         uiState.movements.filterBySearch(searchQuery)
     }
@@ -61,7 +77,24 @@ fun MovementsScreen(
 
     LazyColumn(
         modifier = modifier
-            .fillMaxSize(),
+            .fillMaxSize()
+            .onGloballyPositioned { coordinates ->
+                listCoordinates = coordinates
+            }
+            .pointerInput(listCoordinates, searchFieldBounds) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(pass = PointerEventPass.Initial)
+                    val touchPosition = listCoordinates?.localToRoot(down.position)
+                    val isSearchFieldTap = touchPosition?.let { position ->
+                        searchFieldBounds?.contains(position)
+                    } ?: false
+
+                    if (!isSearchFieldTap) {
+                        focusManager.clearFocus()
+                    }
+                    waitForUpOrCancellation(pass = PointerEventPass.Initial)
+                }
+            },
         contentPadding = PaddingValues(
             start = 20.dp,
             top = 20.dp,
@@ -91,6 +124,10 @@ fun MovementsScreen(
                 query = searchQuery,
                 onQueryChange = { searchQuery = it },
                 onClearQuery = { searchQuery = "" },
+                onSearchAction = { focusManager.clearFocus() },
+                onSearchFieldPositioned = { coordinates ->
+                    searchFieldBounds = coordinates.boundsInRoot()
+                },
             )
         }
 
@@ -203,11 +240,15 @@ private fun MovementSearchField(
     query: String,
     onQueryChange: (String) -> Unit,
     onClearQuery: () -> Unit,
+    onSearchAction: () -> Unit,
+    onSearchFieldPositioned: (LayoutCoordinates) -> Unit,
 ) {
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChange,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .onGloballyPositioned(onSearchFieldPositioned),
         label = {
             Text(text = "Buscar movimientos")
         },
@@ -215,6 +256,12 @@ private fun MovementSearchField(
             Text(text = "Detalle o categoría")
         },
         singleLine = true,
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(
+            onSearch = {
+                onSearchAction()
+            },
+        ),
         trailingIcon = {
             if (query.isNotBlank()) {
                 TextButton(onClick = onClearQuery) {
