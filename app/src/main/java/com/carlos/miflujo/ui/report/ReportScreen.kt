@@ -62,6 +62,7 @@ fun ReportScreen(
             cordoba = uiState.report.cordoba,
             dollar = uiState.report.dollar,
         )
+        MonthlyActivityCard(movements = uiState.movements)
         ExpenseDetailCard(
             cordoba = uiState.report.cordoba,
             dollar = uiState.report.dollar,
@@ -313,6 +314,40 @@ private fun ExpenseDetailCurrencySection(
 }
 
 @Composable
+private fun MonthlyActivityCard(
+    movements: List<Movement>,
+) {
+    val totalMovements = movements.size
+    val incomeMovements = movements.count { it.type == MovementType.INCOME }
+    val expenseMovements = movements.count { it.type == MovementType.EXPENSE }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = "Actividad del mes",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = totalMovements.movementCountLabel(),
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+            )
+            Text(
+                text = "${incomeMovements.incomeCountLabel()} · ${expenseMovements.expenseCountLabel()}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
 private fun MonthlyMovementsCard(
     movements: List<Movement>,
 ) {
@@ -486,6 +521,18 @@ private fun ExpenseBreakdown.isZero(): Boolean {
         waterMinor == 0L &&
         electricityMinor == 0L &&
         internetMinor == 0L
+}
+
+private fun Int.movementCountLabel(): String {
+    return "$this ${if (this == 1) "movimiento" else "movimientos"}"
+}
+
+private fun Int.incomeCountLabel(): String {
+    return "$this ${if (this == 1) "ingreso" else "ingresos"}"
+}
+
+private fun Int.expenseCountLabel(): String {
+    return "$this ${if (this == 1) "egreso" else "egresos"}"
 }
 
 @Composable
