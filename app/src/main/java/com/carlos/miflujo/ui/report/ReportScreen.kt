@@ -8,14 +8,19 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Card
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -41,6 +46,8 @@ fun ReportScreen(
     onNextMonth: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -58,6 +65,14 @@ fun ReportScreen(
             onPreviousMonth = onPreviousMonth,
             onNextMonth = onNextMonth,
         )
+        ShareReportButton(
+            onClick = {
+                shareMonthlyReportPdf(
+                    context = context,
+                    uiState = uiState,
+                )
+            },
+        )
         MonthlyFlowStatementCard(
             cordoba = uiState.report.cordoba,
             dollar = uiState.report.dollar,
@@ -68,6 +83,25 @@ fun ReportScreen(
             dollar = uiState.report.dollar,
         )
         MonthlyMovementsCard(movements = uiState.movements)
+    }
+}
+
+@Composable
+private fun ShareReportButton(
+    onClick: () -> Unit,
+) {
+    FilledTonalButton(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onClick,
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Share,
+            contentDescription = null,
+        )
+        Text(
+            modifier = Modifier.padding(start = 8.dp),
+            text = "Compartir reporte",
+        )
     }
 }
 
