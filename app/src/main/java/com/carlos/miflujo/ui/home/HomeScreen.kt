@@ -7,8 +7,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
@@ -139,13 +137,15 @@ private fun DashboardCurrencySection(
             )
             Text(
                 modifier = Modifier
-                    .padding(start = 16.dp)
-                    .widthIn(min = NetAmountMinWidth),
+                    .weight(1.35f)
+                    .padding(start = 16.dp),
                 text = summary.netCashFlowMinor.formatSignedVisibleMoney(currencySymbol),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
                 color = summary.netFlowColor(),
                 textAlign = TextAlign.End,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
         Row(
@@ -197,6 +197,8 @@ private fun InlineMetric(
             } else {
                 TextAlign.Start
             },
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -266,12 +268,14 @@ private fun ExpenseBreakdownSection(
             }
             Text(
                 modifier = Modifier
-                    .padding(start = 16.dp)
-                    .widthIn(min = SummaryAmountMinWidth),
+                    .weight(1.25f)
+                    .padding(start = 16.dp),
                 text = summary.totalExpenseMinor.formatVisibleMoney(currencySymbol),
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.SemiBold,
                 textAlign = TextAlign.End,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
         Column(
@@ -362,8 +366,8 @@ private fun SummaryLine(
         )
         Text(
             modifier = Modifier
-                .padding(start = 16.dp)
-                .widthIn(min = SummaryAmountMinWidth),
+                .weight(1.25f)
+                .padding(start = 16.dp),
             text = value,
             style = if (compact) {
                 MaterialTheme.typography.bodySmall
@@ -372,6 +376,8 @@ private fun SummaryLine(
             },
             fontWeight = FontWeight.SemiBold,
             textAlign = TextAlign.End,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -436,12 +442,14 @@ private fun RecentMovementRow(movement: Movement) {
             )
         }
         Text(
-            modifier = Modifier.width(116.dp),
+            modifier = Modifier.weight(1.05f),
             text = movement.formattedSignedAmount(),
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.SemiBold,
             color = movement.amountColor(),
             textAlign = TextAlign.End,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -540,5 +548,3 @@ private fun YearMonth.toSpanishMonthLabel(): String {
 
 private val HomeHorizontalPadding = 20.dp
 private val HomeBottomPadding = 128.dp
-private val NetAmountMinWidth = 128.dp
-private val SummaryAmountMinWidth = 112.dp
