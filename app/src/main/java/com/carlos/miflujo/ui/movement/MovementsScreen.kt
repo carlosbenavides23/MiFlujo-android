@@ -24,6 +24,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.carlos.miflujo.domain.model.Currency
 import com.carlos.miflujo.domain.model.Movement
@@ -217,26 +219,37 @@ private fun MovementRow(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
+                    modifier = Modifier.weight(1f),
                     text = movement.date.formatVisibleDate(),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
+                    modifier = Modifier
+                        .weight(1.35f)
+                        .padding(start = 16.dp),
                     text = movement.formattedSignedAmount(),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = movement.amountColor(),
+                    textAlign = TextAlign.End,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
             Text(
                 text = movement.detail.orEmpty().ifBlank { "Sin detalle" },
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = movement.categoryLabel(),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -356,6 +369,8 @@ private fun DetailLine(
         Text(
             text = value,
             style = MaterialTheme.typography.bodyLarge,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

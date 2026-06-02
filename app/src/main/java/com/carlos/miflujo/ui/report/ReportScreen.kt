@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
@@ -19,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.carlos.miflujo.domain.model.Currency
 import com.carlos.miflujo.domain.model.CurrencySummary
@@ -182,13 +182,15 @@ private fun CurrencyStatementSection(
             }
             Text(
                 modifier = Modifier
-                    .padding(start = 16.dp)
-                    .widthIn(min = ReportNetAmountMinWidth),
+                    .weight(1.35f)
+                    .padding(start = 16.dp),
                 text = summary.netCashFlowMinor.formatSignedVisibleMoney(currencySymbol),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
                 color = summary.netFlowColor(),
                 textAlign = TextAlign.End,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
         StatementLine(
@@ -260,13 +262,15 @@ private fun ExpenseDetailCurrencySection(
             )
             Text(
                 modifier = Modifier
-                    .padding(start = 16.dp)
-                    .widthIn(min = ReportAmountMinWidth),
+                    .weight(1.25f)
+                    .padding(start = 16.dp),
                 text = summary.totalExpenseMinor.formatVisibleMoney(currencySymbol),
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.SemiBold,
                 color = financeNegativeColor(),
                 textAlign = TextAlign.End,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
         Column(
@@ -415,19 +419,23 @@ private fun MonthlyMovementRow(
             }
             Text(
                 modifier = Modifier
-                    .padding(start = 16.dp)
-                    .widthIn(min = ReportAmountMinWidth),
+                    .weight(1.35f)
+                    .padding(start = 16.dp),
                 text = movement.formattedSignedAmount(),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = movement.amountColor(),
                 textAlign = TextAlign.End,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
         Text(
             text = movement.detail.orEmpty().ifBlank { "Sin detalle" },
             style = MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.Medium,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -451,13 +459,15 @@ private fun StatementLine(
         )
         Text(
             modifier = Modifier
-                .padding(start = 16.dp)
-                .widthIn(min = ReportAmountMinWidth),
+                .weight(1.25f)
+                .padding(start = 16.dp),
             text = value,
             style = MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.SemiBold,
             color = valueColor,
             textAlign = TextAlign.End,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -483,12 +493,14 @@ private fun BreakdownLine(
         )
         Text(
             modifier = Modifier
-                .padding(start = 16.dp)
-                .widthIn(min = ReportAmountMinWidth),
+                .weight(1.25f)
+                .padding(start = 16.dp),
             text = value,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,
             textAlign = TextAlign.End,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -607,6 +619,3 @@ private fun YearMonth.toSpanishMonthLabel(): String {
     }
     return "$month $year"
 }
-
-private val ReportAmountMinWidth = 112.dp
-private val ReportNetAmountMinWidth = 128.dp
