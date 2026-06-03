@@ -154,3 +154,13 @@ feature/nombre-de-la-tarea
 `dev` se usará para integración.
 
 Las ramas `feature/*` se usarán para tareas específicas.
+
+## 020 - Exportación PDF de reportes con HTML/WebView abandonada
+
+Se probó generar reportes PDF desde HTML y CSS renderizados en un `WebView`, pero el enfoque fue abandonado.
+
+La implementación se removió porque el renderizado fuera de pantalla de `WebView` produjo PDFs en blanco o recortados de forma no confiable.
+
+La siguiente implementación usará OpenPDF para generar tablas de forma determinista.
+
+No se usará dibujo manual con `Canvas`, `Paint`, `drawText` o `drawRect` para construir tablas del reporte.

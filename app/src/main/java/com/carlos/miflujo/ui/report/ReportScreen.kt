@@ -20,7 +20,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -46,8 +45,6 @@ fun ReportScreen(
     onNextMonth: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
-
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -66,12 +63,8 @@ fun ReportScreen(
             onNextMonth = onNextMonth,
         )
         ShareReportButton(
-            onClick = {
-                shareMonthlyReportPdf(
-                    context = context,
-                    uiState = uiState,
-                )
-            },
+            enabled = false,
+            onClick = {},
         )
         MonthlyFlowStatementCard(
             cordoba = uiState.report.cordoba,
@@ -88,10 +81,13 @@ fun ReportScreen(
 
 @Composable
 private fun ShareReportButton(
+    enabled: Boolean,
     onClick: () -> Unit,
 ) {
+    // TODO: Reimplement PDF export with OpenPDF.
     FilledTonalButton(
         modifier = Modifier.fillMaxWidth(),
+        enabled = enabled,
         onClick = onClick,
     ) {
         Icon(
