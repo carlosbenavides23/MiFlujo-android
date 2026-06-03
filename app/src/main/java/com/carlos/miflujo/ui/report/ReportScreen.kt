@@ -8,8 +8,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Card
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -39,6 +43,7 @@ fun ReportScreen(
     uiState: ReportUiState,
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
+    onShareReport: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -58,6 +63,11 @@ fun ReportScreen(
             onPreviousMonth = onPreviousMonth,
             onNextMonth = onNextMonth,
         )
+        ShareReportButton(
+            enabled = !uiState.isExportingReport,
+            isSharing = uiState.isExportingReport,
+            onClick = onShareReport,
+        )
         MonthlyFlowStatementCard(
             cordoba = uiState.report.cordoba,
             dollar = uiState.report.dollar,
@@ -68,6 +78,28 @@ fun ReportScreen(
             dollar = uiState.report.dollar,
         )
         MonthlyMovementsCard(movements = uiState.movements)
+    }
+}
+
+@Composable
+private fun ShareReportButton(
+    enabled: Boolean,
+    isSharing: Boolean,
+    onClick: () -> Unit,
+) {
+    FilledTonalButton(
+        modifier = Modifier.fillMaxWidth(),
+        enabled = enabled,
+        onClick = onClick,
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Share,
+            contentDescription = null,
+        )
+        Text(
+            modifier = Modifier.padding(start = 8.dp),
+            text = if (isSharing) "Preparando reporte" else "Compartir reporte",
+        )
     }
 }
 

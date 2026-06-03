@@ -2,6 +2,7 @@ package com.carlos.miflujo.ui
 
 import android.content.Context
 import android.content.ContextWrapper
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -105,6 +106,16 @@ fun MiFlujoApp() {
         movementViewModel.clearFeedback()
     }
 
+    LaunchedEffect(reportViewModel) {
+        reportViewModel.exportFeedbackEvents.collect { feedbackEvent ->
+            Toast.makeText(
+                context,
+                feedbackEvent.message,
+                Toast.LENGTH_LONG,
+            ).show()
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -180,6 +191,12 @@ fun MiFlujoApp() {
                     uiState = reportUiState,
                     onPreviousMonth = reportViewModel::goToPreviousMonth,
                     onNextMonth = reportViewModel::goToNextMonth,
+                    onShareReport = {
+                        reportViewModel.shareReport(
+                            context = context,
+                            uiState = reportUiState,
+                        )
+                    },
                 )
             }
         }
