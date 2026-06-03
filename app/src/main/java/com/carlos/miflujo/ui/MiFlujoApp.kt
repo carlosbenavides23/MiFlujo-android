@@ -9,12 +9,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -50,6 +53,7 @@ import com.carlos.miflujo.ui.movement.MovementsScreen
 import com.carlos.miflujo.ui.report.ReportScreen
 import com.carlos.miflujo.ui.report.ReportViewModel
 import com.carlos.miflujo.ui.report.ReportViewModelFactory
+import com.carlos.miflujo.ui.settings.SettingsScreen
 
 private enum class MainDestination(
     val label: String,
@@ -65,6 +69,7 @@ private enum class MainDestination(
 fun MiFlujoApp() {
     var selectedDestination by rememberSaveable { mutableStateOf(MainDestination.Home) }
     var showAddMovementDialog by rememberSaveable { mutableStateOf(false) }
+    var showSettings by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
     val activity = remember(context) { context.findComponentActivity() }
     val movementRepository = remember(context) {
@@ -119,37 +124,61 @@ fun MiFlujoApp() {
     Scaffold(
         topBar = {
             TopAppBar(
+                navigationIcon = {
+                    if (showSettings) {
+                        IconButton(onClick = { showSettings = false }) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Volver",
+                            )
+                        }
+                    }
+                },
                 title = {
                     Text(text = "MiFlujo")
+                },
+                actions = {
+                    if (!showSettings) {
+                        IconButton(onClick = { showSettings = true }) {
+                            Icon(
+                                imageVector = Icons.Filled.Settings,
+                                contentDescription = "Ajustes",
+                            )
+                        }
+                    }
                 },
             )
         },
         bottomBar = {
-            NavigationBar {
-                MainDestination.entries.forEach { destination ->
-                    NavigationBarItem(
-                        selected = selectedDestination == destination,
-                        onClick = { selectedDestination = destination },
-                        icon = {
-                            Icon(
-                                imageVector = destination.icon,
-                                contentDescription = destination.label,
-                            )
-                        },
-                        label = {
-                            Text(text = destination.label)
-                        },
-                    )
+            if (!showSettings) {
+                NavigationBar {
+                    MainDestination.entries.forEach { destination ->
+                        NavigationBarItem(
+                            selected = selectedDestination == destination,
+                            onClick = { selectedDestination = destination },
+                            icon = {
+                                Icon(
+                                    imageVector = destination.icon,
+                                    contentDescription = destination.label,
+                                )
+                            },
+                            label = {
+                                Text(text = destination.label)
+                            },
+                        )
+                    }
                 }
             }
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = {
-                    showAddMovementDialog = true
-                },
-            ) {
-                Text(text = "+ Agregar")
+            if (!showSettings) {
+                ExtendedFloatingActionButton(
+                    onClick = {
+                        showAddMovementDialog = true
+                    },
+                ) {
+                    Text(text = "+ Agregar")
+                }
             }
         },
         snackbarHost = {
@@ -177,27 +206,31 @@ fun MiFlujoApp() {
                 .fillMaxSize()
                 .padding(innerPadding),
         ) {
-            when (selectedDestination) {
-                MainDestination.Home -> HomeScreen(uiState = homeUiState)
-                MainDestination.Movements -> MovementsScreen(
-                    uiState = movementUiState,
-                    onPreviousMonth = movementViewModel::goToPreviousMonth,
-                    onNextMonth = movementViewModel::goToNextMonth,
-                    onFilterSelected = movementViewModel::selectFilter,
-                    onEditMovement = movementViewModel::updateMovement,
-                    onDeleteMovement = movementViewModel::deleteMovement,
-                )
-                MainDestination.Report -> ReportScreen(
-                    uiState = reportUiState,
-                    onPreviousMonth = reportViewModel::goToPreviousMonth,
-                    onNextMonth = reportViewModel::goToNextMonth,
-                    onShareReport = {
-                        reportViewModel.shareReport(
-                            context = context,
-                            uiState = reportUiState,
-                        )
-                    },
-                )
+            if (showSettings) {
+                SettingsScreen()
+            } else {
+                when (selectedDestination) {
+                    MainDestination.Home -> HomeScreen(uiState = homeUiState)
+                    MainDestination.Movements -> MovementsScreen(
+                        uiState = movementUiState,
+                        onPreviousMonth = movementViewModel::goToPreviousMonth,
+                        onNextMonth = movementViewModel::goToNextMonth,
+                        onFilterSelected = movementViewModel::selectFilter,
+                        onEditMovement = movementViewModel::updateMovement,
+                        onDeleteMovement = movementViewModel::deleteMovement,
+                    )
+                    MainDestination.Report -> ReportScreen(
+                        uiState = reportUiState,
+                        onPreviousMonth = reportViewModel::goToPreviousMonth,
+                        onNextMonth = reportViewModel::goToNextMonth,
+                        onShareReport = {
+                            reportViewModel.shareReport(
+                                context = context,
+                                uiState = reportUiState,
+                            )
+                        },
+                    )
+                }
             }
         }
     }
