@@ -43,6 +43,7 @@ fun ReportScreen(
     uiState: ReportUiState,
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
+    onShareReport: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -63,8 +64,9 @@ fun ReportScreen(
             onNextMonth = onNextMonth,
         )
         ShareReportButton(
-            enabled = false,
-            onClick = {},
+            enabled = !uiState.isExportingReport,
+            isSharing = uiState.isExportingReport,
+            onClick = onShareReport,
         )
         MonthlyFlowStatementCard(
             cordoba = uiState.report.cordoba,
@@ -82,9 +84,9 @@ fun ReportScreen(
 @Composable
 private fun ShareReportButton(
     enabled: Boolean,
+    isSharing: Boolean,
     onClick: () -> Unit,
 ) {
-    // TODO: Reimplement PDF export with Android PdfDocument.
     FilledTonalButton(
         modifier = Modifier.fillMaxWidth(),
         enabled = enabled,
@@ -96,7 +98,7 @@ private fun ShareReportButton(
         )
         Text(
             modifier = Modifier.padding(start = 8.dp),
-            text = "Compartir reporte",
+            text = if (isSharing) "Preparando reporte" else "Compartir reporte",
         )
     }
 }

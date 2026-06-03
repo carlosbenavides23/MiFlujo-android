@@ -165,8 +165,8 @@ También se probó OpenPDF, pero el intento fue abandonado porque la dependencia
 
 No se parcheará `java.awt` ni se usará OpenPDF para la exportación.
 
-La siguiente implementación usará `android.graphics.pdf.PdfDocument` nativo de Android.
+La exportación PDF usa `android.graphics.pdf.PdfDocument` nativo de Android.
 
-Antes de codificarla, el diseño del PDF debe definirse cuidadosamente para evitar volver a un layout frágil.
+El diseño del PDF es sobrio, profesional, basado en tablas y similar a una exportación de Excel.
 
 Esta función genera un reporte mensual legible para compartir o revisar fuera de la app. No implementa respaldo, restauración, nube, CSV ni XLSX.

@@ -1,15 +1,21 @@
 package com.carlos.miflujo.ui.report
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.carlos.miflujo.data.repository.MovementRepository
 import com.carlos.miflujo.domain.model.Movement
 import com.carlos.miflujo.domain.usecase.CalculateMonthlyCashFlowReportUseCase
+import com.carlos.miflujo.ui.report.export.ReportPdfExporter
 import java.time.YearMonth
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
@@ -21,17 +27,28 @@ class ReportViewModel(
 ) : ViewModel() {
     private val selectedMonth = MutableStateFlow(YearMonth.now())
     private val monthMovements = MutableStateFlow<List<Movement>>(emptyList())
+    private val isExportingReport = MutableStateFlow(false)
+    private val exportFeedback = MutableSharedFlow<ReportExportFeedback>(extraBufferCapacity = 1)
+    private var exportJob: Job? = null
 
     val uiState: StateFlow<ReportUiState> = combine(
         selectedMonth,
         monthMovements,
-    ) { month, movements ->
-        month.toUiState(movements)
+        isExportingReport,
+    ) { month, movements, isExporting ->
+        month.toUiState(
+            movements = movements,
+            isExportingReport = isExporting,
+        )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = selectedMonth.value.toUiState(emptyList()),
+        initialValue = selectedMonth.value.toUiState(
+            movements = emptyList(),
+            isExportingReport = false,
+        ),
     )
+    val exportFeedbackEvents: SharedFlow<ReportExportFeedback> = exportFeedback.asSharedFlow()
 
     init {
         viewModelScope.launch {
@@ -56,7 +73,32 @@ class ReportViewModel(
         selectedMonth.value = selectedMonth.value.plusMonths(1)
     }
 
-    private fun YearMonth.toUiState(movements: List<Movement>): ReportUiState {
+    fun shareReport(
+        context: Context,
+        uiState: ReportUiState,
+    ) {
+        if (exportJob?.isActive == true || isExportingReport.value) return
+
+        val reportSnapshot = uiState.copy(isExportingReport = false)
+        isExportingReport.value = true
+        exportJob = viewModelScope.launch {
+            try {
+                ReportPdfExporter.shareMonthlyReport(
+                    context = context,
+                    uiState = reportSnapshot,
+                )
+            } catch (exception: Exception) {
+                exportFeedback.tryEmit(ReportExportFeedback.ExportFailed)
+            } finally {
+                isExportingReport.value = false
+            }
+        }
+    }
+
+    private fun YearMonth.toUiState(
+        movements: List<Movement>,
+        isExportingReport: Boolean,
+    ): ReportUiState {
         return ReportUiState(
             selectedMonth = this,
             report = calculateMonthlyCashFlowReport(
@@ -64,8 +106,15 @@ class ReportViewModel(
                 month = this,
             ),
             movements = movements,
+            isExportingReport = isExportingReport,
         )
     }
+}
+
+sealed class ReportExportFeedback(
+    val message: String,
+) {
+    data object ExportFailed : ReportExportFeedback("No se pudo generar el reporte.")
 }
 
 class ReportViewModelFactory(

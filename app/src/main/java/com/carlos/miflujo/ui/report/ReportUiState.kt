@@ -8,4 +8,5 @@ data class ReportUiState(
     val selectedMonth: YearMonth,
     val report: MonthlyCashFlowReport,
     val movements: List<Movement>,
+    val isExportingReport: Boolean = false,
 )
