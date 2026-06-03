@@ -84,7 +84,7 @@ private fun ShareReportButton(
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
-    // TODO: Reimplement PDF export with OpenPDF.
+    // TODO: Reimplement PDF export with Android PdfDocument.
     FilledTonalButton(
         modifier = Modifier.fillMaxWidth(),
         enabled = enabled,

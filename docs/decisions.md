@@ -155,12 +155,18 @@ feature/nombre-de-la-tarea
 
 Las ramas `feature/*` se usarán para tareas específicas.
 
-## 020 - Exportación PDF de reportes con HTML/WebView abandonada
+## 020 - Exportación PDF de reportes
 
 Se probó generar reportes PDF desde HTML y CSS renderizados en un `WebView`, pero el enfoque fue abandonado.
 
 La implementación se removió porque el renderizado fuera de pantalla de `WebView` produjo PDFs en blanco o recortados de forma no confiable.
 
-La siguiente implementación usará OpenPDF para generar tablas de forma determinista.
+También se probó OpenPDF, pero el intento fue abandonado porque la dependencia falló en Android al cargar clases de `java.awt`, específicamente `java.awt.Color`.
 
-No se usará dibujo manual con `Canvas`, `Paint`, `drawText` o `drawRect` para construir tablas del reporte.
+No se parcheará `java.awt` ni se usará OpenPDF para la exportación.
+
+La siguiente implementación usará `android.graphics.pdf.PdfDocument` nativo de Android.
+
+Antes de codificarla, el diseño del PDF debe definirse cuidadosamente para evitar volver a un layout frágil.
+
+Esta función genera un reporte mensual legible para compartir o revisar fuera de la app. No implementa respaldo, restauración, nube, CSV ni XLSX.
