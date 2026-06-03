@@ -1,6 +1,7 @@
 package com.carlos.miflujo.ui.report
 
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -88,6 +89,7 @@ class ReportViewModel(
                     uiState = reportSnapshot,
                 )
             } catch (exception: Exception) {
+                Log.e(ReportExportLogTag, "PDF export failed", exception)
                 exportFeedback.tryEmit(ReportExportFeedback.ExportFailed)
             } finally {
                 isExportingReport.value = false
@@ -110,6 +112,8 @@ class ReportViewModel(
         )
     }
 }
+
+private const val ReportExportLogTag = "MiFlujoReportExport"
 
 sealed class ReportExportFeedback(
     val message: String,
