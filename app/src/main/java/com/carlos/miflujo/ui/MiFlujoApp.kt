@@ -4,6 +4,13 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -38,6 +45,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
@@ -99,6 +107,10 @@ fun MiFlujoApp() {
     val feedback by movementViewModel.feedback.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
+    BackHandler(enabled = showSettings) {
+        showSettings = false
+    }
+
     LaunchedEffect(feedback) {
         val currentFeedback = feedback ?: return@LaunchedEffect
         snackbarHostState.showSnackbar(
@@ -121,36 +133,24 @@ fun MiFlujoApp() {
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                navigationIcon = {
-                    if (showSettings) {
-                        IconButton(onClick = { showSettings = false }) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Volver",
-                            )
-                        }
-                    }
-                },
-                title = {
-                    Text(text = "MiFlujo")
-                },
-                actions = {
-                    if (!showSettings) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Text(text = "MiFlujo")
+                    },
+                    actions = {
                         IconButton(onClick = { showSettings = true }) {
                             Icon(
                                 imageVector = Icons.Filled.Settings,
                                 contentDescription = "Ajustes",
                             )
                         }
-                    }
-                },
-            )
-        },
-        bottomBar = {
-            if (!showSettings) {
+                    },
+                )
+            },
+            bottomBar = {
                 NavigationBar {
                     MainDestination.entries.forEach { destination ->
                         NavigationBarItem(
@@ -168,10 +168,8 @@ fun MiFlujoApp() {
                         )
                     }
                 }
-            }
-        },
-        floatingActionButton = {
-            if (!showSettings) {
+            },
+            floatingActionButton = {
                 ExtendedFloatingActionButton(
                     onClick = {
                         showAddMovementDialog = true
@@ -179,36 +177,32 @@ fun MiFlujoApp() {
                 ) {
                     Text(text = "+ Agregar")
                 }
-            }
-        },
-        snackbarHost = {
-            SnackbarHost(hostState = snackbarHostState) { snackbarData ->
-                val feedbackType = feedback?.type ?: MovementFeedbackType.SUCCESS
-                Snackbar(
-                    modifier = Modifier
-                        .padding(horizontal = 24.dp)
-                        .widthIn(max = 360.dp),
-                    snackbarData = snackbarData,
-                    containerColor = when (feedbackType) {
-                        MovementFeedbackType.SUCCESS -> MaterialTheme.colorScheme.surfaceVariant
-                        MovementFeedbackType.ERROR -> MaterialTheme.colorScheme.errorContainer
-                    },
-                    contentColor = when (feedbackType) {
-                        MovementFeedbackType.SUCCESS -> MaterialTheme.colorScheme.onSurfaceVariant
-                        MovementFeedbackType.ERROR -> MaterialTheme.colorScheme.onErrorContainer
-                    },
-                )
-            }
-        },
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-        ) {
-            if (showSettings) {
-                SettingsScreen()
-            } else {
+            },
+            snackbarHost = {
+                SnackbarHost(hostState = snackbarHostState) { snackbarData ->
+                    val feedbackType = feedback?.type ?: MovementFeedbackType.SUCCESS
+                    Snackbar(
+                        modifier = Modifier
+                            .padding(horizontal = 24.dp)
+                            .widthIn(max = 360.dp),
+                        snackbarData = snackbarData,
+                        containerColor = when (feedbackType) {
+                            MovementFeedbackType.SUCCESS -> MaterialTheme.colorScheme.surfaceVariant
+                            MovementFeedbackType.ERROR -> MaterialTheme.colorScheme.errorContainer
+                        },
+                        contentColor = when (feedbackType) {
+                            MovementFeedbackType.SUCCESS -> MaterialTheme.colorScheme.onSurfaceVariant
+                            MovementFeedbackType.ERROR -> MaterialTheme.colorScheme.onErrorContainer
+                        },
+                    )
+                }
+            },
+        ) { innerPadding ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+            ) {
                 when (selectedDestination) {
                     MainDestination.Home -> HomeScreen(uiState = homeUiState)
                     MainDestination.Movements -> MovementsScreen(
@@ -231,6 +225,52 @@ fun MiFlujoApp() {
                         },
                     )
                 }
+            }
+        }
+
+        AnimatedVisibility(
+            visible = showSettings,
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            awaitPointerEvent()
+                        }
+                    }
+                },
+            enter = fadeIn(animationSpec = tween(durationMillis = 200)) +
+                slideInHorizontally(
+                    animationSpec = tween(durationMillis = 200),
+                    initialOffsetX = { width -> width / 12 },
+                ),
+            exit = fadeOut(animationSpec = tween(durationMillis = 180)) +
+                slideOutHorizontally(
+                    animationSpec = tween(durationMillis = 180),
+                    targetOffsetX = { width -> width / 12 },
+                ),
+            label = "Settings transition",
+        ) {
+            Scaffold(
+                topBar = {
+                    TopAppBar(
+                        navigationIcon = {
+                            IconButton(onClick = { showSettings = false }) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Volver",
+                                )
+                            }
+                        },
+                        title = {
+                            Text(text = "MiFlujo")
+                        },
+                    )
+                },
+            ) { innerPadding ->
+                SettingsScreen(
+                    modifier = Modifier.padding(innerPadding),
+                )
             }
         }
     }
