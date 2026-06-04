@@ -16,31 +16,7 @@ El subtítulo visible de la app es:
 
 ```text
 Flujo de efectivo mensual
-```l origin main
-From github.com:carlosbenavides23/MiFlujo-android
- * branch            main       -> FETCH_HEAD
-Already up to date.
-carlos@fedora:~/Proyectos/MiFlujo-android$ git merge dev
-Auto-merging app/build.gradle.kts
-Auto-merging docs/decisions.md
-CONFLICT (content): Merge conflict in docs/decisions.md
-Automatic merge failed; fix conflicts and then commit the result.carlos@fedora:~/Proyectos/MiFlujo-android$ git switch main
-Switched to branch 'main'
-Your branch is up to date with 'origin/main'.
-carlos@fedora:~/Proyectos/MiFlujo-android$ git pull origin main
-From github.com:carlosbenavides23/MiFlujo-android
- * branch            main       -> FETCH_HEAD
-Already up to date.
-carlos@fedora:~/Proyectos/MiFlujo-android$ git merge dev
-Auto-merging app/build.gradle.kts
-Auto-merging docs/decisions.md
-CONFLICT (content): Merge conflict in docs/decisions.md
-Automatic merge failed; fix conflicts and then commit the result.
-`v0.1.0` representa el primer MVP funcional entregado al usuario principal.
-
-Incluyó: docs/decisions.md
-CONFLICT (content): Merge conflict in docs/decisions.md
-Automatic merge failed; fix conflicts and then commit the result.
+```
 
 ## 003 - Nombre del repositorio
 
@@ -59,19 +35,6 @@ com.carlos.miflujo
 ```
 
 ## 005 - App local-first
-
-
-## 003 - Nombre del repositorio
-
-El repositorio se llama:
-
-```text
-MiFlujo-android
-```
-
-## 004 - Package name
-
-El package name es:
 
 MiFlujo es una app local-first.
 
@@ -307,9 +270,8 @@ Feedback real -> issue pequeña -> rama -> implementación -> revisión -> PR ->
 ```
 
 No se deben agregar features grandes sin validar necesidad real.
-Las ramas `feature/*` se usarán para tareas específicas.
 
-## 020 - Exportación PDF de reportes
+## 027 - Exportación PDF de reportes
 
 Se probó generar reportes PDF desde HTML y CSS renderizados en un `WebView`, pero el enfoque fue abandonado.
 
@@ -325,7 +287,7 @@ El diseño del PDF es sobrio, profesional, basado en tablas y similar a una expo
 
 Esta función genera un reporte mensual legible para compartir o revisar fuera de la app. No implementa respaldo, restauración, nube, CSV ni XLSX.
 
-## 021 - Respaldo local JSON
+## 028 - Respaldo local JSON
 
 El respaldo manual de datos se exportará como JSON con versión de esquema y todos los movimientos guardados.
 
@@ -335,7 +297,7 @@ Para compartir, el archivo se generará temporalmente en la caché de la app y s
 
 El usuario decidirá dónde guardar o compartir el respaldo. La exportación no implementará cifrado, nube, CSV ni XLSX.
 
-## 022 - Restauración de respaldo local JSON
+## 029 - Restauración de respaldo local JSON
 
 La restauración leerá archivos JSON seleccionados mediante el selector de documentos del sistema.
 
