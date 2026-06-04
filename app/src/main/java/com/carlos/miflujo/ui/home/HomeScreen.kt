@@ -7,8 +7,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
@@ -25,7 +23,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.carlos.miflujo.domain.model.Currency
 import com.carlos.miflujo.domain.model.CurrencySummary
-import com.carlos.miflujo.domain.model.ExpenseBreakdown
 import com.carlos.miflujo.domain.model.Movement
 import com.carlos.miflujo.domain.model.MovementCategory
 import com.carlos.miflujo.domain.model.MovementSubcategory
@@ -56,10 +53,6 @@ fun HomeScreen(
     ) {
         HomeHeader(currentMonth = uiState.currentMonth)
         CurrentMonthDashboardCard(
-            cordoba = uiState.report.cordoba,
-            dollar = uiState.report.dollar,
-        )
-        ExpenseSummaryCard(
             cordoba = uiState.report.cordoba,
             dollar = uiState.report.dollar,
         )
@@ -139,13 +132,15 @@ private fun DashboardCurrencySection(
             )
             Text(
                 modifier = Modifier
-                    .padding(start = 16.dp)
-                    .widthIn(min = NetAmountMinWidth),
+                    .weight(1.35f)
+                    .padding(start = 16.dp),
                 text = summary.netCashFlowMinor.formatSignedVisibleMoney(currencySymbol),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
                 color = summary.netFlowColor(),
                 textAlign = TextAlign.End,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
         Row(
@@ -197,181 +192,8 @@ private fun InlineMetric(
             } else {
                 TextAlign.Start
             },
-        )
-    }
-}
-
-@Composable
-private fun ExpenseSummaryCard(
-    cordoba: CurrencySummary,
-    dollar: CurrencySummary,
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
-        ) {
-            Text(
-                text = "Resumen de egresos",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-            ExpenseBreakdownSection(
-                title = "Córdobas (C$)",
-                currencySymbol = "C$",
-                summary = cordoba,
-            )
-            HorizontalDivider()
-            ExpenseBreakdownSection(
-                title = "Dólares (US$)",
-                currencySymbol = "US$",
-                summary = dollar,
-            )
-        }
-    }
-}
-
-@Composable
-private fun ExpenseBreakdownSection(
-    title: String,
-    currencySymbol: String,
-    summary: CurrencySummary,
-) {
-    val breakdown = summary.expenseBreakdown
-
-    Column(
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = "Total egresos",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Text(
-                modifier = Modifier
-                    .padding(start = 16.dp)
-                    .widthIn(min = SummaryAmountMinWidth),
-                text = summary.totalExpenseMinor.formatVisibleMoney(currencySymbol),
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.End,
-            )
-        }
-        Column(
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            SummaryLine(
-                label = "Costos fijos",
-                value = breakdown.fixedCostMinor.formatVisibleMoney(currencySymbol),
-            )
-            SummaryLine(
-                label = "Mantenimiento",
-                value = breakdown.maintenanceMinor.formatVisibleMoney(currencySymbol),
-            )
-            SummaryLine(
-                label = "Otros",
-                value = breakdown.otherMinor.formatVisibleMoney(currencySymbol),
-            )
-        }
-        if (breakdown.hasFixedCostDetails()) {
-            Column(
-                modifier = Modifier.padding(top = 2.dp),
-                verticalArrangement = Arrangement.spacedBy(7.dp),
-            ) {
-                Text(
-                    text = "Detalle de costos fijos",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                FixedCostDetailLine(
-                    label = "Agua",
-                    value = breakdown.waterMinor,
-                    currencySymbol = currencySymbol,
-                )
-                FixedCostDetailLine(
-                    label = "Luz",
-                    value = breakdown.electricityMinor,
-                    currencySymbol = currencySymbol,
-                )
-                FixedCostDetailLine(
-                    label = "Internet",
-                    value = breakdown.internetMinor,
-                    currencySymbol = currencySymbol,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun FixedCostDetailLine(
-    label: String,
-    value: Long,
-    currencySymbol: String,
-) {
-    if (value <= 0L) return
-
-    SummaryLine(
-        label = label,
-        value = value.formatVisibleMoney(currencySymbol),
-        compact = true,
-        indented = true,
-    )
-}
-
-@Composable
-private fun SummaryLine(
-    label: String,
-    value: String,
-    compact: Boolean = false,
-    indented: Boolean = false,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            modifier = Modifier
-                .weight(1f)
-                .padding(start = if (indented) 12.dp else 0.dp),
-            text = label,
-            style = if (compact) {
-                MaterialTheme.typography.bodySmall
-            } else {
-                MaterialTheme.typography.bodyMedium
-            },
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            modifier = Modifier
-                .padding(start = 16.dp)
-                .widthIn(min = SummaryAmountMinWidth),
-            text = value,
-            style = if (compact) {
-                MaterialTheme.typography.bodySmall
-            } else {
-                MaterialTheme.typography.bodyMedium
-            },
-            fontWeight = FontWeight.SemiBold,
-            textAlign = TextAlign.End,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -436,12 +258,14 @@ private fun RecentMovementRow(movement: Movement) {
             )
         }
         Text(
-            modifier = Modifier.width(116.dp),
+            modifier = Modifier.weight(1.05f),
             text = movement.formattedSignedAmount(),
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.SemiBold,
             color = movement.amountColor(),
             textAlign = TextAlign.End,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -516,10 +340,6 @@ private fun MovementSubcategory.label(): String {
     }
 }
 
-private fun ExpenseBreakdown.hasFixedCostDetails(): Boolean {
-    return waterMinor > 0L || electricityMinor > 0L || internetMinor > 0L
-}
-
 private fun YearMonth.toSpanishMonthLabel(): String {
     val month = when (monthValue) {
         1 -> "Enero"
@@ -540,5 +360,3 @@ private fun YearMonth.toSpanishMonthLabel(): String {
 
 private val HomeHorizontalPadding = 20.dp
 private val HomeBottomPadding = 128.dp
-private val NetAmountMinWidth = 128.dp
-private val SummaryAmountMinWidth = 112.dp

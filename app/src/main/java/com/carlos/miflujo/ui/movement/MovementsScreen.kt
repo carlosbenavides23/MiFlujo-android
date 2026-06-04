@@ -1,6 +1,9 @@
 package com.carlos.miflujo.ui.movement
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -10,20 +13,34 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.carlos.miflujo.domain.model.Currency
 import com.carlos.miflujo.domain.model.Movement
@@ -49,10 +66,35 @@ fun MovementsScreen(
     var selectedMovement by remember { mutableStateOf<Movement?>(null) }
     var movementPendingEdit by remember { mutableStateOf<Movement?>(null) }
     var movementPendingDelete by remember { mutableStateOf<Movement?>(null) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var listCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    var searchFieldBounds by remember { mutableStateOf<Rect?>(null) }
+    val focusManager = LocalFocusManager.current
+    val searchedMovements = remember(uiState.movements, searchQuery) {
+        uiState.movements.filterBySearch(searchQuery)
+    }
+    val hasSearchQuery = searchQuery.trim().isNotEmpty()
 
     LazyColumn(
         modifier = modifier
-            .fillMaxSize(),
+            .fillMaxSize()
+            .onGloballyPositioned { coordinates ->
+                listCoordinates = coordinates
+            }
+            .pointerInput(listCoordinates, searchFieldBounds) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(pass = PointerEventPass.Initial)
+                    val touchPosition = listCoordinates?.localToRoot(down.position)
+                    val isSearchFieldTap = touchPosition?.let { position ->
+                        searchFieldBounds?.contains(position)
+                    } ?: false
+
+                    if (!isSearchFieldTap) {
+                        focusManager.clearFocus()
+                    }
+                    waitForUpOrCancellation(pass = PointerEventPass.Initial)
+                }
+            },
         contentPadding = PaddingValues(
             start = 20.dp,
             top = 20.dp,
@@ -78,19 +120,36 @@ fun MovementsScreen(
         }
 
         item {
+            MovementSearchField(
+                query = searchQuery,
+                resultCount = searchedMovements.size,
+                onQueryChange = { searchQuery = it },
+                onClearQuery = { searchQuery = "" },
+                onSearchAction = { focusManager.clearFocus() },
+                onSearchFieldPositioned = { coordinates ->
+                    searchFieldBounds = coordinates.boundsInRoot()
+                },
+            )
+        }
+
+        item {
             MovementFilters(
                 selectedFilter = uiState.selectedFilter,
                 onFilterSelected = onFilterSelected,
             )
         }
 
-        if (uiState.movements.isEmpty()) {
+        if (searchedMovements.isEmpty()) {
             item {
-                EmptyMovementsCard()
+                if (hasSearchQuery) {
+                    EmptySearchResultsCard()
+                } else {
+                    EmptyMovementsCard()
+                }
             }
         } else {
             items(
-                items = uiState.movements,
+                items = searchedMovements,
                 key = { it.id },
             ) { movement ->
                 MovementRow(
@@ -178,6 +237,74 @@ private fun MonthSelector(
 }
 
 @Composable
+private fun MovementSearchField(
+    query: String,
+    resultCount: Int,
+    onQueryChange: (String) -> Unit,
+    onClearQuery: () -> Unit,
+    onSearchAction: () -> Unit,
+    onSearchFieldPositioned: (LayoutCoordinates) -> Unit,
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        OutlinedTextField(
+            value = query,
+            onValueChange = onQueryChange,
+            modifier = Modifier
+                .fillMaxWidth()
+                .onGloballyPositioned(onSearchFieldPositioned),
+            label = {
+                Text(text = "Buscar movimientos")
+            },
+            placeholder = {
+                Text(text = "Detalle o categoría")
+            },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(
+                onSearch = {
+                    onSearchAction()
+                },
+                onDone = {
+                    onSearchAction()
+                },
+            ),
+            trailingIcon = {
+                if (query.isNotBlank()) {
+                    TextButton(onClick = onClearQuery) {
+                        Text(text = "Limpiar")
+                    }
+                }
+            },
+        )
+        if (query.trim().isNotEmpty()) {
+            SearchFeedbackText(resultCount = resultCount)
+        }
+    }
+}
+
+@Composable
+private fun SearchFeedbackText(
+    resultCount: Int,
+) {
+    val text = when (resultCount) {
+        0 -> "No se encontraron movimientos."
+        1 -> "1 resultado encontrado"
+        else -> "$resultCount resultados encontrados"
+    }
+
+    Text(
+        modifier = Modifier.padding(start = 16.dp),
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
+@Composable
 private fun MovementFilters(
     selectedFilter: MovementFilter,
     onFilterSelected: (MovementFilter) -> Unit,
@@ -217,26 +344,37 @@ private fun MovementRow(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
+                    modifier = Modifier.weight(1f),
                     text = movement.date.formatVisibleDate(),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
+                    modifier = Modifier
+                        .weight(1.35f)
+                        .padding(start = 16.dp),
                     text = movement.formattedSignedAmount(),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = movement.amountColor(),
+                    textAlign = TextAlign.End,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
             Text(
                 text = movement.detail.orEmpty().ifBlank { "Sin detalle" },
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = movement.categoryLabel(),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -258,6 +396,29 @@ private fun EmptyMovementsCard() {
             )
             Text(
                 text = "Cambie el mes o el filtro para revisar otros movimientos.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun EmptySearchResultsCard() {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = "No hay resultados",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Medium,
+            )
+            Text(
+                text = "Revise la búsqueda o cambie el filtro para encontrar otros movimientos.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -356,7 +517,19 @@ private fun DetailLine(
         Text(
             text = value,
             style = MaterialTheme.typography.bodyLarge,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
         )
+    }
+}
+
+private fun List<Movement>.filterBySearch(query: String): List<Movement> {
+    val normalizedQuery = query.trim()
+    if (normalizedQuery.isEmpty()) return this
+
+    return filter { movement ->
+        movement.detail.orEmpty().contains(normalizedQuery, ignoreCase = true) ||
+            movement.categoryLabel().contains(normalizedQuery, ignoreCase = true)
     }
 }
 

@@ -16,7 +16,31 @@ El subtítulo visible de la app es:
 
 ```text
 Flujo de efectivo mensual
-```
+```l origin main
+From github.com:carlosbenavides23/MiFlujo-android
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+carlos@fedora:~/Proyectos/MiFlujo-android$ git merge dev
+Auto-merging app/build.gradle.kts
+Auto-merging docs/decisions.md
+CONFLICT (content): Merge conflict in docs/decisions.md
+Automatic merge failed; fix conflicts and then commit the result.carlos@fedora:~/Proyectos/MiFlujo-android$ git switch main
+Switched to branch 'main'
+Your branch is up to date with 'origin/main'.
+carlos@fedora:~/Proyectos/MiFlujo-android$ git pull origin main
+From github.com:carlosbenavides23/MiFlujo-android
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+carlos@fedora:~/Proyectos/MiFlujo-android$ git merge dev
+Auto-merging app/build.gradle.kts
+Auto-merging docs/decisions.md
+CONFLICT (content): Merge conflict in docs/decisions.md
+Automatic merge failed; fix conflicts and then commit the result.
+`v0.1.0` representa el primer MVP funcional entregado al usuario principal.
+
+Incluyó: docs/decisions.md
+CONFLICT (content): Merge conflict in docs/decisions.md
+Automatic merge failed; fix conflicts and then commit the result.
 
 ## 003 - Nombre del repositorio
 
@@ -35,6 +59,19 @@ com.carlos.miflujo
 ```
 
 ## 005 - App local-first
+
+
+## 003 - Nombre del repositorio
+
+El repositorio se llama:
+
+```text
+MiFlujo-android
+```
+
+## 004 - Package name
+
+El package name es:
 
 MiFlujo es una app local-first.
 
@@ -270,3 +307,40 @@ Feedback real -> issue pequeña -> rama -> implementación -> revisión -> PR ->
 ```
 
 No se deben agregar features grandes sin validar necesidad real.
+Las ramas `feature/*` se usarán para tareas específicas.
+
+## 020 - Exportación PDF de reportes
+
+Se probó generar reportes PDF desde HTML y CSS renderizados en un `WebView`, pero el enfoque fue abandonado.
+
+La implementación se removió porque el renderizado fuera de pantalla de `WebView` produjo PDFs en blanco o recortados de forma no confiable.
+
+También se probó OpenPDF, pero el intento fue abandonado porque la dependencia falló en Android al cargar clases de `java.awt`, específicamente `java.awt.Color`.
+
+No se parcheará `java.awt` ni se usará OpenPDF para la exportación.
+
+La exportación PDF usa `android.graphics.pdf.PdfDocument` nativo de Android.
+
+El diseño del PDF es sobrio, profesional, basado en tablas y similar a una exportación de Excel.
+
+Esta función genera un reporte mensual legible para compartir o revisar fuera de la app. No implementa respaldo, restauración, nube, CSV ni XLSX.
+
+## 021 - Respaldo local JSON
+
+El respaldo manual de datos se exportará como JSON con versión de esquema y todos los movimientos guardados.
+
+El usuario podrá guardarlo con el creador de documentos del sistema o compartirlo mediante Android Share Sheet.
+
+Para compartir, el archivo se generará temporalmente en la caché de la app y se expondrá de forma segura usando `FileProvider`.
+
+El usuario decidirá dónde guardar o compartir el respaldo. La exportación no implementará cifrado, nube, CSV ni XLSX.
+
+## 022 - Restauración de respaldo local JSON
+
+La restauración leerá archivos JSON seleccionados mediante el selector de documentos del sistema.
+
+Antes de pedir confirmación, el archivo completo debe analizarse y validarse contra la versión de esquema, nombre de la app, campos requeridos, enums, fechas, timestamps y reglas de negocio de movimientos. Si un movimiento es inválido, se rechazará el respaldo completo.
+
+Un respaldo válido quedará pendiente hasta que el usuario confirme explícitamente que desea reemplazar los movimientos actuales. También se permitirá confirmar un respaldo válido sin movimientos para limpiar los datos actuales.
+
+Al confirmar, Room eliminará los movimientos actuales e insertará todos los movimientos del respaldo dentro de una sola transacción. Se preservarán los identificadores positivos y únicos del respaldo. Si cualquier inserción falla, la transacción revertirá la eliminación y conservará los datos anteriores.

@@ -11,6 +11,10 @@ interface MovementRepository {
 
     suspend fun deleteMovement(movement: Movement)
 
+    suspend fun getAllMovements(): List<Movement>
+
+    suspend fun replaceAllMovements(movements: List<Movement>)
+
     fun getMovementsByDateRange(
         startDate: LocalDate,
         endDate: LocalDate,

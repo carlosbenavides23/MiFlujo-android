@@ -531,6 +531,7 @@ private fun validateAddMovementForm(
                 amount.isBlank() -> "Ingrese un monto."
                 parsedAmountMinor == null -> "Ingrese un monto válido."
                 parsedAmountMinor <= 0L -> "El monto debe ser mayor que 0."
+                parsedAmountMinor > MAX_MOVEMENT_AMOUNT_MINOR -> MAX_MOVEMENT_AMOUNT_ERROR
                 else -> null
             },
             currency = if (currency == null) "Seleccione C$ o US$." else null,
@@ -560,20 +561,29 @@ private fun validateAddMovementForm(
 }
 
 private fun parseAmountMinorOrNull(rawAmount: String): Long? {
-    val normalizedAmount = rawAmount.trim().replace(',', '.')
+    val normalizedAmount = rawAmount.trim()
     if (normalizedAmount.isBlank()) return null
+    if (!normalizedAmount.all { it.isDigit() || it == '.' || it == ',' }) return null
 
-    val parts = normalizedAmount.split('.')
-    if (parts.size > 2) return null
+    val decimalSeparatorIndex = normalizedAmount.decimalSeparatorIndex()
+    val wholePart = if (decimalSeparatorIndex >= 0) {
+        normalizedAmount.substring(startIndex = 0, endIndex = decimalSeparatorIndex)
+    } else {
+        normalizedAmount
+    }
+    val centsPart = if (decimalSeparatorIndex >= 0) {
+        normalizedAmount.substring(startIndex = decimalSeparatorIndex + 1)
+    } else {
+        ""
+    }
 
-    val wholePart = parts[0]
-    val centsPart = parts.getOrNull(1).orEmpty()
-
-    if (wholePart.isBlank() || !wholePart.all { it.isDigit() }) return null
+    val wholeDigits = wholePart.parseWholeAmountDigitsOrNull(
+        decimalSeparator = decimalSeparatorIndex.takeIf { it >= 0 }?.let { normalizedAmount[it] },
+    ) ?: return null
     if (centsPart.length > 2 || !centsPart.all { it.isDigit() }) return null
 
     return try {
-        val wholeMinor = Math.multiplyExact(wholePart.toLong(), 100L)
+        val wholeMinor = Math.multiplyExact(wholeDigits.toLong(), 100L)
         val centsMinor = centsPart.padEnd(2, '0').ifBlank { "0" }.toLong()
         Math.addExact(wholeMinor, centsMinor)
     } catch (_: NumberFormatException) {
@@ -581,6 +591,41 @@ private fun parseAmountMinorOrNull(rawAmount: String): Long? {
     } catch (_: ArithmeticException) {
         null
     }
+}
+
+private fun String.decimalSeparatorIndex(): Int {
+    val lastSeparatorIndex = maxOf(lastIndexOf('.'), lastIndexOf(','))
+    if (lastSeparatorIndex < 0) return -1
+
+    val centsCandidate = substring(startIndex = lastSeparatorIndex + 1)
+    return if (centsCandidate.length in 1..2 && centsCandidate.all { it.isDigit() }) {
+        lastSeparatorIndex
+    } else {
+        -1
+    }
+}
+
+private fun String.parseWholeAmountDigitsOrNull(decimalSeparator: Char?): String? {
+    if (isBlank()) return null
+    if (all { it.isDigit() }) return this
+
+    val separators = filterNot { it.isDigit() }.toSet()
+    val groupingSeparator = when (decimalSeparator) {
+        '.' -> ','
+        ',' -> '.'
+        else -> separators.singleOrNull()
+    } ?: return null
+
+    if (separators != setOf(groupingSeparator)) return null
+
+    val groups = split(groupingSeparator)
+    if (groups.isEmpty()) return null
+    if (groups.first().length !in 1..3 || !groups.first().all { it.isDigit() }) return null
+    if (groups.drop(1).any { it.length != 3 || !it.all { character -> character.isDigit() } }) {
+        return null
+    }
+
+    return groups.joinToString(separator = "")
 }
 
 private fun TextFieldValue.formatVisibleDateInput(previousFormattedText: String): TextFieldValue {
@@ -617,6 +662,8 @@ private fun String.dateDigits(): String {
 }
 
 private const val MAX_DATE_DIGITS = 6
+private const val MAX_MOVEMENT_AMOUNT_MINOR = 99_999_999_999L
+private const val MAX_MOVEMENT_AMOUNT_ERROR = "El monto máximo permitido es 999,999,999.99."
 
 private fun Long.formatAmountInput(): String {
     val whole = this / 100L
