@@ -22,6 +22,9 @@ class RoomMovementRepository(
         movementDao.deleteMovement(movement.toEntity())
     }
 
+    override suspend fun getAllMovements(): List<Movement> =
+        movementDao.getAllMovements().map { it.toDomain() }
+
     override fun getMovementsByDateRange(
         startDate: LocalDate,
         endDate: LocalDate,

@@ -23,6 +23,14 @@ interface MovementDao {
     @Query(
         """
         SELECT * FROM movements
+        ORDER BY date_epoch_day DESC, created_at_epoch_millis DESC, id DESC
+        """,
+    )
+    suspend fun getAllMovements(): List<MovementEntity>
+
+    @Query(
+        """
+        SELECT * FROM movements
         WHERE date_epoch_day BETWEEN :startEpochDay AND :endEpochDay
         ORDER BY date_epoch_day DESC, created_at_epoch_millis DESC
         """,

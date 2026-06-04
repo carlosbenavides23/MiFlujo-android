@@ -3,4 +3,7 @@
     <cache-path
         name="shared_reports"
         path="shared_reports/" />
+    <cache-path
+        name="shared_backups"
+        path="shared_backups/" />
 </paths>

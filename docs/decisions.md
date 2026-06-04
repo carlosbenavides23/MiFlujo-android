@@ -170,3 +170,13 @@ La exportación PDF usa `android.graphics.pdf.PdfDocument` nativo de Android.
 El diseño del PDF es sobrio, profesional, basado en tablas y similar a una exportación de Excel.
 
 Esta función genera un reporte mensual legible para compartir o revisar fuera de la app. No implementa respaldo, restauración, nube, CSV ni XLSX.
+
+## 021 - Respaldo local JSON
+
+El respaldo manual de datos se exportará como JSON con versión de esquema y todos los movimientos guardados.
+
+El usuario podrá guardarlo con el creador de documentos del sistema o compartirlo mediante Android Share Sheet.
+
+Para compartir, el archivo se generará temporalmente en la caché de la app y se expondrá de forma segura usando `FileProvider`.
+
+El usuario decidirá dónde guardar o compartir el respaldo. No se implementará restauración, cifrado, nube, CSV ni XLSX como parte de esta función.

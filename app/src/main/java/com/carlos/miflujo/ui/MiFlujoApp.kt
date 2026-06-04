@@ -5,6 +5,8 @@ import android.content.ContextWrapper
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -53,6 +55,7 @@ import com.carlos.miflujo.MiFlujoAppProvider
 import com.carlos.miflujo.ui.home.HomeScreen
 import com.carlos.miflujo.ui.home.HomeViewModel
 import com.carlos.miflujo.ui.home.HomeViewModelFactory
+import com.carlos.miflujo.ui.backup.BackupJsonMimeType
 import com.carlos.miflujo.ui.movement.AddMovementDialog
 import com.carlos.miflujo.ui.movement.MovementFeedbackType
 import com.carlos.miflujo.ui.movement.MovementViewModel
@@ -62,6 +65,8 @@ import com.carlos.miflujo.ui.report.ReportScreen
 import com.carlos.miflujo.ui.report.ReportViewModel
 import com.carlos.miflujo.ui.report.ReportViewModelFactory
 import com.carlos.miflujo.ui.settings.SettingsScreen
+import com.carlos.miflujo.ui.settings.SettingsViewModel
+import com.carlos.miflujo.ui.settings.SettingsViewModelFactory
 
 private enum class MainDestination(
     val label: String,
@@ -101,11 +106,30 @@ fun MiFlujoApp() {
             ReportViewModelFactory(movementRepository),
         )[ReportViewModel::class.java]
     }
+    val settingsViewModel = remember(activity, movementRepository) {
+        ViewModelProvider(
+            activity,
+            SettingsViewModelFactory(movementRepository),
+        )[SettingsViewModel::class.java]
+    }
     val homeUiState by homeViewModel.uiState.collectAsState()
     val movementUiState by movementViewModel.uiState.collectAsState()
     val reportUiState by reportViewModel.uiState.collectAsState()
+    val settingsUiState by settingsViewModel.uiState.collectAsState()
     val feedback by movementViewModel.feedback.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    val createBackupDocumentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument(BackupJsonMimeType),
+    ) { destinationUri ->
+        if (destinationUri == null) {
+            settingsViewModel.cancelPreparedBackup()
+        } else {
+            settingsViewModel.savePreparedBackup(
+                context = context,
+                destinationUri = destinationUri,
+            )
+        }
+    }
 
     BackHandler(enabled = showSettings) {
         showSettings = false
@@ -130,6 +154,26 @@ fun MiFlujoApp() {
                 feedbackEvent.message,
                 Toast.LENGTH_LONG,
             ).show()
+        }
+    }
+
+    LaunchedEffect(settingsViewModel) {
+        settingsViewModel.exportFeedbackEvents.collect { feedbackEvent ->
+            Toast.makeText(
+                context,
+                feedbackEvent.message,
+                Toast.LENGTH_LONG,
+            ).show()
+        }
+    }
+
+    LaunchedEffect(settingsViewModel) {
+        settingsViewModel.createDocumentRequestEvents.collect { request ->
+            try {
+                createBackupDocumentLauncher.launch(request.fileName)
+            } catch (exception: Exception) {
+                settingsViewModel.handleDocumentCreatorFailure(exception)
+            }
         }
     }
 
@@ -269,6 +313,11 @@ fun MiFlujoApp() {
                 },
             ) { innerPadding ->
                 SettingsScreen(
+                    isExportingBackup = settingsUiState.isExportingBackup,
+                    onSaveBackup = settingsViewModel::prepareBackupForSave,
+                    onShareBackup = {
+                        settingsViewModel.shareBackup(context)
+                    },
                     modifier = Modifier.padding(innerPadding),
                 )
             }
