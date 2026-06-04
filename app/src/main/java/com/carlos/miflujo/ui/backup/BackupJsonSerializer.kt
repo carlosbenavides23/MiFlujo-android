@@ -4,6 +4,7 @@ import com.carlos.miflujo.domain.model.Movement
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeFormatterBuilder
+import java.time.format.ResolverStyle
 import java.time.temporal.ChronoField
 import java.util.Locale
 import org.json.JSONArray
@@ -44,10 +45,11 @@ object BackupJsonSerializer {
         format(BackupDateTimeFormatter)
 }
 
-private const val BackupSchemaVersion = 1L
-private const val BackupAppName = "MiFlujo"
+internal const val BackupSchemaVersion = 1L
+internal const val BackupAppName = "MiFlujo"
 private const val BackupJsonIndentSpaces = 2
-private val BackupDateTimeFormatter: DateTimeFormatter = DateTimeFormatterBuilder()
+internal val BackupDateTimeFormatter: DateTimeFormatter = DateTimeFormatterBuilder()
     .appendPattern("uuuu-MM-dd'T'HH:mm:ss")
     .appendFraction(ChronoField.NANO_OF_SECOND, 0, 9, true)
     .toFormatter(Locale.ROOT)
+    .withResolverStyle(ResolverStyle.STRICT)

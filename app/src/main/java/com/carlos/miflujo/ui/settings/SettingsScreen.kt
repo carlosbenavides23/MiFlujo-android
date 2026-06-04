@@ -30,11 +30,18 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun SettingsScreen(
     isExportingBackup: Boolean,
+    isRestoringBackup: Boolean,
+    pendingRestoreMovementCount: Int?,
     onSaveBackup: () -> Unit,
     onShareBackup: () -> Unit,
+    onRestoreBackup: () -> Unit,
+    onCancelRestore: () -> Unit,
+    onConfirmRestore: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showBackupActions by rememberSaveable { mutableStateOf(false) }
+    val isBackupOperationInProgress =
+        isExportingBackup || isRestoringBackup || pendingRestoreMovementCount != null
 
     Column(
         modifier = modifier
@@ -54,7 +61,7 @@ fun SettingsScreen(
                 SettingsOption(
                     title = "Crear respaldo local",
                     description = "Exporta tus movimientos a un archivo para guardarlo fuera de la app.",
-                    enabled = !isExportingBackup,
+                    enabled = !isBackupOperationInProgress,
                     status = if (isExportingBackup) "Preparando respaldo..." else "Crear",
                     onClick = {
                         showBackupActions = true
@@ -63,6 +70,9 @@ fun SettingsScreen(
                 SettingsOption(
                     title = "Restaurar respaldo",
                     description = "Recupera movimientos desde un archivo de respaldo anterior.",
+                    enabled = !isBackupOperationInProgress,
+                    status = if (isRestoringBackup) "Restaurando respaldo..." else "Restaurar",
+                    onClick = onRestoreBackup,
                 ),
             ),
         )
@@ -96,6 +106,14 @@ fun SettingsScreen(
             },
         )
     }
+
+    pendingRestoreMovementCount?.let { movementCount ->
+        RestoreBackupDialog(
+            movementCount = movementCount,
+            onDismissRequest = onCancelRestore,
+            onConfirmRestore = onConfirmRestore,
+        )
+    }
 }
 
 @Composable
@@ -126,6 +144,39 @@ private fun CreateBackupDialog(
                 TextButton(onClick = onDismissRequest) {
                     Text(text = "Cancelar")
                 }
+            }
+        },
+    )
+}
+
+@Composable
+private fun RestoreBackupDialog(
+    movementCount: Int,
+    onDismissRequest: () -> Unit,
+    onConfirmRestore: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        title = {
+            Text(text = "Restaurar respaldo")
+        },
+        text = {
+            Text(
+                text = "Esta acción eliminará todos los movimientos actuales y los reemplazará " +
+                    "por los $movementCount movimientos del respaldo. No se puede deshacer.",
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirmRestore) {
+                Text(
+                    text = "Restaurar",
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismissRequest) {
+                Text(text = "Cancelar")
             }
         },
     )

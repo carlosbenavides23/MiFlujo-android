@@ -130,6 +130,18 @@ fun MiFlujoApp() {
             )
         }
     }
+    val openBackupDocumentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { sourceUri ->
+        if (sourceUri == null) {
+            settingsViewModel.cancelBackupSelection()
+        } else {
+            settingsViewModel.readSelectedBackup(
+                context = context,
+                sourceUri = sourceUri,
+            )
+        }
+    }
 
     BackHandler(enabled = showSettings) {
         showSettings = false
@@ -168,11 +180,31 @@ fun MiFlujoApp() {
     }
 
     LaunchedEffect(settingsViewModel) {
+        settingsViewModel.restoreFeedbackEvents.collect { feedbackEvent ->
+            Toast.makeText(
+                context,
+                feedbackEvent.message,
+                Toast.LENGTH_LONG,
+            ).show()
+        }
+    }
+
+    LaunchedEffect(settingsViewModel) {
         settingsViewModel.createDocumentRequestEvents.collect { request ->
             try {
                 createBackupDocumentLauncher.launch(request.fileName)
             } catch (exception: Exception) {
                 settingsViewModel.handleDocumentCreatorFailure(exception)
+            }
+        }
+    }
+
+    LaunchedEffect(settingsViewModel) {
+        settingsViewModel.openBackupDocumentRequestEvents.collect {
+            try {
+                openBackupDocumentLauncher.launch(arrayOf(BackupJsonMimeType))
+            } catch (exception: Exception) {
+                settingsViewModel.handleDocumentPickerFailure(exception)
             }
         }
     }
@@ -314,10 +346,15 @@ fun MiFlujoApp() {
             ) { innerPadding ->
                 SettingsScreen(
                     isExportingBackup = settingsUiState.isExportingBackup,
+                    isRestoringBackup = settingsUiState.isRestoringBackup,
+                    pendingRestoreMovementCount = settingsUiState.pendingRestoreMovementCount,
                     onSaveBackup = settingsViewModel::prepareBackupForSave,
                     onShareBackup = {
                         settingsViewModel.shareBackup(context)
                     },
+                    onRestoreBackup = settingsViewModel::requestBackupRestore,
+                    onCancelRestore = settingsViewModel::cancelPendingRestore,
+                    onConfirmRestore = settingsViewModel::confirmPendingRestore,
                     modifier = Modifier.padding(innerPadding),
                 )
             }
