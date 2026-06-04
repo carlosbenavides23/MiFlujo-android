@@ -13,6 +13,8 @@ interface MovementRepository {
 
     suspend fun getAllMovements(): List<Movement>
 
+    suspend fun replaceAllMovements(movements: List<Movement>)
+
     fun getMovementsByDateRange(
         startDate: LocalDate,
         endDate: LocalDate,

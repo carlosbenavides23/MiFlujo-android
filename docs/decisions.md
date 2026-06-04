@@ -179,4 +179,14 @@ El usuario podrá guardarlo con el creador de documentos del sistema o compartir
 
 Para compartir, el archivo se generará temporalmente en la caché de la app y se expondrá de forma segura usando `FileProvider`.
 
-El usuario decidirá dónde guardar o compartir el respaldo. No se implementará restauración, cifrado, nube, CSV ni XLSX como parte de esta función.
+El usuario decidirá dónde guardar o compartir el respaldo. La exportación no implementará cifrado, nube, CSV ni XLSX.
+
+## 022 - Restauración de respaldo local JSON
+
+La restauración leerá archivos JSON seleccionados mediante el selector de documentos del sistema.
+
+Antes de pedir confirmación, el archivo completo debe analizarse y validarse contra la versión de esquema, nombre de la app, campos requeridos, enums, fechas, timestamps y reglas de negocio de movimientos. Si un movimiento es inválido, se rechazará el respaldo completo.
+
+Un respaldo válido quedará pendiente hasta que el usuario confirme explícitamente que desea reemplazar los movimientos actuales. También se permitirá confirmar un respaldo válido sin movimientos para limpiar los datos actuales.
+
+Al confirmar, Room eliminará los movimientos actuales e insertará todos los movimientos del respaldo dentro de una sola transacción. Se preservarán los identificadores positivos y únicos del respaldo. Si cualquier inserción falla, la transacción revertirá la eliminación y conservará los datos anteriores.

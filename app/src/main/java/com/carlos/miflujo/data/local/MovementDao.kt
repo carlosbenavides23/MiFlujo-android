@@ -5,6 +5,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import com.carlos.miflujo.data.model.MovementEntity
 import kotlinx.coroutines.flow.Flow
@@ -13,6 +14,9 @@ import kotlinx.coroutines.flow.Flow
 interface MovementDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertMovement(movement: MovementEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertMovements(movements: List<MovementEntity>)
 
     @Update
     suspend fun updateMovement(movement: MovementEntity)
@@ -27,6 +31,17 @@ interface MovementDao {
         """,
     )
     suspend fun getAllMovements(): List<MovementEntity>
+
+    @Query("DELETE FROM movements")
+    suspend fun deleteAllMovements()
+
+    @Transaction
+    suspend fun replaceAllMovements(movements: List<MovementEntity>) {
+        deleteAllMovements()
+        if (movements.isNotEmpty()) {
+            insertMovements(movements)
+        }
+    }
 
     @Query(
         """
