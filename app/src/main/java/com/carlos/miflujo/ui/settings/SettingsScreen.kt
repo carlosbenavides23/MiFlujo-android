@@ -1,5 +1,6 @@
 package com.carlos.miflujo.ui.settings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,11 +9,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -22,8 +29,13 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun SettingsScreen(
+    isExportingBackup: Boolean,
+    onSaveBackup: () -> Unit,
+    onShareBackup: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var showBackupActions by rememberSaveable { mutableStateOf(false) }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -42,6 +54,11 @@ fun SettingsScreen(
                 SettingsOption(
                     title = "Crear respaldo local",
                     description = "Exporta tus movimientos a un archivo para guardarlo fuera de la app.",
+                    enabled = !isExportingBackup,
+                    status = if (isExportingBackup) "Preparando respaldo..." else "Crear",
+                    onClick = {
+                        showBackupActions = true
+                    },
                 ),
                 SettingsOption(
                     title = "Restaurar respaldo",
@@ -63,6 +80,55 @@ fun SettingsScreen(
             ),
         )
     }
+
+    if (showBackupActions) {
+        CreateBackupDialog(
+            onDismissRequest = {
+                showBackupActions = false
+            },
+            onSaveBackup = {
+                showBackupActions = false
+                onSaveBackup()
+            },
+            onShareBackup = {
+                showBackupActions = false
+                onShareBackup()
+            },
+        )
+    }
+}
+
+@Composable
+private fun CreateBackupDialog(
+    onDismissRequest: () -> Unit,
+    onSaveBackup: () -> Unit,
+    onShareBackup: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        title = {
+            Text(text = "Crear respaldo local")
+        },
+        text = {
+            Text(text = "Este archivo contiene tus movimientos. Guárdalo en un lugar seguro.")
+        },
+        confirmButton = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.End,
+            ) {
+                TextButton(onClick = onSaveBackup) {
+                    Text(text = "Guardar en Archivos")
+                }
+                TextButton(onClick = onShareBackup) {
+                    Text(text = "Compartir con otra app")
+                }
+                TextButton(onClick = onDismissRequest) {
+                    Text(text = "Cancelar")
+                }
+            }
+        },
+    )
 }
 
 @Composable
@@ -83,7 +149,7 @@ private fun SettingsSection(
         ) {
             Column {
                 options.forEachIndexed { index, option ->
-                    DisabledSettingsRow(option = option)
+                    SettingsOptionRow(option = option)
                     if (index < options.lastIndex) {
                         HorizontalDivider()
                     }
@@ -94,11 +160,15 @@ private fun SettingsSection(
 }
 
 @Composable
-private fun DisabledSettingsRow(option: SettingsOption) {
+private fun SettingsOptionRow(option: SettingsOption) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .alpha(0.68f)
+            .clickable(
+                enabled = option.enabled,
+                onClick = option.onClick,
+            )
+            .alpha(if (option.enabled) 1f else 0.68f)
             .padding(16.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -119,16 +189,21 @@ private fun DisabledSettingsRow(option: SettingsOption) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Text(
-            text = "Próximamente",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.End,
-        )
+        option.status?.let { status ->
+            Text(
+                text = status,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.End,
+            )
+        }
     }
 }
 
 private data class SettingsOption(
     val title: String,
     val description: String,
+    val enabled: Boolean = false,
+    val status: String? = "Próximamente",
+    val onClick: () -> Unit = {},
 )
