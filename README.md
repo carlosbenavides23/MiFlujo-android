@@ -1,6 +1,6 @@
 # MiFlujo
 
-**MiFlujo** es una app Android local-first para registrar ingresos, egresos y consultar el flujo de efectivo mensual de forma rápida, clara y separada por moneda.
+**MiFlujo** es una app Android local-first para registrar ingresos, egresos, consultar el flujo de efectivo mensual y proteger los datos mediante respaldos locales.
 
 Subtítulo de la app:
 
@@ -8,7 +8,7 @@ Subtítulo de la app:
 Flujo de efectivo mensual
 ```
 
-La app está pensada para un uso simple y directo: registrar movimientos de dinero, revisar cómo va el mes y consultar un reporte mensual sin depender de nube, cuentas, login ni conversión de moneda.
+La app está pensada para un uso simple y directo: registrar movimientos de dinero, revisar cómo va el mes, generar un reporte mensual y conservar los datos sin depender de nube, cuentas, login ni conversión de moneda.
 
 Principio central del producto:
 
@@ -18,23 +18,40 @@ Abro, registro dinero, veo cómo va el mes, cierro.
 
 ## Estado actual
 
-MiFlujo ya cuenta con un MVP funcional entregado y probado en dispositivo físico.
+MiFlujo ya cuenta con un MVP funcional entregado, probado en dispositivo físico y publicado como APK firmado.
 
-Versión actual publicada:
+Versión estable publicada:
 
 ```text
-v0.1.1
+v0.3.0
 ```
 
-La versión `v0.1.1` incluye correcciones post-MVP después de la primera prueba real:
+La versión `v0.3.0` representa una etapa post-MVP importante llamada conceptualmente:
 
-- El diálogo de agregar/editar movimiento ya no se cierra al tocar fuera.
-- El snackbar se integra mejor con el modo oscuro.
-- El modo claro tiene superficies más limpias y menos pesadas.
-- Los colores financieros son semánticos:
-  - verde suave para ingresos y flujo positivo.
-  - rojo suave para egresos y flujo negativo.
-- La actualización desde `v0.1.0` a `v0.1.1` fue probada sin pérdida de datos locales.
+```text
+Reportes, Ajustes y Respaldo Local
+```
+
+Incluye:
+
+- Exportación del reporte mensual a PDF tipo tabla.
+- Home simplificado para vistazo rápido del mes.
+- Pantalla de Ajustes.
+- Exportación de respaldo local JSON.
+- Guardado de respaldo mediante el creador de documentos del sistema.
+- Compartir respaldo mediante Android Share Sheet.
+- Restauración de respaldo local JSON.
+- Validación fuerte antes de restaurar.
+- Restauración transaccional en Room.
+- Tests unitarios para cálculo mensual y respaldo JSON.
+
+Trabajo actual planificado:
+
+```text
+v0.3.5 - Pre-Firebase Technical Baseline
+```
+
+`v0.3.5` es una fase técnica de auditoría, documentación y saneamiento antes de Firebase Cloud Sync. No debe implementar Firebase, login, Firestore ni sincronización todavía.
 
 ## Funcionalidades
 
@@ -55,28 +72,36 @@ La versión `v0.1.1` incluye correcciones post-MVP después de la primera prueba
   - Internet.
 - Detalle opcional por movimiento.
 - Dashboard del mes actual.
+- Home simplificado con flujo neto y últimos movimientos.
 - Historial de movimientos.
 - Filtros por tipo de movimiento.
 - Edición de movimientos.
 - Eliminación de movimientos.
 - Reporte mensual de flujo de efectivo.
+- Exportación del reporte mensual a PDF.
 - Navegación entre meses.
+- Pantalla de Ajustes.
+- Respaldo local JSON.
+- Restauración local JSON validada.
 - Persistencia local con Room.
 
-## Alcance del MVP
+## Alcance del producto
 
 MiFlujo es una app Android local-first.
 
-Incluye:
+Incluye actualmente:
 
 - Registro y consulta de movimientos.
 - Resumen mensual.
 - Reporte mensual.
+- Exportación de reporte mensual a PDF.
 - Edición y eliminación.
 - Persistencia local.
 - Soporte separado para C$ y US$.
+- Backup local JSON.
+- Restauración local JSON por reemplazo completo.
 
-No incluye en el MVP:
+No incluye actualmente:
 
 - Login.
 - Sincronización en la nube.
@@ -89,6 +114,8 @@ No incluye en el MVP:
 - Tipo de cambio.
 - Totales combinados entre monedas.
 - Reportes contables avanzados.
+- Merge avanzado de respaldos.
+- Sincronización multi-dispositivo.
 
 ## Stack técnico
 
@@ -116,6 +143,8 @@ La UI no accede directamente a Room. Los datos pasan por ViewModels y Repository
 
 Los reportes se calculan a partir de los movimientos almacenados, no como registros independientes.
 
+Room/local es la fuente principal de datos. Cualquier sincronización futura debe ser opcional y no debe romper el uso offline-first.
+
 ## Reglas importantes del producto
 
 - C$ y US$ se manejan siempre por separado.
@@ -123,13 +152,50 @@ Los reportes se calculan a partir de los movimientos almacenados, no como regist
 - No se calcula un total combinado entre C$ y US$.
 - El dinero no se almacena como `Double` ni `Float`.
 - Los montos se guardan como unidades menores usando `Long`.
+- El reporte PDF es una salida humana para leer o compartir.
+- El respaldo JSON es una salida técnica para proteger o restaurar datos.
+- Backup local y PDF no son lo mismo.
+- La restauración local actual reemplaza todos los movimientos después de validar el archivo y pedir confirmación.
 
-Ejemplo:
+Ejemplo de dinero en unidades menores:
 
 ```text
 C$ 1,800.50 -> 180050
 US$ 100.00 -> 10000
 ```
+
+## Pre-Firebase Technical Baseline
+
+Antes de implementar Firebase Cloud Sync, el proyecto debe pasar por una fase `v0.3.5`.
+
+Objetivo:
+
+```text
+Auditar, limpiar y preparar la base técnica antes de sincronización cloud.
+```
+
+Reglas de esta fase:
+
+- No implementar Firebase todavía.
+- No agregar login todavía.
+- No agregar Firestore todavía.
+- No implementar sync parcial.
+- No hacer cambios grandes de UI.
+- No hacer PRs gigantes.
+- Documentar decisiones antes de cambiar datos.
+- Cualquier cambio de Room debe tener migración clara.
+- Cualquier cambio de backup/restore debe comprobar compatibilidad con `v0.3.0`.
+
+Issues principales de la fase:
+
+- `#96` docs: guardar auditoría técnica pre-Firebase.
+- `#97` docs: definir estrategia de identidad y sincronización cloud.
+- `#98` chore: habilitar Room schema export antes de migraciones sync.
+- `#99` feature: agregar UUID estable a movimientos.
+- `#100` feature: crear backup schema v2 con UUID.
+- `#101` refactor: centralizar validación de reglas de negocio de movimientos.
+- `#102` docs: definir comportamiento cloud-safe para restauración de backups.
+- `#103` chore: definir política de Android Auto Backup para datos financieros.
 
 ## Releases
 
@@ -149,16 +215,16 @@ Al actualizar desde una release firmada con el mismo keystore, los datos locales
 Comandos útiles:
 
 ```bash
+./gradlew :app:testDebugUnitTest
+```
+
+Ejecuta las pruebas unitarias debug del módulo `app`.
+
+```bash
 ./gradlew :app:assembleDebug
 ```
 
 Compila la app en modo debug para validar que el proyecto construye correctamente.
-
-```bash
-./gradlew :app:test
-```
-
-Ejecuta las pruebas unitarias disponibles.
 
 ## Flujo de ramas
 
@@ -169,6 +235,7 @@ feature/* -> nuevas funcionalidades
 fix/*     -> correcciones de bugs
 style/*   -> cambios visuales o de UI
 chore/*   -> tareas de mantenimiento
+docs/*    -> documentación
 ```
 
 Los cambios deben trabajarse en ramas pequeñas y luego integrarse mediante Pull Request.
@@ -183,17 +250,21 @@ La documentación base se encuentra en `docs/`:
 - `docs/data-model.md`
 - `docs/business-rules.md`
 - `docs/decisions.md`
+- `docs/release-process.md`
+- `docs/audit-pre-firebase.md`
 
 El archivo `AGENTS.md` contiene reglas importantes para agentes de IA o colaboradores que trabajen en el proyecto.
 
 ## Roadmap posible
 
-Ideas futuras, sujetas a feedback real del usuario:
+Ideas futuras, sujetas a feedback real del usuario y planificación técnica:
 
-- Exportación de reportes.
-- Backup local o manual.
+- Firebase Cloud Sync opcional.
+- Estrategia de identidad global con UUID.
+- Backup schema v2.
+- Changelog visible dentro de Ajustes.
+- Acerca de MiFlujo.
 - Comparación entre meses.
-- Mejoras visuales adicionales.
-- Estadísticas simples si aportan valor real.
+- Exportaciones editables futuras si aportan valor real.
 
-Estas ideas no forman parte del MVP y no deben agregarse sin validar necesidad real.
+Estas ideas no deben agregarse sin issue, decisión documentada y validación de necesidad real.
