@@ -1,10 +1,16 @@
 # MVP Scope
 
-## Incluido en el MVP
+## Propósito del documento
 
-El MVP de MiFlujo incluye únicamente las funciones necesarias para registrar movimientos y consultar el flujo de efectivo mensual.
+Este documento separa el alcance del MVP original del alcance post-MVP actual.
 
-Funciones incluidas:
+MiFlujo ya superó el MVP inicial. Por eso, este archivo debe leerse como referencia histórica y como guardarraíl de alcance, no como lista completa del estado actual.
+
+## Incluido en el MVP original
+
+El MVP de MiFlujo incluyó únicamente las funciones necesarias para registrar movimientos y consultar el flujo de efectivo mensual.
+
+Funciones incluidas en el MVP:
 
 - Registrar ingresos.
 - Registrar egresos.
@@ -28,14 +34,33 @@ Funciones incluidas:
 - Eliminar movimientos.
 - Generar reporte mensual de flujo de efectivo.
 - Mostrar totales mensuales separados por moneda.
+- Persistir datos localmente con Room.
 
-## Excluido del MVP
+## Agregado después del MVP
 
-No implementar en el MVP:
+Estas funciones no formaron parte del MVP inicial, pero fueron implementadas después por necesidad real del proyecto:
+
+- Exportación de reporte mensual a PDF.
+- Pantalla de Ajustes.
+- Respaldo local JSON.
+- Guardado de respaldo mediante el creador de documentos del sistema.
+- Compartir respaldo mediante Android Share Sheet.
+- Restauración local JSON.
+- Validación estricta de respaldo antes de restaurar.
+- Confirmación explícita antes de reemplazar datos.
+- Restauración transaccional en Room.
+
+Estas funciones siguen respetando la filosofía local-first.
+
+## Excluido actualmente
+
+No implementar sin issue, decisión documentada y planificación previa:
 
 - Login.
 - Cuentas de usuario.
-- Nube.
+- Firebase Cloud Sync.
+- Firestore.
+- Backend obligatorio.
 - Sincronización entre dispositivos.
 - Integración bancaria.
 - Escaneo de facturas.
@@ -49,23 +74,25 @@ No implementar en el MVP:
 - Gráficas avanzadas.
 - Conversión automática entre monedas.
 - Tipo de cambio.
-- Exportación de reportes.
-- Importación de respaldos.
+- Merge avanzado de respaldos.
+- Restauración cloud-safe sin estrategia previa.
 
 ## Justificación
 
-El usuario principal necesita una herramienta rápida para registrar dinero y ver cómo va el mes.
+El usuario principal necesita una herramienta rápida para registrar dinero, ver cómo va el mes y proteger sus datos.
 
-Agregar funciones avanzadas al inicio aumentaría la complejidad sin aportar valor inmediato.
+Agregar funciones avanzadas sin preparación aumenta la complejidad y el riesgo de pérdida o corrupción de datos.
 
 ## Regla de alcance
 
-Si una función no ayuda directamente a registrar movimientos o consultar el flujo mensual, no pertenece al MVP.
+Si una función no ayuda directamente a registrar movimientos, consultar el flujo mensual, generar un reporte útil o proteger los datos, debe quedar fuera hasta que exista feedback real y planificación.
 
 ## Riesgos a evitar
 
 - Convertir MiFlujo en una app contable compleja.
 - Agregar funciones por curiosidad técnica.
 - Mezclar córdobas y dólares en un solo total.
-- Meter nube antes de validar la app local.
+- Meter nube antes de auditar la base local.
+- Implementar Firebase antes de definir identidad global y comportamiento de restore.
 - Diseñar pantallas antes de cerrar reglas de negocio.
+- Cambiar Room sin migración clara.

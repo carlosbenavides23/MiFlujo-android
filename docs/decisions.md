@@ -104,9 +104,9 @@ C$ 1,800.50 -> 180050
 US$ 100.00 -> 10000
 ```
 
-## 013 - Categorías controladas en el MVP
+## 013 - Categorías controladas inicialmente
 
-Las categorías son controladas por código en el MVP.
+Las categorías están controladas por código.
 
 No se implementan categorías dinámicas todavía.
 
@@ -114,7 +114,7 @@ No se implementan categorías dinámicas todavía.
 
 El reporte mensual se calcula desde los movimientos guardados.
 
-No se guarda como entidad independiente en el MVP.
+No se guarda como entidad independiente.
 
 ## 015 - Stack visual
 
@@ -171,6 +171,7 @@ feature/* -> nuevas funcionalidades
 fix/*     -> correcciones de bugs
 style/*   -> cambios visuales o de UI
 chore/*   -> tareas de mantenimiento
+docs/*    -> documentación
 ```
 
 Los cambios deben trabajarse en ramas pequeñas y luego integrarse mediante Pull Request.
@@ -251,12 +252,14 @@ Regla:
 - `versionCode` debe aumentar en cada APK release.
 - `versionName` debe coincidir con la versión publicada en GitHub Release.
 
-Ejemplo:
+Secuencia actual:
 
 ```text
 v0.1.0 -> versionCode 1, versionName "0.1.0"
 v0.1.1 -> versionCode 2, versionName "0.1.1"
-v0.1.2 -> versionCode 3, versionName "0.1.2"
+v0.2.0 -> versionCode 3, versionName "0.2.0"
+v0.3.0 -> versionCode 4, versionName "0.3.0"
+v0.3.5 -> versionCode 5, versionName "0.3.5"
 ```
 
 ## 026 - Post-MVP guiado por feedback real
@@ -289,20 +292,127 @@ Esta función genera un reporte mensual legible para compartir o revisar fuera d
 
 ## 028 - Respaldo local JSON
 
-El respaldo manual de datos se exportará como JSON con versión de esquema y todos los movimientos guardados.
+El respaldo manual de datos se exporta como JSON con versión de esquema y todos los movimientos guardados.
 
-El usuario podrá guardarlo con el creador de documentos del sistema o compartirlo mediante Android Share Sheet.
+El usuario puede guardarlo con el creador de documentos del sistema o compartirlo mediante Android Share Sheet.
 
-Para compartir, el archivo se generará temporalmente en la caché de la app y se expondrá de forma segura usando `FileProvider`.
+Para compartir, el archivo se genera temporalmente en la caché de la app y se expone de forma segura usando `FileProvider`.
 
-El usuario decidirá dónde guardar o compartir el respaldo. La exportación no implementará cifrado, nube, CSV ni XLSX.
+El usuario decide dónde guardar o compartir el respaldo. La exportación no implementa cifrado, nube, CSV ni XLSX.
 
 ## 029 - Restauración de respaldo local JSON
 
-La restauración leerá archivos JSON seleccionados mediante el selector de documentos del sistema.
+La restauración lee archivos JSON seleccionados mediante el selector de documentos del sistema.
 
-Antes de pedir confirmación, el archivo completo debe analizarse y validarse contra la versión de esquema, nombre de la app, campos requeridos, enums, fechas, timestamps y reglas de negocio de movimientos. Si un movimiento es inválido, se rechazará el respaldo completo.
+Antes de pedir confirmación, el archivo completo debe analizarse y validarse contra la versión de esquema, nombre de la app, campos requeridos, enums, fechas, timestamps y reglas de negocio de movimientos. Si un movimiento es inválido, se rechaza el respaldo completo.
 
-Un respaldo válido quedará pendiente hasta que el usuario confirme explícitamente que desea reemplazar los movimientos actuales. También se permitirá confirmar un respaldo válido sin movimientos para limpiar los datos actuales.
+Un respaldo válido queda pendiente hasta que el usuario confirme explícitamente que desea reemplazar los movimientos actuales. También se permite confirmar un respaldo válido sin movimientos para limpiar los datos actuales.
 
-Al confirmar, Room eliminará los movimientos actuales e insertará todos los movimientos del respaldo dentro de una sola transacción. Se preservarán los identificadores positivos y únicos del respaldo. Si cualquier inserción falla, la transacción revertirá la eliminación y conservará los datos anteriores.
+Al confirmar, Room elimina los movimientos actuales e inserta todos los movimientos del respaldo dentro de una sola transacción. Se preservan los identificadores positivos y únicos del respaldo. Si cualquier inserción falla, la transacción revierte la eliminación y conserva los datos anteriores.
+
+## 030 - Release v0.3.0 Reportes, Ajustes y Respaldo Local
+
+`v0.3.0` representa una release post-MVP grande y estable.
+
+Incluyó:
+
+- Exportación de reporte mensual a PDF tipo tabla.
+- Home simplificado.
+- Pantalla de Ajustes.
+- Exportación de respaldo local JSON.
+- Guardado de respaldo en Archivos.
+- Compartir respaldo con otras apps.
+- Restauración de respaldo local JSON.
+- Validación fuerte antes de restaurar.
+- Restauración transaccional en Room.
+- Tests unitarios para backup/parser y cálculo mensual.
+
+Esta release dejó la app más seria y preparada para uso real con datos importantes.
+
+## 031 - v0.3.5 Pre-Firebase Technical Baseline
+
+Antes de implementar Firebase Cloud Sync, MiFlujo debe pasar por una fase técnica llamada:
+
+```text
+v0.3.5 - Pre-Firebase Technical Baseline
+```
+
+Objetivo:
+
+```text
+Auditar, limpiar y preparar la base técnica antes de sincronización cloud.
+```
+
+Esta fase no debe implementar Firebase, login, Firestore ni sincronización.
+
+Debe reducir riesgo antes de trabajar con datos sincronizados.
+
+## 032 - Firebase como capa opcional futura
+
+Firebase Cloud Sync, si se implementa, debe ser una capa opcional encima de la app local-first.
+
+Room/local sigue siendo la fuente principal para el funcionamiento de la app.
+
+La app debe seguir funcionando:
+
+- sin internet,
+- sin cuenta,
+- sin backend obligatorio,
+- sin Firebase como requisito para registrar o consultar movimientos.
+
+## 033 - `id: Long` es identidad local, no identidad cloud
+
+El `id: Long` actual de `Movement` es una identidad local de Room.
+
+Funciona para:
+
+- persistencia local,
+- edición local,
+- eliminación local,
+- respaldo local por reemplazo completo,
+- restauración local validada.
+
+No debe tratarse como identidad global entre dispositivos.
+
+Antes de Firebase Cloud Sync se debe definir y agregar una identidad global estable, probablemente mediante UUID.
+
+## 034 - Backup schema v1 no es cloud-ready
+
+El respaldo JSON actual usa `schemaVersion = 1`.
+
+Este schema preserva los campos actuales del movimiento, incluyendo IDs locales positivos y únicos.
+
+Limitación:
+
+```text
+schemaVersion 1 no incluye UUID global.
+```
+
+Antes de sincronización cloud se debe diseñar backup schema v2 con identidad global.
+
+## 035 - Restore destructivo local no debe asumirse cloud-safe
+
+La restauración local actual reemplaza todos los movimientos actuales después de validación y confirmación.
+
+Este comportamiento es aceptable mientras la app sea local-first sin cloud sync activa.
+
+Antes de Firebase Cloud Sync se debe definir un comportamiento cloud-safe para restauración.
+
+No se debe asumir que un restore destructivo local puede ejecutarse igual cuando existan datos remotos sincronizados.
+
+## 036 - Documentar antes de cambiar datos para sync
+
+Antes de tocar Room, UUID, backup schema v2 o comportamiento cloud-safe, se deben documentar las decisiones técnicas.
+
+Orden recomendado:
+
+1. Auditoría técnica pre-Firebase.
+2. Estrategia de identidad y sincronización cloud.
+3. Comportamiento cloud-safe para restauración de backups.
+4. Política de Android Auto Backup.
+5. Room schema export.
+6. Centralización de validación de movimientos.
+7. UUID estable.
+8. Backup schema v2.
+
+El objetivo es evitar que Firebase se implemente encima de decisiones locales incompletas.
