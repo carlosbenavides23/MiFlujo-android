@@ -281,13 +281,13 @@ No mezclar responsabilidades.
 
 ## Backup schema v1
 
-El backup actual usa:
+Los respaldos históricos usan:
 
 ```text
 schemaVersion = 1
 ```
 
-Este schema no incluye UUID global.
+Este schema no incluye UUID global y sigue soportado para importación local.
 
 Sirve para restauración local por reemplazo completo.
 
@@ -299,7 +299,7 @@ No es cloud-ready.
 
 ## Backup schema v2
 
-Después de agregar UUID, se debe crear `schemaVersion = 2`.
+Los respaldos nuevos usan `schemaVersion = 2`.
 
 Debe incluir:
 
@@ -310,14 +310,12 @@ Debe incluir:
 - updatedAt,
 - schemaVersion.
 
-Reglas esperadas:
+Reglas:
 
-- Exportar v2 por defecto después de implementar UUID.
+- Exportar v2 por defecto.
 - Mantener importación de v1 por compatibilidad.
 - Al importar v1 en una app con UUID, generar UUID nuevos durante importación.
 - Al importar v2, preservar UUID.
-
-No implementar schema v2 antes de agregar UUID.
 
 ## Restauración y cloud sync
 

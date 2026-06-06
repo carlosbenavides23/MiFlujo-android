@@ -10,15 +10,24 @@ import java.time.LocalDateTime
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 
 class BackupJsonSerializerTest {
     @Test
     fun serializesStableSchemaAndAllRealMovementFields() {
         val createdAt = LocalDateTime.of(2026, 6, 3, 16, 50)
+        val uuids = listOf(
+            "3f83ad74-77f1-4625-a525-66d860a86e76",
+            "bfa01442-30ed-4d90-83ab-cee48d00dfe3",
+            "07e63d69-a318-4ab8-a915-9dbb04db944d",
+            "9fc6cd49-7c38-4bd1-bfa6-ae047394f87d",
+            "d32cda3c-b987-4016-ae35-27d99c1a4938",
+        )
         val movements = listOf(
             Movement(
                 id = 41L,
+                uuid = uuids[0],
                 type = MovementType.EXPENSE,
                 amountMinor = 180_050L,
                 currency = Currency.CORDOBA,
@@ -31,6 +40,7 @@ class BackupJsonSerializerTest {
             ),
             Movement(
                 id = 42L,
+                uuid = uuids[1],
                 type = MovementType.INCOME,
                 amountMinor = 10_000L,
                 currency = Currency.DOLLAR,
@@ -43,6 +53,7 @@ class BackupJsonSerializerTest {
             ),
             movement(
                 id = 43L,
+                uuid = uuids[2],
                 type = MovementType.EXPENSE,
                 currency = Currency.CORDOBA,
                 category = MovementCategory.FIXED_COST,
@@ -50,6 +61,7 @@ class BackupJsonSerializerTest {
             ),
             movement(
                 id = 44L,
+                uuid = uuids[3],
                 type = MovementType.EXPENSE,
                 currency = Currency.DOLLAR,
                 category = MovementCategory.FIXED_COST,
@@ -57,6 +69,7 @@ class BackupJsonSerializerTest {
             ),
             movement(
                 id = 45L,
+                uuid = uuids[4],
                 type = MovementType.EXPENSE,
                 currency = Currency.DOLLAR,
                 category = MovementCategory.MAINTENANCE,
@@ -74,7 +87,7 @@ class BackupJsonSerializerTest {
         val expense = serializedMovements.getJSONObject(0)
         val income = serializedMovements.getJSONObject(1)
 
-        assertEquals(1, backup.getInt("schemaVersion"))
+        assertEquals(2, backup.getInt("schemaVersion"))
         assertEquals("MiFlujo", backup.getString("app"))
         assertEquals("2026-06-03T16:50:00", backup.getString("createdAt"))
         assertEquals(5, serializedMovements.length())
@@ -84,6 +97,7 @@ class BackupJsonSerializerTest {
         )
 
         assertEquals(41L, expense.getLong("id"))
+        assertEquals(uuids[0], expense.getString("uuid"))
         assertEquals("EXPENSE", expense.getString("type"))
         assertEquals("CORDOBA", expense.getString("currency"))
         assertEquals("FIXED_COST", expense.getString("category"))
@@ -106,6 +120,10 @@ class BackupJsonSerializerTest {
             )
         }
         assertEquals(
+            uuids,
+            serializedMovements.objects().map { it.getString("uuid") },
+        )
+        assertEquals(
             setOf("WATER", "ELECTRICITY", "INTERNET"),
             serializedMovements.objects()
                 .filterNot { it.isNull("subcategory") }
@@ -125,8 +143,44 @@ class BackupJsonSerializerTest {
         )
     }
 
+    @Test
+    fun rejectsDuplicateOrInvalidMovementUuids() {
+        val duplicateUuid = "3f83ad74-77f1-4625-a525-66d860a86e76"
+
+        assertSerializationFails(
+            listOf(
+                movement(
+                    id = 1L,
+                    uuid = duplicateUuid,
+                    type = MovementType.INCOME,
+                    currency = Currency.CORDOBA,
+                    category = MovementCategory.GENERAL_INCOME,
+                ),
+                movement(
+                    id = 2L,
+                    uuid = duplicateUuid,
+                    type = MovementType.EXPENSE,
+                    currency = Currency.CORDOBA,
+                    category = MovementCategory.OTHER,
+                ),
+            ),
+        )
+        assertSerializationFails(
+            listOf(
+                movement(
+                    id = 1L,
+                    uuid = "not-a-uuid",
+                    type = MovementType.INCOME,
+                    currency = Currency.CORDOBA,
+                    category = MovementCategory.GENERAL_INCOME,
+                ),
+            ),
+        )
+    }
+
     private fun movement(
         id: Long,
+        uuid: String,
         type: MovementType,
         currency: Currency,
         category: MovementCategory,
@@ -136,6 +190,7 @@ class BackupJsonSerializerTest {
         val timestamp = LocalDateTime.of(2026, 6, 4, 8, 0)
         return Movement(
             id = id,
+            uuid = uuid,
             type = type,
             amountMinor = amountMinor,
             currency = currency,
@@ -147,10 +202,23 @@ class BackupJsonSerializerTest {
             updatedAt = timestamp,
         )
     }
+
+    private fun assertSerializationFails(movements: List<Movement>) {
+        try {
+            BackupJsonSerializer.serialize(
+                createdAt = LocalDateTime.of(2026, 6, 4, 12, 30),
+                movements = movements,
+            )
+            fail("Expected serialization to reject invalid UUIDs.")
+        } catch (_: IllegalArgumentException) {
+            // Expected.
+        }
+    }
 }
 
 private val MovementJsonKeys = setOf(
     "id",
+    "uuid",
     "type",
     "currency",
     "category",

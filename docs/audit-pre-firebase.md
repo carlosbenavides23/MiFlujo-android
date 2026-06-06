@@ -98,7 +98,7 @@ Agregar una identidad global estable, probablemente `uuid`, antes de sincronizac
 
 ### 2. Backup schema v1 no incluye identidad global
 
-El backup JSON actual usa:
+En el momento de la auditoría, el backup JSON usaba:
 
 ```text
 schemaVersion = 1
@@ -127,9 +127,9 @@ Riesgo:
 
 Un backup restaurado en un contexto cloud podría crear duplicados o pisar datos incorrectos si se usa `id` como identidad.
 
-Decisión necesaria:
+Resolución:
 
-Diseñar `schemaVersion = 2` con UUID estable.
+`#100` implementa `schemaVersion = 2` con UUID estable para nuevos respaldos y mantiene importación compatible de schema v1 generando UUID nuevos.
 
 ### 3. Timestamps actuales no bastan para resolución de conflictos
 

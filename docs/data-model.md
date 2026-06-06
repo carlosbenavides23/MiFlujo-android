@@ -73,7 +73,7 @@ Reglas:
 - No cambia al editar un movimiento.
 - Es obligatorio y único en Room.
 - Los movimientos existentes reciben UUID durante la migración Room `1 -> 2`.
-- Backup schema v1 no lo exporta ni lo preserva.
+- Backup schema v2 lo exporta y preserva.
 - Restaurar schema v1 genera UUID nuevos para los movimientos importados.
 
 ### type
@@ -206,7 +206,7 @@ Movement
 
 La migración Room `1 -> 2` preserva el ID local y todos los campos existentes, y asigna un UUID aleatorio distinto a cada fila.
 
-Backup schema v2 deberá preservar UUID, pero pertenece a la issue `#100`.
+Backup schema v2 preserva el UUID estable al exportar y restaurar movimientos.
 
 ## Enums sugeridos
 
@@ -287,9 +287,9 @@ detail: Repuesto comprado
 
 ## Backup schema v1
 
-El respaldo JSON actual usa schema version 1.
+Schema version 1 sigue soportado para importación de respaldos existentes.
 
-Incluye los campos actuales del movimiento:
+Incluye:
 
 - id.
 - type.
@@ -308,7 +308,23 @@ Limitación:
 schemaVersion 1 no incluye UUID global.
 ```
 
-Al importar schema v1, la app genera UUID nuevos. La exportación continúa omitiendo UUID hasta implementar backup schema v2 en `#100`.
+Al importar schema v1, la app genera UUID nuevos porque ese formato no contiene identidad global.
+
+## Backup schema v2
+
+Los respaldos nuevos se exportan con schema version 2.
+
+Incluyen los mismos campos de schema v1 y además:
+
+- uuid.
+
+Reglas:
+
+- El UUID debe tener formato canónico válido.
+- Los UUID deben ser únicos dentro del respaldo.
+- Exportar preserva el UUID almacenado; no genera otro UUID.
+- Importar schema v2 preserva el UUID del movimiento.
+- Versiones distintas de 1 y 2 se rechazan.
 
 ## Nota sobre categorías
 
