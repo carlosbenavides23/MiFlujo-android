@@ -5,6 +5,7 @@ import com.carlos.miflujo.domain.model.Movement
 import com.carlos.miflujo.domain.model.MovementCategory
 import com.carlos.miflujo.domain.model.MovementSubcategory
 import com.carlos.miflujo.domain.model.MovementType
+import com.carlos.miflujo.domain.validation.MovementBusinessRuleValidator
 import java.math.BigInteger
 import java.time.DateTimeException
 import java.time.LocalDate
@@ -69,7 +70,7 @@ object BackupJsonParser {
         val movement = Movement(
             id = requiredPositiveLong("id"),
             type = requiredEnum<MovementType>("type"),
-            amountMinor = requiredPositiveLong("amountMinor"),
+            amountMinor = requiredLong("amountMinor"),
             currency = requiredEnum<Currency>("currency"),
             date = requiredDate("date"),
             category = requiredEnum<MovementCategory>("category"),
@@ -78,7 +79,16 @@ object BackupJsonParser {
             createdAt = requiredTimestamp("createdAt"),
             updatedAt = requiredTimestamp("updatedAt"),
         )
-        movement.requireValidBusinessRules()
+        if (
+            MovementBusinessRuleValidator.validate(
+                amountMinor = movement.amountMinor,
+                type = movement.type,
+                category = movement.category,
+                subcategory = movement.subcategory,
+            ).isNotEmpty()
+        ) {
+            invalidBackup("Movement violates business rules.")
+        }
         return movement
     }
 
@@ -108,8 +118,15 @@ object BackupJsonParser {
     }
 
     private fun JSONObject.requiredPositiveLong(key: String): Long {
-        val value = requiredValue(key)
-        val parsed = when (value) {
+        val parsed = requiredLong(key)
+        if (parsed <= 0L) {
+            invalidBackup("$key must be positive.")
+        }
+        return parsed
+    }
+
+    private fun JSONObject.requiredLong(key: String): Long {
+        return when (val value = requiredValue(key)) {
             is Byte -> value.toLong()
             is Short -> value.toLong()
             is Int -> value.toLong()
@@ -121,10 +138,6 @@ object BackupJsonParser {
             }
             else -> invalidBackup("$key must be an integer.")
         }
-        if (parsed <= 0L) {
-            invalidBackup("$key must be positive.")
-        }
-        return parsed
     }
 
     private inline fun <reified T : Enum<T>> JSONObject.requiredEnum(key: String): T =
@@ -159,23 +172,6 @@ object BackupJsonParser {
             invalidBackup("Missing required field: $key.")
         }
         return get(key)
-    }
-
-    private fun Movement.requireValidBusinessRules() {
-        val valid = when (type) {
-            MovementType.INCOME ->
-                category == MovementCategory.GENERAL_INCOME && subcategory == null
-            MovementType.EXPENSE -> when (category) {
-                MovementCategory.GENERAL_INCOME -> false
-                MovementCategory.FIXED_COST -> subcategory != null
-                MovementCategory.MAINTENANCE,
-                MovementCategory.OTHER,
-                -> subcategory == null
-            }
-        }
-        if (!valid) {
-            invalidBackup("Movement has an invalid type, category, or subcategory combination.")
-        }
     }
 
     private fun parseDate(value: String, key: String): LocalDate =

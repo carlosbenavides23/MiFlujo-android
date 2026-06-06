@@ -111,7 +111,14 @@ class BackupJsonParserTest {
 
     @Test
     fun rejectsUnknownEnum() {
-        assertInvalid(validBackup(validMovement().put("currency", "EURO")))
+        listOf(
+            validMovement().put("type", "TRANSFER"),
+            validMovement().put("currency", "EURO"),
+            validMovement().put("category", "TAX"),
+            validMovement().put("subcategory", "PHONE"),
+        ).forEach { movement ->
+            assertInvalid(validBackup(movement))
+        }
     }
 
     @Test
