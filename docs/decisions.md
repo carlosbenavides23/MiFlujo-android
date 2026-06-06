@@ -454,4 +454,23 @@ Los movimientos nuevos reciben un UUID aleatorio al crearse. Editar un movimient
 
 Room usa schema version 2. La migración `1 -> 2` conserva IDs y datos existentes, asigna un UUID distinto a cada fila y crea un índice único sobre `uuid`.
 
-Backup schema v1 sigue sin incluir UUID. Restaurar un backup v1 genera UUID nuevos; exportar y preservar UUID queda reservado para backup schema v2 en `#100`.
+Backup schema v1 sigue sin incluir UUID. Restaurar un backup v1 genera UUID nuevos. Backup schema v2 exporta y preserva el UUID estable.
+
+## 040 - Backup schema v2 preserva UUID
+
+Los respaldos nuevos usan:
+
+```text
+schemaVersion = 2
+```
+
+Cada movimiento exportado incluye su UUID estable. La exportación rechaza UUID inválidos o duplicados y nunca genera una identidad distinta durante la serialización.
+
+La importación mantiene compatibilidad con schema v1:
+
+- schema v1 no requiere UUID y genera UUID nuevos al importar;
+- schema v2 requiere UUID canónico válido y único;
+- schema v2 preserva el UUID al restaurar;
+- versiones distintas de 1 y 2 se rechazan.
+
+La restauración continúa reemplazando todos los movimientos locales dentro de una transacción después de validación y confirmación explícita.

@@ -255,14 +255,13 @@ Política:
 
 - v1 puede restaurarse localmente con sync apagado.
 - v1 no debe subirse automáticamente a la nube como reemplazo remoto.
-- si se importa v1 en una app con UUID, se deberán generar UUID nuevos.
-- esa conversión pertenece a backup schema v2 / migración futura.
+- al importar v1, la app genera UUID nuevos.
 
 ## Relación con backup schema v2
 
-Backup schema v2 debe incluir UUID estable.
+Backup schema v2 incluye UUID estable.
 
-Cuando exista v2:
+Reglas actuales:
 
 - exportar debe preservar UUID,
 - importar v2 debe preservar UUID,
