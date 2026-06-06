@@ -5,10 +5,13 @@ import com.carlos.miflujo.domain.model.Movement
 import com.carlos.miflujo.domain.model.MovementCategory
 import com.carlos.miflujo.domain.model.MovementSubcategory
 import com.carlos.miflujo.domain.model.MovementType
+import com.carlos.miflujo.domain.model.generateMovementUuid
+import com.carlos.miflujo.domain.validation.MovementBusinessRuleValidator
 import java.math.BigInteger
 import java.time.DateTimeException
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.util.UUID
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
@@ -28,7 +31,7 @@ object BackupJsonParser {
         try {
             val root = JSONObject(json)
             val schemaVersion = root.requiredPositiveLong("schemaVersion")
-            if (schemaVersion != BackupSchemaVersion) {
+            if (schemaVersion !in SupportedBackupSchemaVersions) {
                 invalidBackup("Unsupported backup schema version.")
             }
             if (root.requiredString("app") != BackupAppName) {
@@ -37,7 +40,7 @@ object BackupJsonParser {
 
             val createdAt = root.requiredTimestamp("createdAt")
             val serializedMovements = root.requiredArray("movements")
-            val movements = serializedMovements.parseMovements()
+            val movements = serializedMovements.parseMovements(schemaVersion)
 
             return ParsedBackup(
                 createdAt = createdAt,
@@ -50,26 +53,43 @@ object BackupJsonParser {
         }
     }
 
-    private fun JSONArray.parseMovements(): List<Movement> {
+    private fun JSONArray.parseMovements(schemaVersion: Long): List<Movement> {
         val ids = mutableSetOf<Long>()
+        val uuids = mutableSetOf<UUID>()
         return List(length()) { index ->
             val serializedMovement = opt(index) as? JSONObject
                 ?: invalidBackup("Movement at index $index is not an object.")
-            serializedMovement.toMovement().also { movement ->
+            serializedMovement.toMovement(schemaVersion).also { movement ->
                 if (!ids.add(movement.id)) {
                     invalidBackup("Movement IDs must be unique.")
+                }
+                val uuid = parseCanonicalUuidOrNull(movement.uuid)
+                    ?: invalidBackup("Movement UUID must use canonical UUID format.")
+                if (!uuids.add(uuid)) {
+                    invalidBackup("Movement UUIDs must be unique.")
                 }
             }
         }
     }
 
-    private fun JSONObject.toMovement(): Movement {
-        requireKeys(MovementJsonKeys)
+    private fun JSONObject.toMovement(schemaVersion: Long): Movement {
+        requireKeys(
+            if (schemaVersion == BackupSchemaVersion) {
+                MovementJsonKeysV2
+            } else {
+                MovementJsonKeysV1
+            },
+        )
 
         val movement = Movement(
             id = requiredPositiveLong("id"),
+            uuid = if (schemaVersion == BackupSchemaVersion) {
+                requiredUuid("uuid")
+            } else {
+                generateMovementUuid()
+            },
             type = requiredEnum<MovementType>("type"),
-            amountMinor = requiredPositiveLong("amountMinor"),
+            amountMinor = requiredLong("amountMinor"),
             currency = requiredEnum<Currency>("currency"),
             date = requiredDate("date"),
             category = requiredEnum<MovementCategory>("category"),
@@ -78,9 +98,25 @@ object BackupJsonParser {
             createdAt = requiredTimestamp("createdAt"),
             updatedAt = requiredTimestamp("updatedAt"),
         )
-        movement.requireValidBusinessRules()
+        if (
+            MovementBusinessRuleValidator.validate(
+                amountMinor = movement.amountMinor,
+                type = movement.type,
+                category = movement.category,
+                subcategory = movement.subcategory,
+            ).isNotEmpty()
+        ) {
+            invalidBackup("Movement violates business rules.")
+        }
         return movement
     }
+
+    private fun JSONObject.requiredUuid(key: String): String =
+        requiredString(key).also { value ->
+            if (parseCanonicalUuidOrNull(value) == null) {
+                invalidBackup("$key must use canonical UUID format.")
+            }
+        }
 
     private fun JSONObject.requireKeys(keys: Set<String>) {
         keys.forEach { key ->
@@ -108,8 +144,15 @@ object BackupJsonParser {
     }
 
     private fun JSONObject.requiredPositiveLong(key: String): Long {
-        val value = requiredValue(key)
-        val parsed = when (value) {
+        val parsed = requiredLong(key)
+        if (parsed <= 0L) {
+            invalidBackup("$key must be positive.")
+        }
+        return parsed
+    }
+
+    private fun JSONObject.requiredLong(key: String): Long {
+        return when (val value = requiredValue(key)) {
             is Byte -> value.toLong()
             is Short -> value.toLong()
             is Int -> value.toLong()
@@ -121,10 +164,6 @@ object BackupJsonParser {
             }
             else -> invalidBackup("$key must be an integer.")
         }
-        if (parsed <= 0L) {
-            invalidBackup("$key must be positive.")
-        }
-        return parsed
     }
 
     private inline fun <reified T : Enum<T>> JSONObject.requiredEnum(key: String): T =
@@ -161,23 +200,6 @@ object BackupJsonParser {
         return get(key)
     }
 
-    private fun Movement.requireValidBusinessRules() {
-        val valid = when (type) {
-            MovementType.INCOME ->
-                category == MovementCategory.GENERAL_INCOME && subcategory == null
-            MovementType.EXPENSE -> when (category) {
-                MovementCategory.GENERAL_INCOME -> false
-                MovementCategory.FIXED_COST -> subcategory != null
-                MovementCategory.MAINTENANCE,
-                MovementCategory.OTHER,
-                -> subcategory == null
-            }
-        }
-        if (!valid) {
-            invalidBackup("Movement has an invalid type, category, or subcategory combination.")
-        }
-    }
-
     private fun parseDate(value: String, key: String): LocalDate =
         try {
             LocalDate.parse(value)
@@ -193,7 +215,12 @@ object BackupJsonParser {
         }
 }
 
-private val MovementJsonKeys = setOf(
+private val SupportedBackupSchemaVersions = setOf(
+    LegacyBackupSchemaVersion,
+    BackupSchemaVersion,
+)
+
+private val MovementJsonKeysV1 = setOf(
     "id",
     "type",
     "currency",
@@ -205,6 +232,8 @@ private val MovementJsonKeys = setOf(
     "createdAt",
     "updatedAt",
 )
+
+private val MovementJsonKeysV2 = MovementJsonKeysV1 + "uuid"
 
 private inline fun <reified T : Enum<T>> enumValueOrNull(value: String): T? =
     enumValues<T>().firstOrNull { it.name == value }

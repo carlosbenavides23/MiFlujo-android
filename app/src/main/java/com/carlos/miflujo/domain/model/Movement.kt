@@ -5,6 +5,7 @@ import java.time.LocalDateTime
 
 data class Movement(
     val id: Long = 0,
+    val uuid: String = generateMovementUuid(),
     val type: MovementType,
     val amountMinor: Long,
     val currency: Currency,

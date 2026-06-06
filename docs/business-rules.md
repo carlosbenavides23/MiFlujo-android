@@ -139,6 +139,8 @@ Reglas:
 - Debe incluir fecha/hora de creación del respaldo.
 - Debe incluir todos los movimientos exportados.
 - Debe preservar los campos reales necesarios para restaurar movimientos.
+- Los respaldos nuevos usan `schemaVersion = 2` e incluyen el UUID estable de cada movimiento.
+- La importación mantiene compatibilidad con `schemaVersion = 1` y genera UUID nuevos para esos movimientos.
 - No debe mezclar datos calculados de reportes como si fueran entidad persistida.
 
 El respaldo local actual no implementa:
@@ -174,6 +176,7 @@ Reglas de validación del respaldo:
 - Las fechas deben ser válidas.
 - Los timestamps deben ser válidos.
 - Los IDs deben ser positivos y únicos dentro del respaldo.
+- En schema v2, los UUID deben existir, ser válidos y únicos dentro del respaldo.
 - Los montos deben ser positivos.
 - Las combinaciones tipo/categoría/subcategoría deben respetar las reglas de negocio.
 

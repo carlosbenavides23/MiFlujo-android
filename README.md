@@ -252,6 +252,8 @@ La documentación base se encuentra en `docs/`:
 - `docs/decisions.md`
 - `docs/release-process.md`
 - `docs/audit-pre-firebase.md`
+- `docs/cloud-sync-strategy.md`
+- `docs/cloud-safe-restore.md`
 
 El archivo `AGENTS.md` contiene reglas importantes para agentes de IA o colaboradores que trabajen en el proyecto.
 

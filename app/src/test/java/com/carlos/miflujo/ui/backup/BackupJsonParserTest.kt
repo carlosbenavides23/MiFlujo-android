@@ -6,6 +6,7 @@ import com.carlos.miflujo.domain.model.MovementSubcategory
 import com.carlos.miflujo.domain.model.MovementType
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.util.UUID
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -15,7 +16,7 @@ import org.junit.Test
 
 class BackupJsonParserTest {
     @Test
-    fun parsesValidBackupAndPreservesAllFieldsExactly() {
+    fun parsesSchemaVersion1AndGeneratesNewUuids() {
         val backup = validBackup(
             validMovement(
                 id = 1L,
@@ -50,6 +51,10 @@ class BackupJsonParserTest {
 
         assertEquals(LocalDateTime.of(2026, 6, 4, 12, 30, 45), parsed.createdAt)
         assertEquals(4, parsed.movements.size)
+        assertEquals(4, parsed.movements.map { it.uuid }.toSet().size)
+        parsed.movements.forEach { movement ->
+            assertEquals(movement.uuid, UUID.fromString(movement.uuid).toString())
+        }
 
         val income = parsed.movements[0]
         assertEquals(1L, income.id)
@@ -75,6 +80,19 @@ class BackupJsonParserTest {
     }
 
     @Test
+    fun parsesSchemaVersion2AndPreservesMovementUuid() {
+        val uuid = "3f83ad74-77f1-4625-a525-66d860a86e76"
+        val parsed = BackupJsonParser.parse(
+            validBackup(
+                validMovement(uuid = uuid),
+                schemaVersion = 2,
+            ).toString(),
+        )
+
+        assertEquals(uuid, parsed.movements.single().uuid)
+    }
+
+    @Test
     fun acceptsEmptyMovementsArray() {
         val parsed = BackupJsonParser.parse(validBackup().toString())
 
@@ -83,7 +101,39 @@ class BackupJsonParserTest {
 
     @Test
     fun rejectsInvalidSchemaVersion() {
-        assertInvalid(validBackup(validMovement()).put("schemaVersion", 2))
+        assertInvalid(validBackup(validMovement()).put("schemaVersion", 3))
+    }
+
+    @Test
+    fun rejectsMissingUuidInSchemaVersion2() {
+        assertInvalid(
+            validBackup(
+                validMovement(),
+                schemaVersion = 2,
+            ),
+        )
+    }
+
+    @Test
+    fun rejectsInvalidUuidInSchemaVersion2() {
+        assertInvalid(
+            validBackup(
+                validMovement(uuid = "not-a-uuid"),
+                schemaVersion = 2,
+            ),
+        )
+    }
+
+    @Test
+    fun rejectsDuplicateUuidInSchemaVersion2() {
+        val uuid = "3f83ad74-77f1-4625-a525-66d860a86e76"
+        assertInvalid(
+            validBackup(
+                validMovement(id = 1L, uuid = uuid),
+                validMovement(id = 2L, uuid = uuid),
+                schemaVersion = 2,
+            ),
+        )
     }
 
     @Test
@@ -111,7 +161,14 @@ class BackupJsonParserTest {
 
     @Test
     fun rejectsUnknownEnum() {
-        assertInvalid(validBackup(validMovement().put("currency", "EURO")))
+        listOf(
+            validMovement().put("type", "TRANSFER"),
+            validMovement().put("currency", "EURO"),
+            validMovement().put("category", "TAX"),
+            validMovement().put("subcategory", "PHONE"),
+        ).forEach { movement ->
+            assertInvalid(validBackup(movement))
+        }
     }
 
     @Test
@@ -180,9 +237,12 @@ class BackupJsonParserTest {
     }
 }
 
-private fun validBackup(vararg movements: JSONObject): JSONObject =
+private fun validBackup(
+    vararg movements: JSONObject,
+    schemaVersion: Int = 1,
+): JSONObject =
     JSONObject()
-        .put("schemaVersion", 1)
+        .put("schemaVersion", schemaVersion)
         .put("app", "MiFlujo")
         .put("createdAt", "2026-06-04T12:30:45")
         .put("movements", JSONArray().apply { movements.forEach(::put) })
@@ -193,17 +253,21 @@ private fun validMovement(
     category: String = "OTHER",
     subcategory: Any = JSONObject.NULL,
     detail: Any = "Detalle exacto",
+    uuid: String? = null,
 ): JSONObject = JSONObject()
-    .put("id", id)
-    .put("type", type)
-    .put("currency", "CORDOBA")
-    .put("category", category)
-    .put("subcategory", subcategory)
-    .put("amountMinor", 12_345L)
-    .put("detail", detail)
-    .put("date", "2026-06-03")
-    .put("createdAt", "2026-06-03T09:15:30")
-    .put("updatedAt", "2026-06-03T10:20:45.123")
+    .apply {
+        put("id", id)
+        uuid?.let { put("uuid", it) }
+        put("type", type)
+        put("currency", "CORDOBA")
+        put("category", category)
+        put("subcategory", subcategory)
+        put("amountMinor", 12_345L)
+        put("detail", detail)
+        put("date", "2026-06-03")
+        put("createdAt", "2026-06-03T09:15:30")
+        put("updatedAt", "2026-06-03T10:20:45.123")
+    }
 
 private val MovementJsonKeys = setOf(
     "id",

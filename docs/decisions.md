@@ -416,3 +416,61 @@ Orden recomendado:
 8. Backup schema v2.
 
 El objetivo es evitar que Firebase se implemente encima de decisiones locales incompletas.
+
+## 037 - Exportar y versionar schemas de Room
+
+Room exporta su schema al directorio versionado del proyecto:
+
+```text
+app/schemas/
+```
+
+Los archivos generados deben mantenerse en Git para revisar cambios de estructura y preparar migraciones futuras.
+
+Habilitar el export no cambia la versión actual de la base de datos, el modelo `Movement` ni el comportamiento de la app.
+
+## 038 - Validación centralizada de reglas de movimientos
+
+Las reglas de negocio compartidas de `Movement` se validan desde una fuente pura de dominio:
+
+```text
+domain/validation/MovementBusinessRuleValidator
+```
+
+Esta validación cubre monto positivo y combinaciones válidas de tipo, categoría y subcategoría.
+
+La UI conserva sus validaciones de formato y campos requeridos. El parser de backups conserva la validación estructural, de enums, fechas, timestamps e IDs. Después de esas validaciones, ambos reutilizan las mismas reglas de dominio.
+
+## 039 - UUID estable para movimientos
+
+`Movement` conserva dos identidades:
+
+```text
+id: Long     -> identidad local y primary key de Room
+uuid: String -> identidad global estable futura
+```
+
+Los movimientos nuevos reciben un UUID aleatorio al crearse. Editar un movimiento preserva su UUID.
+
+Room usa schema version 2. La migración `1 -> 2` conserva IDs y datos existentes, asigna un UUID distinto a cada fila y crea un índice único sobre `uuid`.
+
+Backup schema v1 sigue sin incluir UUID. Restaurar un backup v1 genera UUID nuevos. Backup schema v2 exporta y preserva el UUID estable.
+
+## 040 - Backup schema v2 preserva UUID
+
+Los respaldos nuevos usan:
+
+```text
+schemaVersion = 2
+```
+
+Cada movimiento exportado incluye su UUID estable. La exportación rechaza UUID inválidos o duplicados y nunca genera una identidad distinta durante la serialización.
+
+La importación mantiene compatibilidad con schema v1:
+
+- schema v1 no requiere UUID y genera UUID nuevos al importar;
+- schema v2 requiere UUID canónico válido y único;
+- schema v2 preserva el UUID al restaurar;
+- versiones distintas de 1 y 2 se rechazan.
+
+La restauración continúa reemplazando todos los movimientos locales dentro de una transacción después de validación y confirmación explícita.

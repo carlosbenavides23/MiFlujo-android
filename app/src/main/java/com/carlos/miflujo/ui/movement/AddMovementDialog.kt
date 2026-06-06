@@ -39,6 +39,8 @@ import com.carlos.miflujo.domain.model.Movement
 import com.carlos.miflujo.domain.model.MovementCategory
 import com.carlos.miflujo.domain.model.MovementSubcategory
 import com.carlos.miflujo.domain.model.MovementType
+import com.carlos.miflujo.domain.validation.MovementBusinessRuleValidator
+import com.carlos.miflujo.domain.validation.MovementBusinessRuleViolation
 import com.carlos.miflujo.ui.formatVisibleDate
 import java.time.DateTimeException
 import java.time.LocalDate
@@ -523,6 +525,19 @@ private fun validateAddMovementForm(
 ): AddMovementValidationResult {
     val parsedAmountMinor = parseAmountMinorOrNull(amount)
     val parsedDate = parseVisibleDateOrNull(date)
+    val businessRuleViolations = if (movementType != null && parsedAmountMinor != null) {
+        MovementBusinessRuleValidator.validate(
+            amountMinor = parsedAmountMinor,
+            type = movementType,
+            category = movementType.categoryForSubmit(category),
+            subcategory = movementType.subcategoryForSubmit(
+                category = category,
+                subcategory = subcategory,
+            ),
+        )
+    } else {
+        emptySet()
+    }
 
     return AddMovementValidationResult(
         errors = AddMovementFormErrors(
@@ -530,7 +545,8 @@ private fun validateAddMovementForm(
             amount = when {
                 amount.isBlank() -> "Ingrese un monto."
                 parsedAmountMinor == null -> "Ingrese un monto válido."
-                parsedAmountMinor <= 0L -> "El monto debe ser mayor que 0."
+                MovementBusinessRuleViolation.AMOUNT_NOT_POSITIVE in businessRuleViolations ->
+                    "El monto debe ser mayor que 0."
                 parsedAmountMinor > MAX_MOVEMENT_AMOUNT_MINOR -> MAX_MOVEMENT_AMOUNT_ERROR
                 else -> null
             },
@@ -546,9 +562,8 @@ private fun validateAddMovementForm(
                 null
             },
             subcategory = if (
-                movementType == MovementType.EXPENSE &&
-                category == MovementCategory.FIXED_COST &&
-                subcategory == null
+                MovementBusinessRuleViolation.FIXED_COST_HAS_NO_SUBCATEGORY in
+                businessRuleViolations
             ) {
                 "Seleccione agua, luz o internet."
             } else {
