@@ -428,3 +428,15 @@ app/schemas/
 Los archivos generados deben mantenerse en Git para revisar cambios de estructura y preparar migraciones futuras.
 
 Habilitar el export no cambia la versión actual de la base de datos, el modelo `Movement` ni el comportamiento de la app.
+
+## 038 - Validación centralizada de reglas de movimientos
+
+Las reglas de negocio compartidas de `Movement` se validan desde una fuente pura de dominio:
+
+```text
+domain/validation/MovementBusinessRuleValidator
+```
+
+Esta validación cubre monto positivo y combinaciones válidas de tipo, categoría y subcategoría.
+
+La UI conserva sus validaciones de formato y campos requeridos. El parser de backups conserva la validación estructural, de enums, fechas, timestamps e IDs. Después de esas validaciones, ambos reutilizan las mismas reglas de dominio.
