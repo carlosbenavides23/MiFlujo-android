@@ -416,3 +416,15 @@ Orden recomendado:
 8. Backup schema v2.
 
 El objetivo es evitar que Firebase se implemente encima de decisiones locales incompletas.
+
+## 037 - Exportar y versionar schemas de Room
+
+Room exporta su schema al directorio versionado del proyecto:
+
+```text
+app/schemas/
+```
+
+Los archivos generados deben mantenerse en Git para revisar cambios de estructura y preparar migraciones futuras.
+
+Habilitar el export no cambia la versión actual de la base de datos, el modelo `Movement` ni el comportamiento de la app.
