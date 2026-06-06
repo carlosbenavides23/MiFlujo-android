@@ -440,3 +440,18 @@ domain/validation/MovementBusinessRuleValidator
 Esta validación cubre monto positivo y combinaciones válidas de tipo, categoría y subcategoría.
 
 La UI conserva sus validaciones de formato y campos requeridos. El parser de backups conserva la validación estructural, de enums, fechas, timestamps e IDs. Después de esas validaciones, ambos reutilizan las mismas reglas de dominio.
+
+## 039 - UUID estable para movimientos
+
+`Movement` conserva dos identidades:
+
+```text
+id: Long     -> identidad local y primary key de Room
+uuid: String -> identidad global estable futura
+```
+
+Los movimientos nuevos reciben un UUID aleatorio al crearse. Editar un movimiento preserva su UUID.
+
+Room usa schema version 2. La migración `1 -> 2` conserva IDs y datos existentes, asigna un UUID distinto a cada fila y crea un índice único sobre `uuid`.
+
+Backup schema v1 sigue sin incluir UUID. Restaurar un backup v1 genera UUID nuevos; exportar y preservar UUID queda reservado para backup schema v2 en `#100`.

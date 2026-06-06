@@ -3,6 +3,7 @@ package com.carlos.miflujo
 import android.content.Context
 import androidx.room.Room
 import com.carlos.miflujo.data.local.MiFlujoDatabase
+import com.carlos.miflujo.data.local.MIGRATION_1_2
 import com.carlos.miflujo.data.repository.MovementRepository
 import com.carlos.miflujo.data.repository.RoomMovementRepository
 
@@ -21,7 +22,9 @@ class DefaultMiFlujoAppContainer(
             context = applicationContext,
             klass = MiFlujoDatabase::class.java,
             name = DATABASE_NAME,
-        ).build()
+        )
+            .addMigrations(MIGRATION_1_2)
+            .build()
     }
 
     override val movementRepository: MovementRepository by lazy {

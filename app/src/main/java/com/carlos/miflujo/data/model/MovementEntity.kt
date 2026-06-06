@@ -2,12 +2,17 @@ package com.carlos.miflujo.data.model
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "movements")
+@Entity(
+    tableName = "movements",
+    indices = [Index(value = ["uuid"], unique = true)],
+)
 data class MovementEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
+    val uuid: String,
     val type: String,
     @ColumnInfo(name = "amount_minor")
     val amountMinor: Long,

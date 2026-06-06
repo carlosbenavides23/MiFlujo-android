@@ -12,6 +12,7 @@ import java.time.ZoneOffset
 
 fun Movement.toEntity(): MovementEntity = MovementEntity(
     id = id,
+    uuid = uuid,
     type = type.name,
     amountMinor = amountMinor,
     currency = currency.name,
@@ -25,6 +26,7 @@ fun Movement.toEntity(): MovementEntity = MovementEntity(
 
 fun MovementEntity.toDomain(): Movement = Movement(
     id = id,
+    uuid = uuid,
     type = MovementType.valueOf(type),
     amountMinor = amountMinor,
     currency = Currency.valueOf(currency),
