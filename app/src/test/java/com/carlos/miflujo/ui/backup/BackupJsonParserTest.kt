@@ -6,6 +6,7 @@ import com.carlos.miflujo.domain.model.MovementSubcategory
 import com.carlos.miflujo.domain.model.MovementType
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.util.UUID
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -50,6 +51,10 @@ class BackupJsonParserTest {
 
         assertEquals(LocalDateTime.of(2026, 6, 4, 12, 30, 45), parsed.createdAt)
         assertEquals(4, parsed.movements.size)
+        assertEquals(4, parsed.movements.map { it.uuid }.toSet().size)
+        parsed.movements.forEach { movement ->
+            assertEquals(movement.uuid, UUID.fromString(movement.uuid).toString())
+        }
 
         val income = parsed.movements[0]
         assertEquals(1L, income.id)

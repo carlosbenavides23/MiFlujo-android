@@ -6,7 +6,7 @@ import com.carlos.miflujo.data.model.MovementEntity
 
 @Database(
     entities = [MovementEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class MiFlujoDatabase : RoomDatabase() {

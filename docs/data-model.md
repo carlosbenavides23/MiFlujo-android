@@ -9,6 +9,7 @@ Modelo actual:
 ```text
 Movement
 - id
+- uuid
 - type
 - amountMinor
 - currency
@@ -24,9 +25,9 @@ Movement
 
 El modelo actual está diseñado para una app local-first basada en Room.
 
-`id` es un identificador local. Funciona correctamente para persistencia local, edición, eliminación, respaldo local por reemplazo completo y restauración local validada.
+`id` sigue siendo el identificador local de Room.
 
-Antes de Firebase Cloud Sync se debe agregar una estrategia de identidad global. No se debe asumir que `id: Long` sirve como identidad cloud entre dispositivos.
+`uuid` es la identidad global estable preparada para una futura sincronización cloud.
 
 ## Campos
 
@@ -53,7 +54,27 @@ Limitación:
 id no es identidad global.
 ```
 
-Para sincronización cloud futura se debe agregar un UUID estable o una estrategia equivalente de identidad global.
+No debe usarse como identidad cloud entre dispositivos.
+
+### uuid
+
+Identificador global estable del movimiento.
+
+Tipo:
+
+```kotlin
+String
+```
+
+Reglas:
+
+- Se genera con un UUID aleatorio al crear un movimiento.
+- No depende del ID local ni de campos editables.
+- No cambia al editar un movimiento.
+- Es obligatorio y único en Room.
+- Los movimientos existentes reciben UUID durante la migración Room `1 -> 2`.
+- Backup schema v1 no lo exporta ni lo preserva.
+- Restaurar schema v1 genera UUID nuevos para los movimientos importados.
 
 ### type
 
@@ -175,11 +196,7 @@ Limitación:
 
 `updatedAt` no debe considerarse suficiente para resolver conflictos cloud sin una estrategia documentada.
 
-## Identidad cloud futura
-
-Antes de implementar Firebase Cloud Sync, el modelo debe definir una identidad global estable.
-
-Dirección esperada:
+## Identidad local y global
 
 ```text
 Movement
@@ -187,16 +204,9 @@ Movement
 - uuid: String global stable id
 ```
 
-Reglas a definir antes de implementar:
+La migración Room `1 -> 2` preserva el ID local y todos los campos existentes, y asigna un UUID aleatorio distinto a cada fila.
 
-- Cómo se genera el UUID para movimientos nuevos.
-- Cómo se asigna UUID a movimientos existentes mediante migración.
-- Cómo se exporta UUID en backup schema v2.
-- Cómo se importa backup schema v1 sin UUID.
-- Cómo se evita duplicar movimientos al sincronizar.
-- Cómo se comporta restore cuando cloud sync existe.
-
-No implementar este cambio sin migración Room y pruebas.
+Backup schema v2 deberá preservar UUID, pero pertenece a la issue `#100`.
 
 ## Enums sugeridos
 
@@ -237,6 +247,7 @@ enum class MovementSubcategory {
 
 ```text
 id: 1
+uuid: 3f83ad74-77f1-4625-a525-66d860a86e76
 type: INCOME
 amountMinor: 500000
 currency: CORDOBA
@@ -250,6 +261,7 @@ detail: Venta del día
 
 ```text
 id: 2
+uuid: bfa01442-30ed-4d90-83ab-cee48d00dfe3
 type: EXPENSE
 amountMinor: 180000
 currency: CORDOBA
@@ -263,6 +275,7 @@ detail: Pago de factura mensual
 
 ```text
 id: 3
+uuid: 07e63d69-a318-4ab8-a915-9dbb04db944d
 type: EXPENSE
 amountMinor: 10000
 currency: DOLLAR
@@ -295,7 +308,7 @@ Limitación:
 schemaVersion 1 no incluye UUID global.
 ```
 
-Por eso, antes de Firebase Cloud Sync se debe diseñar backup schema v2.
+Al importar schema v1, la app genera UUID nuevos. La exportación continúa omitiendo UUID hasta implementar backup schema v2 en `#100`.
 
 ## Nota sobre categorías
 
