@@ -47,6 +47,13 @@ ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
 
+configurations.matching { it.name.endsWith("AndroidTestRuntimeClasspath") }.configureEach {
+    resolutionStrategy.force(
+        "org.jetbrains.kotlinx:kotlinx-serialization-core:1.8.1",
+        "org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:1.8.1",
+    )
+}
+
 dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
