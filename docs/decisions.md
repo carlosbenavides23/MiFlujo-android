@@ -474,3 +474,53 @@ La importación mantiene compatibilidad con schema v1:
 - versiones distintas de 1 y 2 se rechazan.
 
 La restauración continúa reemplazando todos los movimientos locales dentro de una transacción después de validación y confirmación explícita.
+
+## 041 - Plan final de Firebase Cloud Sync v0.4.0
+
+`v0.4.0` será una release estable, no una alpha, con QA fuerte antes de publicación.
+
+Cloud Sync será opcional y local-first:
+
+- Room sigue siendo la fuente local de verdad y la fuente observable para UI.
+- Firestore es una capa remota de sincronización.
+- La caché offline de Firestore no es fuente de verdad.
+- Con Cloud Sync apagado, MiFlujo se comporta como `v0.3.5`, usa `LOCAL_ONLY` y no encola trabajo de sync.
+
+Cloud Sync será individual por cuenta. No habrá cuentas compartidas, espacios familiares, lectura cruzada ni rol administrador con acceso a movimientos ajenos. Carlos no tendrá privilegio de app sobre los datos financieros de otro usuario.
+
+Estructura Firestore:
+
+```text
+users/{uid}/movements/{movementUuid}
+users/{uid}/metadata/sync
+authorizedUsers/{uid}
+```
+
+`authorizedUsers/{uid}` habilita Cloud Sync para ese UID, pero no concede acceso a datos de otros usuarios. La app no mostrará datos de contacto del owner. Una cuenta no autorizada podrá copiar su UID y continuar local-only.
+
+Firestore usará UUID como document ID y como campo coincidente. No guardará el `id` local de Room.
+
+Room necesitará `syncStatus`, `lastSyncedAt` y `deletedAt`. Los dos primeros serán local-only y no se guardarán en Firestore; `deletedAt` se sincronizará como tombstone.
+
+`LOCAL_ONLY` será el estado local para movimientos cuando Cloud Sync esté apagado o todavía no fue activado. No se subirá a Firestore. Los estados pendientes solo se usarán con Cloud Sync activo.
+
+Con Cloud Sync activo:
+
+- crear/editar -> `PENDING_UPLOAD`,
+- eliminar -> `deletedAt` + `PENDING_DELETE`,
+- los tombstones no se limpiarán físicamente en `v0.4.0`,
+- los tombstones no aparecerán en UI normal, reportes ni PDF.
+
+La reconciliación usará UUID para identidad y `updatedAt` generado por la app para conflictos. Descargar nunca borrará físicamente filas Room.
+
+Crear backup local siempre estará permitido. Restaurar quedará bloqueado mientras Cloud Sync esté activo. Backup schema v1 nunca se restaurará con sync activo; cualquier soporte futuro requerirá schema v2 o superior y una política explícita.
+
+Los triggers serán foreground, red recuperada con la app abierta, aproximadamente cada 90 segundos en foreground con pendientes, `Sincronizar ahora` y WorkManager con restricción de red como respaldo. Salir de la app no será trigger y WorkManager periódico no implementará el timer de 90 segundos.
+
+Desactivar Cloud Sync o cerrar sesión no borrará Room ni Firestore, detendrá sync automático y advertirá si existen cambios pendientes.
+
+El plan completo está en:
+
+```text
+docs/firebase-cloud-sync-plan.md
+```

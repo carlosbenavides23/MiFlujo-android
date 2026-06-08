@@ -18,6 +18,14 @@ v0.3.5 - Pre-Firebase Technical Baseline
 
 Este documento no implementa Firebase, login, Firestore ni sincronización. Solo define las decisiones base para evitar pérdida, duplicación o corrupción de datos cuando se implemente cloud sync en una versión futura.
 
+El plan final de implementación para `v0.4.0` está en:
+
+```text
+docs/firebase-cloud-sync-plan.md
+```
+
+Si una opción exploratoria de este documento difiere del plan `v0.4.0`, prevalece el plan final.
+
 ## Principio principal
 
 ```text
@@ -61,7 +69,9 @@ La primera versión de Firebase Cloud Sync debe ser mínima y conservadora.
 Alcance recomendado:
 
 - Sincronizar movimientos del usuario autenticado.
-- Mantener Room como cache/base local.
+- Mantener Room como fuente local de verdad y fuente observable para UI.
+- Usar Firestore solo como capa remota de sincronización.
+- No tratar la caché offline de Firestore como fuente de verdad.
 - Subir movimientos locales después de activar sync.
 - Descargar movimientos remotos del mismo usuario.
 - Evitar duplicados usando identidad global estable.
@@ -72,6 +82,9 @@ Alcance recomendado:
 No incluir inicialmente:
 
 - Colaboradores.
+- Cuentas compartidas.
+- Espacios familiares o compartidos.
+- Rol administrador con acceso a movimientos de otros usuarios.
 - Multiempresa.
 - Permisos avanzados.
 - Sync compartido entre usuarios.
@@ -162,26 +175,32 @@ subcategory: MovementSubcategory?
 detail: String?
 createdAt: LocalDateTime
 updatedAt: LocalDateTime
-syncState: SyncState?   // futuro, si se necesita
-lastSyncedAt: DateTime? // futuro, si se necesita
+syncStatus: SyncStatus? // local-only
+lastSyncedAt: DateTime? // local-only
+deletedAt: DateTime?    // tombstone sincronizado
 ```
 
-No todos los campos futuros deben agregarse en el primer cambio. El cambio obligatorio antes de cloud sync es `uuid`.
+`syncStatus` y `lastSyncedAt` no se envían ni se guardan en Firestore. `LOCAL_ONLY` es metadata local. `deletedAt` sí se sincroniza porque representa una eliminación lógica.
 
 ## Firestore conceptual
 
 La estructura remota debe aislar datos por usuario.
 
-Estructura conceptual posible:
+Estructura definida para `v0.4.0`:
 
 ```text
-users/{userId}/movements/{movementUuid}
+users/{uid}/movements/{movementUuid}
+users/{uid}/metadata/sync
+authorizedUsers/{uid}
 ```
 
 Reglas conceptuales:
 
 - Cada usuario solo accede a sus propios movimientos.
 - El documento remoto de un movimiento usa `movementUuid` como identificador.
+- Firestore no guarda el `id` local de Room.
+- El campo remoto `uuid` debe coincidir con el document ID.
+- `authorizedUsers/{uid}` permite usar Cloud Sync, pero no concede acceso cruzado.
 - No se guarda un reporte mensual como entidad remota independiente.
 - Los reportes se recalculan desde movimientos sincronizados.
 - No se mezclan monedas en un total remoto.
@@ -199,61 +218,32 @@ subcategory
 detail
 createdAt
 updatedAt
-deletedAt?       // si se implementa soft delete
-schemaVersion?
+deletedAt
+schemaVersion
 ```
 
 ## Borrado y sincronización
 
-La eliminación local actual puede borrar un movimiento de Room.
-
-Para cloud sync, se debe decidir si se usará:
-
-1. borrado físico remoto,
-2. soft delete con `deletedAt`,
-3. cola de operaciones pendientes.
-
-Recomendación inicial:
+Con Cloud Sync activo, `v0.4.0` usa soft delete:
 
 ```text
-Usar soft delete o una estrategia explícita antes de multi-device sync real.
+delete -> deletedAt + PENDING_DELETE
 ```
 
-Razón:
-
-Si un dispositivo elimina un movimiento offline y otro dispositivo lo edita, se necesita una regla clara.
-
-No implementar borrado cloud sin estrategia de conflicto.
+Los tombstones no se limpian físicamente en `v0.4.0`. Se mantienen en Room y Firestore, pero se ocultan de la UI normal y se excluyen de reportes y PDF.
 
 ## Conflictos
 
-La primera estrategia debe ser simple.
-
-Opción mínima posible:
+La reconciliación de `v0.4.0` usa:
 
 ```text
-Last-write-wins por updatedAt controlado por la app.
+UUID para identidad.
+updatedAt generado por la app para decidir conflictos.
 ```
 
-Pero esta opción tiene riesgos:
+Si el mismo UUID existe en ambos lados, gana el `updatedAt` más reciente. Un remoto ausente localmente se inserta. Un remoto con `deletedAt` se guarda como tombstone local. Descargar nunca elimina físicamente filas de Room.
 
-- Puede perder cambios si dos dispositivos editan el mismo movimiento offline.
-- Requiere timestamps confiables.
-- Requiere definir si se usa hora local, servidor o ambos.
-
-Recomendación para primera versión:
-
-- Evitar edición multi-dispositivo compleja inicialmente.
-- Documentar que el último cambio sincronizado puede ganar.
-- Preferir comportamiento simple y observable.
-- No prometer merge perfecto.
-
-Antes de implementar conflictos, definir:
-
-- Qué campo decide el ganador.
-- Qué pasa si `updatedAt` es igual.
-- Qué pasa si un movimiento fue eliminado en un dispositivo y editado en otro.
-- Qué feedback ve el usuario si hay error de sync.
+`createdAt` nunca cambia. `updatedAt` cambia al editar y al hacer soft delete.
 
 ## Backup local y cloud sync
 
@@ -329,17 +319,9 @@ Riesgo:
 Un restore local podría convertirse en una eliminación masiva remota.
 ```
 
-Antes de activar cloud sync, debe existir un documento específico de restore cloud-safe.
+Para `v0.4.0`, crear backup local siempre está permitido y restaurar backup local queda bloqueado mientras Cloud Sync está activo.
 
-Opciones a evaluar en `#102`:
-
-- Desactivar restore cuando cloud sync esté activo.
-- Permitir restore solo si sync está apagado.
-- Restaurar localmente y pedir confirmación para subir cambios.
-- Implementar import/merge no destructivo.
-- Implementar reemplazo remoto completo con confirmación extrema.
-
-No decidir implementación final aquí. Este documento solo define que restore debe tratarse como riesgo crítico de sincronización.
+Backup schema v1 nunca debe restaurarse con Cloud Sync activo. Un restore cloud futuro solo podrá considerar schema v2 o superior y requerirá una política explícita de merge/restore.
 
 ## Auth futura
 
@@ -347,19 +329,21 @@ Firebase Cloud Sync probablemente requerirá autenticación.
 
 Pero la autenticación no debe ser obligatoria para usar la app local.
 
-Reglas conceptuales:
+Reglas definidas:
 
 - El usuario puede usar la app sin cuenta.
 - El usuario puede activar sync opcionalmente.
 - Si no inicia sesión, Room sigue funcionando.
-- Si cierra sesión, debe definirse qué pasa con datos locales.
-- No borrar datos locales automáticamente al cerrar sesión sin confirmación explícita.
+- Cloud Sync requiere UID autorizado.
+- Una cuenta no autorizada puede copiar su UID y continuar local-only.
+- La app no muestra datos de contacto del owner.
+- Carlos no tiene privilegio de app para leer movimientos de otro usuario.
+- Cerrar sesión no borra Room ni Firestore.
+- Cerrar sesión detiene sync automático y advierte si existen cambios pendientes.
 
 ## Estados de sync futuros
 
-Si se implementa sync real, puede ser útil representar estados internos.
-
-Ejemplos conceptuales:
+Estados locales definidos:
 
 ```text
 LOCAL_ONLY
@@ -369,7 +353,9 @@ PENDING_DELETE
 SYNC_ERROR
 ```
 
-No agregar estos estados todavía si no son necesarios para el primer paso.
+`LOCAL_ONLY` corresponde a movimientos cuando Cloud Sync está apagado, todavía no fue activado o MiFlujo se comporta como `v0.3.5`.
+
+Con Cloud Sync apagado no se encola trabajo de sync. Los estados pendientes solo se usan cuando Cloud Sync está activo.
 
 ## Secuencia recomendada antes de Firebase
 
