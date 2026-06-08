@@ -12,6 +12,12 @@ El reporte mensual se calcula a partir de los movimientos guardados.
 
 Room/local es la fuente principal de datos en la app actual.
 
+Para `v0.4.0`, un movimiento usa `LOCAL_ONLY` cuando Cloud Sync está apagado, aún no fue activado o la app se comporta como `v0.3.5`.
+
+Con Cloud Sync apagado no se encola trabajo de sync. Los estados pendientes solo se usan cuando Cloud Sync está activo.
+
+`syncStatus`, incluido `LOCAL_ONLY`, y `lastSyncedAt` son metadata local y no se guardan en Firestore.
+
 ## Tipos de movimiento
 
 Tipos permitidos:
@@ -116,6 +122,8 @@ Un movimiento pertenece a un mes según su fecha.
 
 Los reportes deben mantener totales separados por moneda.
 
+En `v0.4.0`, los movimientos con `deletedAt` son tombstones y deben excluirse de la UI normal, los reportes mensuales y el PDF.
+
 ## Exportación PDF
 
 El PDF es una salida humana para leer, revisar o compartir el reporte mensual.
@@ -182,11 +190,13 @@ Reglas de validación del respaldo:
 
 ## Restore y cloud sync futura
 
-La restauración local destructiva es aceptable mientras la app sea local-first sin sincronización cloud activa.
+Crear backup local sigue permitido con Cloud Sync activo o apagado.
 
-Antes de Firebase Cloud Sync, se debe definir un comportamiento cloud-safe para restore.
+La restauración local destructiva es aceptable cuando Cloud Sync está apagado.
 
-No se debe asumir que el restore destructivo actual puede usarse igual con datos sincronizados.
+En `v0.4.0`, restaurar backup queda bloqueado mientras Cloud Sync está activo.
+
+Backup schema v1 nunca debe restaurarse con Cloud Sync activo. Un soporte futuro de restore con sync solo podrá considerar schema v2 o superior y requerirá una política explícita de merge/restore.
 
 ## Flujo neto negativo
 

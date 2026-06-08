@@ -236,6 +236,7 @@ La documentación base se encuentra en `docs/`:
 - `docs/cloud-sync-strategy.md`
 - `docs/cloud-safe-restore.md`
 - `docs/android-auto-backup-policy.md`
+- `docs/firebase-cloud-sync-plan.md`
 
 El archivo `AGENTS.md` contiene reglas importantes para agentes de IA o colaboradores que trabajen en el proyecto.
 
@@ -243,7 +244,7 @@ El archivo `AGENTS.md` contiene reglas importantes para agentes de IA o colabora
 
 Ideas futuras, sujetas a feedback real del usuario y planificación técnica:
 
-- Firebase Cloud Sync opcional.
+- Firebase Cloud Sync opcional, planificado en `docs/firebase-cloud-sync-plan.md`.
 - Changelog visible dentro de Ajustes.
 - Acerca de MiFlujo.
 - Comparación entre meses.
