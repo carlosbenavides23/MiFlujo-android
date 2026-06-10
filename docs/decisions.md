@@ -524,3 +524,23 @@ El plan completo está en:
 ```text
 docs/firebase-cloud-sync-plan.md
 ```
+
+## 042 - Reglas de seguridad Firestore aisladas por UID
+
+Las reglas versionadas de Firestore viven en:
+
+```text
+firestore.rules
+```
+
+`firebase.json` configura Firebase CLI para usar ese archivo.
+
+Las reglas niegan acceso por defecto. Cloud Sync requiere autenticación, coincidencia entre `request.auth.uid` y el UID de la ruta, y un documento `authorizedUsers/{uid}` con `enabled = true`.
+
+Cada usuario solo puede acceder a sus propios movimientos y a su documento `users/{uid}/metadata/sync`. Los clientes solo pueden consultar su propio documento `authorizedUsers/{uid}` y no pueden listar ni modificar la allowlist.
+
+Los movimientos remotos aceptan únicamente los campos documentados, excluyen el ID local de Room y la metadata local `syncStatus` y `lastSyncedAt`, exigen que el campo `uuid` coincida con el document ID y preservan `uuid` y `createdAt` durante actualizaciones.
+
+Las reglas representan `date` como texto ISO `YYYY-MM-DD`; `createdAt`, `updatedAt` y `deletedAt` usan timestamps de Firestore. El documento reservado `users/{uid}/metadata/sync` solo acepta `schemaVersion` y `updatedAt`.
+
+La eliminación física de movimientos y metadata está bloqueada. En `v0.4.0`, las eliminaciones sincronizadas deben representarse mediante `deletedAt`.
