@@ -1,7 +1,5 @@
 package com.carlos.miflujo.ui
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.ContextWrapper
 import android.widget.Toast
@@ -90,9 +88,6 @@ fun MiFlujoApp() {
     val movementRepository = remember(context) {
         MiFlujoAppProvider.movementRepository(context)
     }
-    val cloudAccountRepository = remember(context) {
-        MiFlujoAppProvider.cloudAccountRepository(context)
-    }
     val homeViewModel = remember(activity, movementRepository) {
         ViewModelProvider(
             activity,
@@ -111,13 +106,10 @@ fun MiFlujoApp() {
             ReportViewModelFactory(movementRepository),
         )[ReportViewModel::class.java]
     }
-    val settingsViewModel = remember(activity, movementRepository, cloudAccountRepository) {
+    val settingsViewModel = remember(activity, movementRepository) {
         ViewModelProvider(
             activity,
-            SettingsViewModelFactory(
-                movementRepository = movementRepository,
-                cloudAccountRepository = cloudAccountRepository,
-            ),
+            SettingsViewModelFactory(movementRepository),
         )[SettingsViewModel::class.java]
     }
     val homeUiState by homeViewModel.uiState.collectAsState()
@@ -189,16 +181,6 @@ fun MiFlujoApp() {
 
     LaunchedEffect(settingsViewModel) {
         settingsViewModel.restoreFeedbackEvents.collect { feedbackEvent ->
-            Toast.makeText(
-                context,
-                feedbackEvent.message,
-                Toast.LENGTH_LONG,
-            ).show()
-        }
-    }
-
-    LaunchedEffect(settingsViewModel) {
-        settingsViewModel.cloudAccountFeedbackEvents.collect { feedbackEvent ->
             Toast.makeText(
                 context,
                 feedbackEvent.message,
@@ -366,9 +348,6 @@ fun MiFlujoApp() {
                     isExportingBackup = settingsUiState.isExportingBackup,
                     isRestoringBackup = settingsUiState.isRestoringBackup,
                     pendingRestoreMovementCount = settingsUiState.pendingRestoreMovementCount,
-                    cloudAccountStatus = settingsUiState.cloudAccountStatus,
-                    isCloudAccountOperationInProgress =
-                        settingsUiState.isCloudAccountOperationInProgress,
                     onSaveBackup = settingsViewModel::prepareBackupForSave,
                     onShareBackup = {
                         settingsViewModel.shareBackup(context)
@@ -376,18 +355,6 @@ fun MiFlujoApp() {
                     onRestoreBackup = settingsViewModel::requestBackupRestore,
                     onCancelRestore = settingsViewModel::cancelPendingRestore,
                     onConfirmRestore = settingsViewModel::confirmPendingRestore,
-                    onSignInWithGoogle = {
-                        settingsViewModel.signInWithGoogle(activity)
-                    },
-                    onRefreshCloudAuthorization =
-                        settingsViewModel::refreshCloudAccountStatus,
-                    onSignOut = {
-                        settingsViewModel.signOut(activity)
-                    },
-                    onCopyUid = { uid ->
-                        context.copyCloudUid(uid)
-                        Toast.makeText(context, "UID copiado.", Toast.LENGTH_SHORT).show()
-                    },
                     modifier = Modifier.padding(innerPadding),
                 )
             }
@@ -409,11 +376,6 @@ fun MiFlujoApp() {
             },
         )
     }
-}
-
-private fun Context.copyCloudUid(uid: String) {
-    val clipboardManager = getSystemService(ClipboardManager::class.java)
-    clipboardManager.setPrimaryClip(ClipData.newPlainText("MiFlujo UID", uid))
 }
 
 private tailrec fun Context.findComponentActivity(): ComponentActivity {
