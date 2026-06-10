@@ -42,7 +42,9 @@ Incluye:
 - UUID estable por movimiento con migración Room.
 - Backup schema v2 con UUID y compatibilidad de importación con schema v1.
 
-Firebase, login, Firestore y Cloud Sync todavía no están implementados.
+La configuración base de Firebase, las reglas de Firestore y el inicio de sesión con estado de autorización están en desarrollo para `v0.4.0`.
+
+La sincronización de movimientos todavía no está implementada. Iniciar sesión no sube ni descarga movimientos y MiFlujo continúa funcionando local-only.
 
 ## Funcionalidades
 
@@ -75,6 +77,8 @@ Firebase, login, Firestore y Cloud Sync todavía no están implementados.
 - Respaldo local JSON.
 - Restauración local JSON validada.
 - Persistencia local con Room.
+- Inicio de sesión con Google para identificar la cuenta de Cloud Sync.
+- Consulta del estado de autorización por UID sin activar sincronización.
 
 ## Alcance del producto
 
@@ -94,9 +98,6 @@ Incluye actualmente:
 
 No incluye actualmente:
 
-- Login.
-- Firebase.
-- Firestore.
 - Sincronización en la nube.
 - Backend.
 - Integración bancaria.
@@ -109,6 +110,8 @@ No incluye actualmente:
 - Reportes contables avanzados.
 - Merge avanzado de respaldos.
 - Sincronización multi-dispositivo.
+
+El inicio de sesión actual solo identifica la cuenta y consulta si su UID está autorizado. No activa Cloud Sync ni modifica movimientos locales o remotos.
 
 ## Stack técnico
 

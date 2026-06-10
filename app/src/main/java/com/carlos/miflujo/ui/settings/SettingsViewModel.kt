@@ -6,6 +6,9 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.carlos.miflujo.data.cloud.auth.CloudAccountRepository
+import com.carlos.miflujo.data.cloud.auth.CloudAccountStatus
+import com.carlos.miflujo.data.cloud.auth.CloudSignInCanceledException
 import com.carlos.miflujo.data.repository.MovementRepository
 import com.carlos.miflujo.ui.backup.BackupDocument
 import com.carlos.miflujo.ui.backup.BackupExporter
@@ -26,6 +29,8 @@ data class SettingsUiState(
     val isExportingBackup: Boolean = false,
     val isRestoringBackup: Boolean = false,
     val pendingRestoreMovementCount: Int? = null,
+    val cloudAccountStatus: CloudAccountStatus = CloudAccountStatus.Loading,
+    val isCloudAccountOperationInProgress: Boolean = false,
 ) {
     val isBackupOperationInProgress: Boolean
         get() = isExportingBackup || isRestoringBackup || pendingRestoreMovementCount != null
@@ -33,6 +38,7 @@ data class SettingsUiState(
 
 class SettingsViewModel(
     private val movementRepository: MovementRepository,
+    private val cloudAccountRepository: CloudAccountRepository,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(SettingsUiState())
     private val exportFeedback = MutableSharedFlow<BackupExportFeedback>(extraBufferCapacity = 1)
@@ -41,8 +47,12 @@ class SettingsViewModel(
     )
     private val restoreFeedback = MutableSharedFlow<BackupRestoreFeedback>(extraBufferCapacity = 1)
     private val openBackupDocumentRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    private val cloudAccountFeedback = MutableSharedFlow<CloudAccountFeedback>(
+        extraBufferCapacity = 1,
+    )
     private var exportJob: Job? = null
     private var restoreJob: Job? = null
+    private var cloudAccountJob: Job? = null
     private var pendingBackupDocument: BackupDocument? = null
     private var pendingRestoreMovements: List<Movement>? = null
 
@@ -52,6 +62,58 @@ class SettingsViewModel(
         createDocumentRequests.asSharedFlow()
     val restoreFeedbackEvents: SharedFlow<BackupRestoreFeedback> = restoreFeedback.asSharedFlow()
     val openBackupDocumentRequestEvents: SharedFlow<Unit> = openBackupDocumentRequests.asSharedFlow()
+    val cloudAccountFeedbackEvents: SharedFlow<CloudAccountFeedback> =
+        cloudAccountFeedback.asSharedFlow()
+
+    init {
+        refreshCloudAccountStatus()
+    }
+
+    fun signInWithGoogle(context: Context) {
+        if (cloudAccountJob?.isActive == true) return
+
+        mutableUiState.value = mutableUiState.value.copy(isCloudAccountOperationInProgress = true)
+        cloudAccountJob = viewModelScope.launch {
+            try {
+                val status = cloudAccountRepository.signInWithGoogle(context)
+                mutableUiState.value = mutableUiState.value.copy(cloudAccountStatus = status)
+            } catch (exception: Exception) {
+                if (exception is CancellationException) throw exception
+                if (exception !is CloudSignInCanceledException) {
+                    Log.e(CloudAccountLogTag, "Google sign-in failed.", exception)
+                    cloudAccountFeedback.tryEmit(CloudAccountFeedback.SignInFailed)
+                }
+            } finally {
+                mutableUiState.value = mutableUiState.value.copy(
+                    isCloudAccountOperationInProgress = false,
+                )
+                cloudAccountJob = null
+            }
+        }
+    }
+
+    fun signOut(context: Context) {
+        if (cloudAccountJob?.isActive == true) return
+
+        mutableUiState.value = mutableUiState.value.copy(isCloudAccountOperationInProgress = true)
+        cloudAccountJob = viewModelScope.launch {
+            try {
+                cloudAccountRepository.signOut(context)
+                mutableUiState.value = mutableUiState.value.copy(
+                    cloudAccountStatus = CloudAccountStatus.SignedOut,
+                )
+            } catch (exception: Exception) {
+                if (exception is CancellationException) throw exception
+                Log.e(CloudAccountLogTag, "Cloud account sign-out failed.", exception)
+                cloudAccountFeedback.tryEmit(CloudAccountFeedback.SignOutFailed)
+            } finally {
+                mutableUiState.value = mutableUiState.value.copy(
+                    isCloudAccountOperationInProgress = false,
+                )
+                cloudAccountJob = null
+            }
+        }
+    }
 
     fun prepareBackupForSave() {
         if (!canStartBackupOperation()) return
@@ -218,6 +280,29 @@ class SettingsViewModel(
             restoreJob?.isActive != true &&
             !mutableUiState.value.isBackupOperationInProgress
 
+    fun refreshCloudAccountStatus() {
+        if (cloudAccountJob?.isActive == true) return
+
+        mutableUiState.value = mutableUiState.value.copy(isCloudAccountOperationInProgress = true)
+        cloudAccountJob = viewModelScope.launch {
+            try {
+                val status = cloudAccountRepository.getCurrentStatus()
+                mutableUiState.value = mutableUiState.value.copy(cloudAccountStatus = status)
+            } catch (exception: Exception) {
+                if (exception is CancellationException) throw exception
+                Log.e(CloudAccountLogTag, "Cloud account status refresh failed.", exception)
+                mutableUiState.value = mutableUiState.value.copy(
+                    cloudAccountStatus = CloudAccountStatus.SignedOut,
+                )
+            } finally {
+                mutableUiState.value = mutableUiState.value.copy(
+                    isCloudAccountOperationInProgress = false,
+                )
+                cloudAccountJob = null
+            }
+        }
+    }
+
     private fun finishExport() {
         pendingBackupDocument = null
         mutableUiState.value = mutableUiState.value.copy(isExportingBackup = false)
@@ -236,6 +321,7 @@ class SettingsViewModel(
 
 private const val BackupExportLogTag = "MiFlujoBackupExport"
 private const val BackupRestoreLogTag = "MiFlujoBackupRestore"
+private const val CloudAccountLogTag = "MiFlujoCloudAccount"
 
 data class CreateBackupDocumentRequest(
     val fileName: String,
@@ -256,13 +342,28 @@ sealed class BackupRestoreFeedback(
     data object RestoreFailed : BackupRestoreFeedback("No se pudo restaurar el respaldo.")
 }
 
+sealed class CloudAccountFeedback(
+    val message: String,
+) {
+    data object SignInFailed : CloudAccountFeedback(
+        "No se pudo iniciar sesión con Google. MiFlujo continúa en modo local.",
+    )
+    data object SignOutFailed : CloudAccountFeedback(
+        "No se pudo cerrar la sesión. Intenta nuevamente.",
+    )
+}
+
 class SettingsViewModelFactory(
     private val movementRepository: MovementRepository,
+    private val cloudAccountRepository: CloudAccountRepository,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(SettingsViewModel::class.java)) {
-            return SettingsViewModel(movementRepository) as T
+            return SettingsViewModel(
+                movementRepository = movementRepository,
+                cloudAccountRepository = cloudAccountRepository,
+            ) as T
         }
 
         throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")

@@ -544,3 +544,19 @@ Los movimientos remotos aceptan únicamente los campos documentados, excluyen el
 Las reglas representan `date` como texto ISO `YYYY-MM-DD`; `createdAt`, `updatedAt` y `deletedAt` usan timestamps de Firestore. El documento reservado `users/{uid}/metadata/sync` solo acepta `schemaVersion` y `updatedAt`.
 
 La eliminación física de movimientos y metadata está bloqueada. En `v0.4.0`, las eliminaciones sincronizadas deben representarse mediante `deletedAt`.
+
+## 043 - Inicio de sesión y estado de autorización sin activar sync
+
+MiFlujo usa Credential Manager con Google ID tokens y Firebase Auth para identificar la cuenta. Firebase Auth conserva la sesión y expone el usuario actual; no se agrega DataStore porque el proyecto no tenía ese patrón y no existe metadata adicional que deba persistirse para esta issue.
+
+Después de iniciar sesión, la app consulta únicamente:
+
+```text
+authorizedUsers/{uid}
+```
+
+Si `enabled == true`, Ajustes muestra la cuenta como autorizada. Si el documento falta, no se puede leer o no está habilitado, Ajustes muestra la cuenta como no autorizada, permite copiar el UID y mantiene la app en modo local-only.
+
+Iniciar sesión o resultar autorizado no activa Cloud Sync, no sube movimientos y no descarga movimientos. Cerrar sesión no modifica Room, Firestore, movimientos ni respaldos.
+
+La UI no muestra datos de contacto del owner y el cliente no crea ni modifica documentos `authorizedUsers`.

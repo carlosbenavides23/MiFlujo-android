@@ -2,14 +2,21 @@ package com.carlos.miflujo
 
 import android.content.Context
 import androidx.room.Room
+import com.carlos.miflujo.data.cloud.auth.CloudAccountRepository
+import com.carlos.miflujo.data.cloud.auth.DefaultCloudAccountRepository
+import com.carlos.miflujo.data.cloud.auth.FirebaseCloudAuthDataSource
+import com.carlos.miflujo.data.cloud.firestore.FirestoreCloudAuthorizationChecker
 import com.carlos.miflujo.data.local.MiFlujoDatabase
 import com.carlos.miflujo.data.local.MIGRATION_1_2
 import com.carlos.miflujo.data.repository.MovementRepository
 import com.carlos.miflujo.data.repository.RoomMovementRepository
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 
 interface MiFlujoAppContainer {
     val database: MiFlujoDatabase
     val movementRepository: MovementRepository
+    val cloudAccountRepository: CloudAccountRepository
 }
 
 class DefaultMiFlujoAppContainer(
@@ -31,6 +38,18 @@ class DefaultMiFlujoAppContainer(
         RoomMovementRepository(database.movementDao())
     }
 
+    override val cloudAccountRepository: CloudAccountRepository by lazy {
+        DefaultCloudAccountRepository(
+            authDataSource = FirebaseCloudAuthDataSource(
+                firebaseAuth = FirebaseAuth.getInstance(),
+                googleWebClientId = applicationContext.getString(R.string.google_web_client_id),
+            ),
+            authorizationChecker = FirestoreCloudAuthorizationChecker(
+                firestore = FirebaseFirestore.getInstance(),
+            ),
+        )
+    }
+
     private companion object {
         const val DATABASE_NAME = "miflujo.db"
     }
@@ -48,5 +67,9 @@ object MiFlujoAppProvider {
 
     fun movementRepository(context: Context): MovementRepository {
         return container(context).movementRepository
+    }
+
+    fun cloudAccountRepository(context: Context): CloudAccountRepository {
+        return container(context).cloudAccountRepository
     }
 }
