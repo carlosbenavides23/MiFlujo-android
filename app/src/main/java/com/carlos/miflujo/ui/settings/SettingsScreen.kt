@@ -10,9 +10,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -26,17 +29,25 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.carlos.miflujo.data.cloud.auth.CloudAccount
+import com.carlos.miflujo.data.cloud.auth.CloudAccountStatus
 
 @Composable
 fun SettingsScreen(
     isExportingBackup: Boolean,
     isRestoringBackup: Boolean,
     pendingRestoreMovementCount: Int?,
+    cloudAccountStatus: CloudAccountStatus,
+    isCloudAccountOperationInProgress: Boolean,
     onSaveBackup: () -> Unit,
     onShareBackup: () -> Unit,
     onRestoreBackup: () -> Unit,
     onCancelRestore: () -> Unit,
     onConfirmRestore: () -> Unit,
+    onSignInWithGoogle: () -> Unit,
+    onRefreshCloudAuthorization: () -> Unit,
+    onSignOut: () -> Unit,
+    onCopyUid: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showBackupActions by rememberSaveable { mutableStateOf(false) }
@@ -54,6 +65,14 @@ fun SettingsScreen(
             text = "Ajustes",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.SemiBold,
+        )
+        CloudSyncSection(
+            status = cloudAccountStatus,
+            isOperationInProgress = isCloudAccountOperationInProgress,
+            onSignInWithGoogle = onSignInWithGoogle,
+            onRefreshCloudAuthorization = onRefreshCloudAuthorization,
+            onSignOut = onSignOut,
+            onCopyUid = onCopyUid,
         )
         SettingsSection(
             title = "Datos",
@@ -114,6 +133,162 @@ fun SettingsScreen(
             onConfirmRestore = onConfirmRestore,
         )
     }
+}
+
+@Composable
+private fun CloudSyncSection(
+    status: CloudAccountStatus,
+    isOperationInProgress: Boolean,
+    onSignInWithGoogle: () -> Unit,
+    onRefreshCloudAuthorization: () -> Unit,
+    onSignOut: () -> Unit,
+    onCopyUid: (String) -> Unit,
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = "Cloud Sync",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                when (status) {
+                    CloudAccountStatus.Loading -> {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            CircularProgressIndicator()
+                            Text(text = "Comprobando estado de la cuenta...")
+                        }
+                    }
+
+                    CloudAccountStatus.SignedOut -> {
+                        CloudStatusText(
+                            title = "Sin sesión",
+                            description = "MiFlujo funciona en modo local. Iniciar sesión no activa " +
+                                "la sincronización automáticamente.",
+                        )
+                        Button(
+                            onClick = onSignInWithGoogle,
+                            enabled = !isOperationInProgress,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                text = if (isOperationInProgress) {
+                                    "Iniciando sesión..."
+                                } else {
+                                    "Iniciar sesión con Google"
+                                },
+                            )
+                        }
+                    }
+
+                    is CloudAccountStatus.Authorized -> {
+                        CloudStatusText(
+                            title = "Cuenta autorizada",
+                            description = "Cloud Sync todavía no está activado. No se han subido ni " +
+                                "descargado movimientos.",
+                        )
+                        CloudAccountIdentity(account = status.account)
+                        OutlinedButton(
+                            onClick = onSignOut,
+                            enabled = !isOperationInProgress,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(text = "Cerrar sesión")
+                        }
+                    }
+
+                    is CloudAccountStatus.Unauthorized -> {
+                        CloudStatusText(
+                            title = "Cuenta no autorizada",
+                            description = "Esta cuenta no tiene acceso a Cloud Sync. MiFlujo continúa " +
+                                "funcionando solo con los datos locales.",
+                        )
+                        CloudAccountIdentity(account = status.account)
+                        Text(
+                            text = "UID\n${status.account.uid}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Button(
+                            onClick = onRefreshCloudAuthorization,
+                            enabled = !isOperationInProgress,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                text = if (isOperationInProgress) {
+                                    "Verificando..."
+                                } else {
+                                    "Verificar autorización"
+                                },
+                            )
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                onCopyUid(status.account.uid)
+                            },
+                            enabled = !isOperationInProgress,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(text = "Copiar UID")
+                        }
+                        TextButton(
+                            onClick = onSignOut,
+                            enabled = !isOperationInProgress,
+                            modifier = Modifier.align(Alignment.End),
+                        ) {
+                            Text(text = "Cerrar sesión")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CloudStatusText(
+    title: String,
+    description: String,
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Text(
+            text = description,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun CloudAccountIdentity(account: CloudAccount) {
+    val identityLines = listOfNotNull(
+        account.displayName?.takeIf { it.isNotBlank() },
+        account.email?.takeIf { it.isNotBlank() },
+    )
+    if (identityLines.isEmpty()) return
+
+    Text(
+        text = identityLines.joinToString(separator = "\n"),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 @Composable
