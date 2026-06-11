@@ -278,6 +278,23 @@ deletedAt
 schemaVersion
 ```
 
+La capa de mapeo remoto usa `RemoteMovementDto` exclusivamente como representación
+del documento Firestore. No incluye `id`, `syncStatus` ni `lastSyncedAt`.
+
+Reglas del mapper:
+
+- `Movement -> RemoteMovementDto` preserva el UUID y usa remote schema version 1.
+- `date` se representa como texto ISO `YYYY-MM-DD`.
+- `createdAt`, `updatedAt` y `deletedAt` usan `Firebase Timestamp`.
+- Los timestamps convierten `LocalDateTime` usando UTC y preservan nanosegundos.
+- `RemoteMovementDto -> Movement` exige que el UUID coincida con el document ID.
+- La entrada remota valida enums, monto positivo y reglas de clasificación.
+- Un movimiento remoto válido vuelve al dominio con `id = 0`, `SYNCED` y
+  `lastSyncedAt = null`; la futura capa de persistencia decidirá el ID Room y el
+  momento efectivo de última sincronización.
+
+Esta capa no realiza lecturas ni escrituras Firestore.
+
 ## Identidad local y global
 
 ```text

@@ -585,3 +585,20 @@ continúa siendo compatible y reinicia esa metadata a sus valores locales por de
 
 Esta preparación no implementa lecturas, escrituras, colas ni reconciliación de
 movimientos con Firebase.
+
+## 045 - DTO y mapper remoto de movimientos
+
+El documento futuro `users/{uid}/movements/{movementUuid}` se representa mediante
+`RemoteMovementDto` con únicamente los campos permitidos por las reglas Firestore.
+No contiene el ID local de Room, `syncStatus` ni `lastSyncedAt`.
+
+La versión inicial del documento remoto es `schemaVersion = 1`. `date` usa texto ISO
+`YYYY-MM-DD`; `createdAt`, `updatedAt` y `deletedAt` usan `Firebase Timestamp`.
+La conversión entre `LocalDateTime` y `Timestamp` usa UTC y conserva nanosegundos.
+
+El mapper remoto valida UUID canónico, igualdad entre UUID y document ID, versión,
+campos requeridos, enums y reglas de negocio. Un DTO remoto válido produce un
+`Movement` sin ID Room, con estado local `SYNCED` y sin asignar `lastSyncedAt`.
+
+Esta decisión agrega únicamente el contrato y mapeo puros. No activa lecturas,
+escrituras ni sincronización de movimientos con Firestore.
