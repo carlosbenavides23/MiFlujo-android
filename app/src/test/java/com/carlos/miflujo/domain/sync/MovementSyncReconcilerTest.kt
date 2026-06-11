@@ -190,6 +190,31 @@ class MovementSyncReconcilerTest {
     }
 
     @Test
+    fun `equal mutable data with different createdAt marks synced`() {
+        val local = movement(
+            id = 10,
+            syncStatus = SyncStatus.SYNCED,
+        )
+        val remote = local.toRemoteSnapshot().copy(
+            createdAt = local.createdAt.minusDays(3),
+        )
+
+        val action = reconcile(
+            local = listOf(local),
+            remote = listOf(valid(remote)),
+        ).singleAction()
+
+        assertEquals(
+            SyncReconciliationAction.MarkLocalSynced(
+                localId = 10,
+                uuid = testUuid,
+                lastSyncedAt = syncTime,
+            ),
+            action,
+        )
+    }
+
+    @Test
     fun `equal timestamp but different pending data deterministically uploads local`() {
         val local = movement(
             detail = "Local value",

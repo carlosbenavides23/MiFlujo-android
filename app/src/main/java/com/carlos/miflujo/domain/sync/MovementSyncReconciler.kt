@@ -275,7 +275,6 @@ private fun MovementRemoteSnapshot.isEquivalentTo(local: Movement): Boolean =
         category == local.category &&
         subcategory == local.subcategory &&
         detail == local.detail &&
-        createdAt == local.createdAt &&
         updatedAt == local.updatedAt &&
         deletedAt == local.deletedAt
 
