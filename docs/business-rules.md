@@ -18,6 +18,10 @@ Con Cloud Sync apagado no se encola trabajo de sync. Los estados pendientes solo
 
 `syncStatus`, incluido `LOCAL_ONLY`, y `lastSyncedAt` son metadata local y no se guardan en Firestore.
 
+El backup schema v2 no exporta `syncStatus`, `lastSyncedAt` ni `deletedAt`.
+Estos campos son metadata operativa local. Restaurar backups schema v1 o v2 crea
+movimientos `LOCAL_ONLY` con timestamps de sync y eliminación en `null`.
+
 ## Tipos de movimiento
 
 Tipos permitidos:
@@ -123,6 +127,9 @@ Un movimiento pertenece a un mes según su fecha.
 Los reportes deben mantener totales separados por moneda.
 
 En `v0.4.0`, los movimientos con `deletedAt` son tombstones y deben excluirse de la UI normal, los reportes mensuales y el PDF.
+
+Las consultas Room visibles ya aplican esta exclusión. Mientras Cloud Sync no esté
+activo, eliminar un movimiento conserva el borrado físico actual y no crea tombstones.
 
 ## Exportación PDF
 

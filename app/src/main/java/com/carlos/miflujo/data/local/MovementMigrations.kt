@@ -83,6 +83,19 @@ val MIGRATION_1_2 = Migration(1, 2) { database ->
     )
 }
 
+val MIGRATION_2_3 = Migration(2, 3) { database ->
+    database.execSQL(
+        "ALTER TABLE `movements` ADD COLUMN `sync_status` TEXT NOT NULL " +
+            "DEFAULT 'LOCAL_ONLY'",
+    )
+    database.execSQL(
+        "ALTER TABLE `movements` ADD COLUMN `last_synced_at_epoch_millis` INTEGER",
+    )
+    database.execSQL(
+        "ALTER TABLE `movements` ADD COLUMN `deleted_at_epoch_millis` INTEGER",
+    )
+}
+
 private fun generateUniqueMovementUuid(generatedUuids: MutableSet<String>): String {
     while (true) {
         val uuid = generateMovementUuid()

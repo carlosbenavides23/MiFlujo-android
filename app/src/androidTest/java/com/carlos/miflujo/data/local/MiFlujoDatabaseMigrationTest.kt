@@ -170,6 +170,67 @@ class MiFlujoDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migrationFrom2To3AddsLocalSyncMetadataWithSafeDefaults() {
+        helper.createDatabase(TEST_DATABASE, 2).apply {
+            execSQL(
+                """
+                INSERT INTO `movements` (
+                    `id`,
+                    `uuid`,
+                    `type`,
+                    `amount_minor`,
+                    `currency`,
+                    `date_epoch_day`,
+                    `category`,
+                    `subcategory`,
+                    `detail`,
+                    `created_at_epoch_millis`,
+                    `updated_at_epoch_millis`
+                ) VALUES (
+                    7,
+                    '3f83ad74-77f1-4625-a525-66d860a86e76',
+                    'INCOME',
+                    500000,
+                    'CORDOBA',
+                    20610,
+                    'GENERAL_INCOME',
+                    NULL,
+                    NULL,
+                    1780734600000,
+                    1780734600000
+                )
+                """.trimIndent(),
+            )
+            close()
+        }
+
+        val migratedDatabase = helper.runMigrationsAndValidate(
+            TEST_DATABASE,
+            3,
+            true,
+            MIGRATION_2_3,
+        )
+
+        migratedDatabase.query(
+            """
+            SELECT
+                `id`,
+                `sync_status`,
+                `last_synced_at_epoch_millis`,
+                `deleted_at_epoch_millis`
+            FROM `movements`
+            """.trimIndent(),
+        ).use { cursor ->
+            assertEquals(1, cursor.count)
+            cursor.moveToFirst()
+            assertEquals(7L, cursor.getLong(0))
+            assertEquals("LOCAL_ONLY", cursor.getString(1))
+            assertEquals(true, cursor.isNull(2))
+            assertEquals(true, cursor.isNull(3))
+        }
+    }
+
     private companion object {
         const val TEST_DATABASE = "miflujo-migration-test"
     }

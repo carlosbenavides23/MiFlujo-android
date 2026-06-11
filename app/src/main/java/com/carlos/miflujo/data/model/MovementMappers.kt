@@ -22,6 +22,9 @@ fun Movement.toEntity(): MovementEntity = MovementEntity(
     detail = detail,
     createdAtEpochMillis = createdAt.toEpochMillis(),
     updatedAtEpochMillis = updatedAt.toEpochMillis(),
+    syncStatus = syncStatus,
+    lastSyncedAt = lastSyncedAt?.toEpochMillis(),
+    deletedAt = deletedAt?.toEpochMillis(),
 )
 
 fun MovementEntity.toDomain(): Movement = Movement(
@@ -36,6 +39,9 @@ fun MovementEntity.toDomain(): Movement = Movement(
     detail = detail,
     createdAt = createdAtEpochMillis.toLocalDateTime(),
     updatedAt = updatedAtEpochMillis.toLocalDateTime(),
+    syncStatus = syncStatus,
+    lastSyncedAt = lastSyncedAt?.toLocalDateTime(),
+    deletedAt = deletedAt?.toLocalDateTime(),
 )
 
 private fun LocalDateTime.toEpochMillis(): Long =

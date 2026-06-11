@@ -4,6 +4,7 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.carlos.miflujo.domain.model.SyncStatus
 
 @Entity(
     tableName = "movements",
@@ -26,4 +27,10 @@ data class MovementEntity(
     val createdAtEpochMillis: Long,
     @ColumnInfo(name = "updated_at_epoch_millis")
     val updatedAtEpochMillis: Long,
+    @ColumnInfo(name = "sync_status", defaultValue = "'LOCAL_ONLY'")
+    val syncStatus: SyncStatus = SyncStatus.LOCAL_ONLY,
+    @ColumnInfo(name = "last_synced_at_epoch_millis")
+    val lastSyncedAt: Long? = null,
+    @ColumnInfo(name = "deleted_at_epoch_millis")
+    val deletedAt: Long? = null,
 )
