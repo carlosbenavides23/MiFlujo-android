@@ -14,5 +14,8 @@ data class Movement(
     val subcategory: MovementSubcategory? = null,
     val detail: String? = null,
     val createdAt: LocalDateTime,
-    val updatedAt: LocalDateTime
+    val updatedAt: LocalDateTime,
+    val syncStatus: SyncStatus = SyncStatus.LOCAL_ONLY,
+    val lastSyncedAt: LocalDateTime? = null,
+    val deletedAt: LocalDateTime? = null,
 )

@@ -560,3 +560,28 @@ Si `enabled == true`, Ajustes muestra la cuenta como autorizada. Si el documento
 Iniciar sesión o resultar autorizado no activa Cloud Sync, no sube movimientos y no descarga movimientos. Cerrar sesión no modifica Room, Firestore, movimientos ni respaldos.
 
 La UI no muestra datos de contacto del owner y el cliente no crea ni modifica documentos `authorizedUsers`.
+
+## 044 - Metadata local de sync en Room sin activar Cloud Sync
+
+Room schema version 3 agrega a cada movimiento:
+
+```text
+syncStatus
+lastSyncedAt
+deletedAt
+```
+
+La migración `2 -> 3` conserva todos los movimientos y asigna `LOCAL_ONLY`, `null`
+y `null` respectivamente. Los movimientos nuevos y restaurados usan los mismos
+valores mientras Cloud Sync no esté activo.
+
+Las consultas normales excluyen filas con `deletedAt`, incluyendo UI, historial,
+reportes, PDF y exportación de backup visible. El borrado sigue siendo físico
+mientras sync está inactivo; esta issue no crea ni sube tombstones.
+
+Backup schema v2 permanece sin cambios. No exporta `syncStatus`, `lastSyncedAt` ni
+`deletedAt` porque son metadata operativa local. Restaurar backups schema v1 o v2
+continúa siendo compatible y reinicia esa metadata a sus valores locales por defecto.
+
+Esta preparación no implementa lecturas, escrituras, colas ni reconciliación de
+movimientos con Firebase.

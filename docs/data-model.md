@@ -19,6 +19,9 @@ Movement
 - detail
 - createdAt
 - updatedAt
+- syncStatus
+- lastSyncedAt
+- deletedAt
 ```
 
 ## Estado actual del modelo
@@ -29,7 +32,7 @@ El modelo actual está diseñado para una app local-first basada en Room.
 
 `uuid` es la identidad global estable preparada para una futura sincronización cloud.
 
-El modelo actual de `v0.3.5` todavía no incluye metadata de sync. El plan de `v0.4.0` está documentado en `docs/firebase-cloud-sync-plan.md`.
+Room ya incluye metadata local preparada para Cloud Sync, pero esta metadata no activa sincronización. El plan de `v0.4.0` está documentado en `docs/firebase-cloud-sync-plan.md`.
 
 ## Campos
 
@@ -202,9 +205,9 @@ Reglas:
 - `updatedAt` cambia al editar.
 - `updatedAt` cambia al hacer soft delete.
 
-## Metadata local planificada para v0.4.0
+## Metadata local para Cloud Sync
 
-Room necesitará estos campos locales:
+Room guarda estos campos:
 
 ```text
 syncStatus
@@ -238,7 +241,15 @@ Crear o editar con Cloud Sync activo asigna `PENDING_UPLOAD`. Eliminar asigna `d
 
 Los tombstones permanecen en Room durante `v0.4.0`, pero se ocultan de la UI normal y se excluyen de reportes y PDF.
 
-Esta sección documenta un cambio futuro. La issue `#115` no modifica Room.
+La migración Room `2 -> 3` asigna `LOCAL_ONLY`, `lastSyncedAt = null` y
+`deletedAt = null` a los movimientos existentes.
+
+Mientras Cloud Sync no esté activo, crear o restaurar movimientos usa esos mismos
+valores por defecto y eliminar conserva el borrado físico actual.
+
+Las consultas visibles excluyen cualquier fila con `deletedAt`, preparando UI,
+reportes, PDF, historial y respaldo visible para futuros tombstones sin cambiar el
+resultado actual.
 
 ## Modelo remoto planificado para v0.4.0
 

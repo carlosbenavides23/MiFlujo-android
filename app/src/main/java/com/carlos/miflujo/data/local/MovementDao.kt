@@ -27,6 +27,7 @@ interface MovementDao {
     @Query(
         """
         SELECT * FROM movements
+        WHERE deleted_at_epoch_millis IS NULL
         ORDER BY date_epoch_day DESC, created_at_epoch_millis DESC, id DESC
         """,
     )
@@ -46,7 +47,8 @@ interface MovementDao {
     @Query(
         """
         SELECT * FROM movements
-        WHERE date_epoch_day BETWEEN :startEpochDay AND :endEpochDay
+        WHERE deleted_at_epoch_millis IS NULL
+            AND date_epoch_day BETWEEN :startEpochDay AND :endEpochDay
         ORDER BY date_epoch_day DESC, created_at_epoch_millis DESC
         """,
     )
@@ -58,6 +60,7 @@ interface MovementDao {
     @Query(
         """
         SELECT * FROM movements
+        WHERE deleted_at_epoch_millis IS NULL
         ORDER BY date_epoch_day DESC, created_at_epoch_millis DESC
         LIMIT :limit
         """,

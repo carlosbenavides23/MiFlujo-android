@@ -5,6 +5,7 @@ import com.carlos.miflujo.domain.model.Movement
 import com.carlos.miflujo.domain.model.MovementCategory
 import com.carlos.miflujo.domain.model.MovementSubcategory
 import com.carlos.miflujo.domain.model.MovementType
+import com.carlos.miflujo.domain.model.SyncStatus
 import java.time.LocalDate
 import java.time.LocalDateTime
 import org.json.JSONObject
@@ -37,6 +38,8 @@ class BackupJsonSerializerTest {
                 detail = "",
                 createdAt = LocalDateTime.of(2026, 6, 3, 9, 15, 30),
                 updatedAt = LocalDateTime.of(2026, 6, 3, 10, 20, 45),
+                syncStatus = SyncStatus.SYNCED,
+                lastSyncedAt = LocalDateTime.of(2026, 6, 3, 10, 25),
             ),
             Movement(
                 id = 42L,

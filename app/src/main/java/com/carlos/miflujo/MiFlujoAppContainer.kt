@@ -8,6 +8,7 @@ import com.carlos.miflujo.data.cloud.auth.FirebaseCloudAuthDataSource
 import com.carlos.miflujo.data.cloud.firestore.FirestoreCloudAuthorizationChecker
 import com.carlos.miflujo.data.local.MiFlujoDatabase
 import com.carlos.miflujo.data.local.MIGRATION_1_2
+import com.carlos.miflujo.data.local.MIGRATION_2_3
 import com.carlos.miflujo.data.repository.MovementRepository
 import com.carlos.miflujo.data.repository.RoomMovementRepository
 import com.google.firebase.auth.FirebaseAuth
@@ -30,7 +31,7 @@ class DefaultMiFlujoAppContainer(
             klass = MiFlujoDatabase::class.java,
             name = DATABASE_NAME,
         )
-            .addMigrations(MIGRATION_1_2)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
             .build()
     }
 
