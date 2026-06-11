@@ -258,6 +258,45 @@ class MovementSyncReconcilerTest {
     }
 
     @Test
+    fun `duplicate local UUID marks every row as error and blocks uploads`() {
+        val first = movement(
+            id = 41,
+            uuid = testUuid,
+            syncStatus = SyncStatus.PENDING_UPLOAD,
+        )
+        val second = movement(
+            id = 42,
+            uuid = testUuid,
+            syncStatus = SyncStatus.PENDING_DELETE,
+            deletedAt = baseTime.plusHours(2),
+        )
+
+        val actions = reconcile(local = listOf(second, first)).actions
+
+        assertEquals(
+            listOf(
+                SyncReconciliationAction.MarkLocalSyncError(
+                    localId = 41,
+                    uuid = testUuid,
+                    reason = LocalSyncErrorReason.DUPLICATE_LOCAL_UUID,
+                ),
+                SyncReconciliationAction.MarkLocalSyncError(
+                    localId = 42,
+                    uuid = testUuid,
+                    reason = LocalSyncErrorReason.DUPLICATE_LOCAL_UUID,
+                ),
+            ),
+            actions,
+        )
+        assertFalse(
+            actions.any {
+                it is SyncReconciliationAction.UploadLocalMovement ||
+                    it is SyncReconciliationAction.UploadLocalTombstone
+            },
+        )
+    }
+
+    @Test
     fun `invalid remote item is skipped and does not crash or overwrite local`() {
         val local = movement(uuid = testUuid)
         val invalidRemote = RemoteMovementInput.Invalid(

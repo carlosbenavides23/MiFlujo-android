@@ -48,6 +48,7 @@ sealed interface SyncReconciliationAction {
 enum class LocalSyncErrorReason {
     PENDING_DELETE_WITHOUT_TOMBSTONE,
     INVALID_LOCAL_MOVEMENT,
+    DUPLICATE_LOCAL_UUID,
 }
 
 object MovementSyncReconciler {
@@ -57,15 +58,35 @@ object MovementSyncReconciler {
         syncTime: LocalDateTime,
     ): SyncReconciliationPlan {
         val actions = mutableListOf<SyncReconciliationAction>()
-        val localByUuid = localMovements.associateBy(Movement::uuid)
+        val localByUuid = mutableMapOf<String, Movement>()
         val validRemoteByUuid = mutableMapOf<String, MovementRemoteSnapshot>()
-        val blockedRemoteDocumentIds = mutableSetOf<String>()
+        val blockedUuids = mutableSetOf<String>()
+
+        localMovements
+            .groupBy(Movement::uuid)
+            .toSortedMap()
+            .forEach { (uuid, movements) ->
+                if (movements.size > 1) {
+                    blockedUuids += uuid
+                    movements
+                        .sortedBy(Movement::id)
+                        .forEach { movement ->
+                            actions += SyncReconciliationAction.MarkLocalSyncError(
+                                localId = movement.id,
+                                uuid = uuid,
+                                reason = LocalSyncErrorReason.DUPLICATE_LOCAL_UUID,
+                            )
+                        }
+                } else {
+                    localByUuid[uuid] = movements.single()
+                }
+            }
 
         remoteInputs
             .filterIsInstance<RemoteMovementInput.Invalid>()
             .sortedBy(RemoteMovementInput.Invalid::documentId)
             .forEach { invalid ->
-                blockedRemoteDocumentIds += invalid.documentId
+                blockedUuids += invalid.documentId
                 actions += SyncReconciliationAction.SkipInvalidRemote(
                     documentId = invalid.documentId,
                     reason = invalid.reason,
@@ -79,7 +100,7 @@ object MovementSyncReconciler {
             .toSortedMap()
             .forEach { (uuid, snapshots) ->
                 if (snapshots.size > 1) {
-                    blockedRemoteDocumentIds += uuid
+                    blockedUuids += uuid
                     actions += SyncReconciliationAction.SkipInvalidRemote(
                         documentId = uuid,
                         reason = InvalidRemoteItemReason.DUPLICATE_UUID,
@@ -89,7 +110,7 @@ object MovementSyncReconciler {
                     if (snapshot.isValid()) {
                         validRemoteByUuid[uuid] = snapshot
                     } else {
-                        blockedRemoteDocumentIds += uuid
+                        blockedUuids += uuid
                         actions += SyncReconciliationAction.SkipInvalidRemote(
                             documentId = uuid,
                             reason = InvalidRemoteItemReason.INVALID_DOCUMENT,
@@ -99,7 +120,7 @@ object MovementSyncReconciler {
             }
 
         val uuids = (localByUuid.keys + validRemoteByUuid.keys)
-            .filterNot(blockedRemoteDocumentIds::contains)
+            .filterNot(blockedUuids::contains)
             .sorted()
 
         uuids.forEach { uuid ->
