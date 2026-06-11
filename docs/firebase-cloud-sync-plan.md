@@ -123,6 +123,23 @@ schemaVersion
 
 `deletedAt` representa borrado logico/tombstone y se sincroniza.
 
+## Boundary remoto de movimientos
+
+`CloudMovementRemoteDataSource` define únicamente:
+
+- leer todos los documentos bajo `users/{uid}/movements`,
+- upsert de movimiento visible,
+- upsert de tombstone.
+
+`FirestoreCloudMovementRemoteDataSource` requiere el UID explícitamente en cada
+operación. Lee desde servidor y usa `movement.uuid` como document ID para `set`.
+No expone delete físico, no consulta `authorizedUsers` y no infiere otro UID.
+
+Cada documento leído se convierte de forma independiente. Un documento inválido
+produce `RemoteMovementInput.Invalid` y no cancela el mapeo de los demás documentos.
+La capa no ejecuta reconciliación ni se conecta todavía con UI, startup, scheduler
+o background sync.
+
 ## Modelo local para sync
 
 Room necesitara metadata local de sincronizacion:

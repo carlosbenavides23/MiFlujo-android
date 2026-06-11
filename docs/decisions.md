@@ -626,3 +626,23 @@ persistencia lo inserte.
 
 Esta fase no agrega llamadas Firestore, ejecución de planes, scheduler, background
 sync, cambios Room, DAO, backup, reglas ni UI.
+
+## 047 - Boundary Firestore remoto de movimientos
+
+`CloudMovementRemoteDataSource` separa el futuro motor de sync del SDK Firestore.
+Su implementación concreta recibe UID explícito y opera únicamente sobre:
+
+```text
+users/{uid}/movements/{movementUuid}
+```
+
+Fetch usa fuente servidor y devuelve cada documento como input válido o inválido
+para reconciliación. Un documento mal formado no invalida toda la colección.
+
+Los writes son upserts mediante `set` con `RemoteMovementDto`; el document ID es el
+UUID canónico del payload. Movimiento visible exige `deletedAt = null` y tombstone
+exige `deletedAt` presente. No se escriben ID Room, `syncStatus` ni `lastSyncedAt`.
+
+El boundary no ofrece delete físico, no modifica `authorizedUsers`, no está
+registrado en el app container y no activa sync, UI, startup, WorkManager ni tareas
+en background.

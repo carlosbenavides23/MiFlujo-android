@@ -23,7 +23,14 @@ class InvalidRemoteMovementException(
 ) : IllegalArgumentException(message, cause)
 
 fun Movement.toRemoteDto(): RemoteMovementDto {
+    return toRemoteSnapshot().toRemoteDto()
+}
+
+fun MovementRemoteSnapshot.toRemoteDto(): RemoteMovementDto {
     requireCanonicalUuid(uuid)
+    if (schemaVersion != MovementRemoteSchemaVersion) {
+        invalidRemoteMovement("Unsupported remote movement schema version.")
+    }
     requireValidBusinessRules(
         amountMinor = amountMinor,
         type = type,
@@ -43,7 +50,7 @@ fun Movement.toRemoteDto(): RemoteMovementDto {
         createdAt = createdAt.toFirestoreTimestamp(),
         updatedAt = updatedAt.toFirestoreTimestamp(),
         deletedAt = deletedAt?.toFirestoreTimestamp(),
-        schemaVersion = MovementRemoteSchemaVersion,
+        schemaVersion = schemaVersion,
     )
 }
 
