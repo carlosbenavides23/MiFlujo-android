@@ -128,8 +128,11 @@ Los reportes deben mantener totales separados por moneda.
 
 En `v0.4.0`, los movimientos con `deletedAt` son tombstones y deben excluirse de la UI normal, los reportes mensuales y el PDF.
 
-Las consultas Room visibles ya aplican esta exclusión. Mientras Cloud Sync no esté
-activo, eliminar un movimiento conserva el borrado físico actual y no crea tombstones.
+Las consultas Room visibles ya aplican esta exclusión. Eliminar un movimiento
+`LOCAL_ONLY` que nunca fue sincronizado conserva el borrado físico actual. Si la
+fila ya participó o pudo participar en sync, eliminar crea un tombstone
+`PENDING_DELETE` aunque la cuenta esté cerrada o no haya una ejecución automática.
+Esto evita que un remoto anterior vuelva a insertar el movimiento.
 
 ## Exportación PDF
 

@@ -35,13 +35,14 @@ class FirestoreCloudMovementRemoteDataSource(
         uid: String,
         movement: MovementRemoteSnapshot,
     ) {
-        upsert(
+        upsertConditionally(
             prepareRemoteMovementWrite(
                 uid = uid,
                 documentId = movement.uuid,
                 movement = movement,
                 writeType = RemoteMovementWriteType.VISIBLE,
             ),
+            movement,
         )
     }
 
@@ -49,20 +50,58 @@ class FirestoreCloudMovementRemoteDataSource(
         uid: String,
         movement: MovementRemoteSnapshot,
     ) {
-        upsert(
+        upsertConditionally(
             prepareRemoteMovementWrite(
                 uid = uid,
                 documentId = movement.uuid,
                 movement = movement,
                 writeType = RemoteMovementWriteType.TOMBSTONE,
             ),
+            movement,
         )
     }
 
-    private suspend fun upsert(write: RemoteMovementWrite) {
-        firestore.collection(write.collectionPath)
+    private suspend fun upsertConditionally(
+        write: RemoteMovementWrite,
+        proposed: MovementRemoteSnapshot,
+    ) {
+        val documentReference = firestore.collection(write.collectionPath)
             .document(write.documentId)
-            .set(write.payload)
+        firestore.runTransaction { transaction ->
+            val currentDocument = transaction.get(documentReference)
+            val payload = if (currentDocument.exists()) {
+                val currentDto = try {
+                    currentDocument.toObject(RemoteMovementDto::class.java)
+                } catch (exception: RuntimeException) {
+                    throw InvalidRemoteMovementWriteException(
+                        "Current remote movement could not be decoded.",
+                        exception,
+                    )
+                } ?: throw InvalidRemoteMovementWriteException(
+                    "Current remote movement is empty.",
+                )
+                val current = when (
+                    val input = decodeRemoteMovementDocument(
+                        documentId = currentDocument.id,
+                        dto = currentDto,
+                    )
+                ) {
+                    is RemoteMovementInput.Valid -> input.snapshot
+                    is RemoteMovementInput.Invalid -> {
+                        throw InvalidRemoteMovementWriteException(
+                            "Current remote movement is invalid.",
+                        )
+                    }
+                }
+                requireRemoteWriteNotStale(current, proposed)
+                write.payload.copy(createdAt = currentDto.createdAt)
+            } else {
+                write.payload
+            }
+
+            transaction.set(documentReference, payload)
+            null
+        }
             .awaitResult()
     }
 }

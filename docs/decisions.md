@@ -646,3 +646,44 @@ exige `deletedAt` presente. No se escriben ID Room, `syncStatus` ni `lastSyncedA
 El boundary no ofrece delete físico, no modifica `authorizedUsers`, no está
 registrado en el app container y no activa sync, UI, startup, WorkManager ni tareas
 en background.
+
+## 048 - Motor manual de Cloud Sync
+
+`CloudSyncEngine.syncNow()` coordina una ejecución manual y explícita de Cloud Sync.
+Primero exige una sesión autorizada y usa únicamente el UID de esa cuenta para leer
+y escribir `users/{uid}/movements`.
+
+El motor captura un tiempo de sync, lee Room incluyendo tombstones, obtiene los
+documentos remotos y delega todas las decisiones de conflicto a
+`MovementSyncReconciler`. Luego aplica cada acción de forma independiente:
+
+- los uploads usan `CloudMovementRemoteDataSource` y después actualizan solo
+  `syncStatus` y `lastSyncedAt` en Room;
+- los remotos aceptados se insertan o actualizan como `SYNCED`;
+- los tombstones se conservan local y remotamente sin borrado físico;
+- los errores por item marcan `SYNC_ERROR` cuando existe una fila local;
+- los documentos remotos inválidos se omiten y producen resultado parcial.
+
+Las escrituras remotas usan una transacción Firestore y comparan `updatedAt` contra
+el documento actual. Una versión remota más nueva rechaza el write; un tombstone
+remoto también gana un empate contra un payload visible. El rechazo produce error
+remoto por item y no descarta datos locales.
+
+Las actualizaciones descargadas y los cambios de metadata local usan compare-and-set
+transaccional sobre `id`, `uuid`, `updatedAt`, `deletedAt` y `syncStatus`. Si la fila
+cambió después de reconciliar o durante un upload, el motor no la sobrescribe ni la
+marca `SYNCED`; devuelve resultado parcial para reintentar con un snapshot nuevo.
+
+El delete local conserva borrado físico únicamente para filas `LOCAL_ONLY` sin
+historial de sync. Una fila que ya pudo existir remotamente se convierte en
+`PENDING_DELETE` con `deletedAt` y permanece en Room, evitando que un documento
+remoto anterior la resucite en la siguiente ejecución manual. Antes de iniciar un
+write remoto, el motor mueve la fila a estado pendiente mediante compare-and-set;
+así, un delete concurrente durante el primer upload también crea tombstone.
+
+`CloudSyncResult` distingue éxito, resultado parcial, sesión cerrada, cuenta no
+autorizada y fallo general, con conteos sin datos financieros.
+
+El motor queda registrado en el app container, pero ninguna UI ni lifecycle lo
+invoca automáticamente. Esta decisión no agrega scheduler, WorkManager, sync al
+inicio, indicador Home, cambios de backup ni cambios de reglas Firestore.

@@ -244,8 +244,10 @@ Los tombstones permanecen en Room durante `v0.4.0`, pero se ocultan de la UI nor
 La migración Room `2 -> 3` asigna `LOCAL_ONLY`, `lastSyncedAt = null` y
 `deletedAt = null` a los movimientos existentes.
 
-Mientras Cloud Sync no esté activo, crear o restaurar movimientos usa esos mismos
-valores por defecto y eliminar conserva el borrado físico actual.
+Crear o restaurar movimientos sin Cloud Sync usa esos mismos valores por defecto.
+Eliminar una fila `LOCAL_ONLY` sin historial de sync conserva el borrado físico
+actual. Eliminar una fila con estado de sync o `lastSyncedAt` crea `deletedAt`,
+actualiza `updatedAt` y asigna `PENDING_DELETE` para impedir resurrección futura.
 
 Las consultas visibles excluyen cualquier fila con `deletedAt`, preparando UI,
 reportes, PDF, historial y respaldo visible para futuros tombstones sin cambiar el
