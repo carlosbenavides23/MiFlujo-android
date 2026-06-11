@@ -3,12 +3,14 @@ package com.carlos.miflujo.ui.settings
 import android.content.Context
 import android.net.Uri
 import android.util.Log
+import androidx.credentials.exceptions.NoCredentialException
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.carlos.miflujo.data.cloud.auth.CloudAccountRepository
 import com.carlos.miflujo.data.cloud.auth.CloudAccountStatus
 import com.carlos.miflujo.data.cloud.auth.CloudSignInCanceledException
+import com.carlos.miflujo.data.cloud.auth.CloudSignInTimedOutException
 import com.carlos.miflujo.data.repository.MovementRepository
 import com.carlos.miflujo.ui.backup.BackupDocument
 import com.carlos.miflujo.ui.backup.BackupExporter
@@ -76,12 +78,30 @@ class SettingsViewModel(
         cloudAccountJob = viewModelScope.launch {
             try {
                 val status = cloudAccountRepository.signInWithGoogle(context)
+                Log.d(CloudAccountLogTag, status.toSignInLogMessage())
                 mutableUiState.value = mutableUiState.value.copy(cloudAccountStatus = status)
             } catch (exception: Exception) {
                 if (exception is CancellationException) throw exception
-                if (exception !is CloudSignInCanceledException) {
-                    Log.e(CloudAccountLogTag, "Google sign-in failed.", exception)
-                    cloudAccountFeedback.tryEmit(CloudAccountFeedback.SignInFailed)
+                when (exception) {
+                    is CloudSignInCanceledException -> Unit
+                    is CloudSignInTimedOutException -> {
+                        Log.w(CloudAccountLogTag, "Google sign-in timed out.", exception)
+                        cloudAccountFeedback.tryEmit(CloudAccountFeedback.SignInTimedOut)
+                    }
+                    is NoCredentialException -> {
+                        Log.w(
+                            CloudAccountLogTag,
+                            "No Google credential available for explicit sign-in.",
+                            exception,
+                        )
+                        cloudAccountFeedback.tryEmit(
+                            CloudAccountFeedback.NoGoogleCredentialAvailable,
+                        )
+                    }
+                    else -> {
+                        Log.e(CloudAccountLogTag, "Google sign-in failed.", exception)
+                        cloudAccountFeedback.tryEmit(CloudAccountFeedback.SignInFailed)
+                    }
                 }
             } finally {
                 mutableUiState.value = mutableUiState.value.copy(
@@ -323,6 +343,17 @@ private const val BackupExportLogTag = "MiFlujoBackupExport"
 private const val BackupRestoreLogTag = "MiFlujoBackupRestore"
 private const val CloudAccountLogTag = "MiFlujoCloudAccount"
 
+private fun CloudAccountStatus.toSignInLogMessage(): String = when (this) {
+    is CloudAccountStatus.Authorized ->
+        "Google sign-in returned Authorized for UID ${account.uid.toShortLogUid()}."
+    is CloudAccountStatus.Unauthorized ->
+        "Google sign-in returned Unauthorized for UID ${account.uid.toShortLogUid()}."
+    CloudAccountStatus.SignedOut -> "Google sign-in returned SignedOut."
+    CloudAccountStatus.Loading -> "Google sign-in returned Loading."
+}
+
+private fun String.toShortLogUid(): String = take(6) + "..."
+
 data class CreateBackupDocumentRequest(
     val fileName: String,
 )
@@ -345,6 +376,12 @@ sealed class BackupRestoreFeedback(
 sealed class CloudAccountFeedback(
     val message: String,
 ) {
+    data object SignInTimedOut : CloudAccountFeedback(
+        "El inicio de sesión tardó demasiado. Intenta nuevamente. MiFlujo continúa en modo local.",
+    )
+    data object NoGoogleCredentialAvailable : CloudAccountFeedback(
+        "No se encontró una cuenta Google disponible o la configuración de inicio de sesión no está completa. MiFlujo continúa en modo local.",
+    )
     data object SignInFailed : CloudAccountFeedback(
         "No se pudo iniciar sesión con Google. MiFlujo continúa en modo local.",
     )

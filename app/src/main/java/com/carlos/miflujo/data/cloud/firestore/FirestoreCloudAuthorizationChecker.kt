@@ -15,14 +15,29 @@ class FirestoreCloudAuthorizationChecker(
 ) : CloudAuthorizationChecker {
     override suspend fun isAuthorized(uid: String): Boolean {
         return try {
-            firestore.collection(AuthorizedUsersCollection)
+            Log.d(
+                CloudAuthorizationLogTag,
+                "Reading $AuthorizedUsersCollection/${uid.toShortLogUid()}.",
+            )
+            val document = firestore.collection(AuthorizedUsersCollection)
                 .document(uid)
                 .get(Source.SERVER)
                 .awaitResult()
-                .getBoolean(EnabledField) == true
+            Log.d(
+                CloudAuthorizationLogTag,
+                "Authorization document exists: ${document.exists()}.",
+            )
+            val isEnabled = document.getBoolean(EnabledField) == true
+            Log.d(CloudAuthorizationLogTag, "Authorization enabled is true: $isEnabled.")
+            isEnabled
         } catch (exception: Exception) {
             if (exception is CancellationException) throw exception
-            Log.w(CloudAuthorizationLogTag, "Cloud Sync authorization check failed.", exception)
+            Log.w(
+                CloudAuthorizationLogTag,
+                "Authorization read failed: class=${exception.javaClass.name}, " +
+                    "message=${exception.message}.",
+                exception,
+            )
             false
         }
     }
@@ -44,3 +59,5 @@ private suspend fun Task<DocumentSnapshot>.awaitResult(): DocumentSnapshot =
 private const val AuthorizedUsersCollection = "authorizedUsers"
 private const val EnabledField = "enabled"
 private const val CloudAuthorizationLogTag = "MiFlujoCloudAuthorization"
+
+private fun String.toShortLogUid(): String = take(6) + "..."
