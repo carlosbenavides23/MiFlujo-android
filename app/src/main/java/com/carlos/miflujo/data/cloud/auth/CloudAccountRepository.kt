@@ -32,3 +32,7 @@ interface CloudAccountRepository {
 class CloudSignInCanceledException(
     cause: Throwable,
 ) : Exception(cause)
+
+class CloudSignInTimedOutException(
+    cause: Throwable,
+) : Exception(cause)
