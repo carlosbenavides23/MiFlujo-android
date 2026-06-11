@@ -8,6 +8,7 @@ import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
 import com.carlos.miflujo.data.model.MovementEntity
+import com.carlos.miflujo.domain.model.SyncStatus
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -32,6 +33,45 @@ interface MovementDao {
         """,
     )
     suspend fun getAllMovements(): List<MovementEntity>
+
+    @Query(
+        """
+        SELECT * FROM movements
+        ORDER BY date_epoch_day DESC, created_at_epoch_millis DESC, id DESC
+        """,
+    )
+    suspend fun getAllMovementsIncludingDeleted(): List<MovementEntity>
+
+    @Update
+    suspend fun updateMovementFromSync(movement: MovementEntity): Int
+
+    @Query(
+        """
+        UPDATE movements
+        SET sync_status = :syncStatus,
+            last_synced_at_epoch_millis = :lastSyncedAtEpochMillis
+        WHERE id = :localId AND uuid = :uuid
+        """,
+    )
+    suspend fun updateSyncMetadata(
+        localId: Long,
+        uuid: String,
+        syncStatus: SyncStatus,
+        lastSyncedAtEpochMillis: Long?,
+    ): Int
+
+    @Query(
+        """
+        UPDATE movements
+        SET sync_status = :syncStatus
+        WHERE id = :localId AND uuid = :uuid
+        """,
+    )
+    suspend fun updateSyncStatus(
+        localId: Long,
+        uuid: String,
+        syncStatus: SyncStatus,
+    ): Int
 
     @Query("DELETE FROM movements")
     suspend fun deleteAllMovements()

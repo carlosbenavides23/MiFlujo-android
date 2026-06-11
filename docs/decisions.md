@@ -646,3 +646,27 @@ exige `deletedAt` presente. No se escriben ID Room, `syncStatus` ni `lastSyncedA
 El boundary no ofrece delete físico, no modifica `authorizedUsers`, no está
 registrado en el app container y no activa sync, UI, startup, WorkManager ni tareas
 en background.
+
+## 048 - Motor manual de Cloud Sync
+
+`CloudSyncEngine.syncNow()` coordina una ejecución manual y explícita de Cloud Sync.
+Primero exige una sesión autorizada y usa únicamente el UID de esa cuenta para leer
+y escribir `users/{uid}/movements`.
+
+El motor captura un tiempo de sync, lee Room incluyendo tombstones, obtiene los
+documentos remotos y delega todas las decisiones de conflicto a
+`MovementSyncReconciler`. Luego aplica cada acción de forma independiente:
+
+- los uploads usan `CloudMovementRemoteDataSource` y después actualizan solo
+  `syncStatus` y `lastSyncedAt` en Room;
+- los remotos aceptados se insertan o actualizan como `SYNCED`;
+- los tombstones se conservan local y remotamente sin borrado físico;
+- los errores por item marcan `SYNC_ERROR` cuando existe una fila local;
+- los documentos remotos inválidos se omiten y producen resultado parcial.
+
+`CloudSyncResult` distingue éxito, resultado parcial, sesión cerrada, cuenta no
+autorizada y fallo general, con conteos sin datos financieros.
+
+El motor queda registrado en el app container, pero ninguna UI ni lifecycle lo
+invoca automáticamente. Esta decisión no agrega scheduler, WorkManager, sync al
+inicio, indicador Home, cambios de backup ni cambios de reglas Firestore.

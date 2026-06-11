@@ -5,7 +5,10 @@ import androidx.room.Room
 import com.carlos.miflujo.data.cloud.auth.CloudAccountRepository
 import com.carlos.miflujo.data.cloud.auth.DefaultCloudAccountRepository
 import com.carlos.miflujo.data.cloud.auth.FirebaseCloudAuthDataSource
+import com.carlos.miflujo.data.cloud.firestore.FirestoreCloudMovementRemoteDataSource
 import com.carlos.miflujo.data.cloud.firestore.FirestoreCloudAuthorizationChecker
+import com.carlos.miflujo.data.cloud.sync.CloudSyncEngine
+import com.carlos.miflujo.data.cloud.sync.RoomCloudSyncLocalDataSource
 import com.carlos.miflujo.data.local.MiFlujoDatabase
 import com.carlos.miflujo.data.local.MIGRATION_1_2
 import com.carlos.miflujo.data.local.MIGRATION_2_3
@@ -18,6 +21,7 @@ interface MiFlujoAppContainer {
     val database: MiFlujoDatabase
     val movementRepository: MovementRepository
     val cloudAccountRepository: CloudAccountRepository
+    val cloudSyncEngine: CloudSyncEngine
 }
 
 class DefaultMiFlujoAppContainer(
@@ -46,6 +50,16 @@ class DefaultMiFlujoAppContainer(
                 googleWebClientId = applicationContext.getString(R.string.google_web_client_id),
             ),
             authorizationChecker = FirestoreCloudAuthorizationChecker(
+                firestore = FirebaseFirestore.getInstance(),
+            ),
+        )
+    }
+
+    override val cloudSyncEngine: CloudSyncEngine by lazy {
+        CloudSyncEngine(
+            cloudAccountRepository = cloudAccountRepository,
+            localDataSource = RoomCloudSyncLocalDataSource(database.movementDao()),
+            remoteDataSource = FirestoreCloudMovementRemoteDataSource(
                 firestore = FirebaseFirestore.getInstance(),
             ),
         )
