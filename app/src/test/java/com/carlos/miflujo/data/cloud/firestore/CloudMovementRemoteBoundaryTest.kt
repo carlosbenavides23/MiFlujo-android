@@ -125,6 +125,47 @@ class CloudMovementRemoteBoundaryTest {
         assertEquals(RemoteMovementInput.Valid(expected), input)
     }
 
+    @Test
+    fun `conditional write rejects newer remote movement`() {
+        assertStaleWrite {
+            requireRemoteWriteNotStale(
+                current = snapshot(updatedAt = baseTime.plusHours(3)),
+                proposed = snapshot(updatedAt = baseTime.plusHours(2)),
+            )
+        }
+    }
+
+    @Test
+    fun `conditional write rejects visible payload when current is equal tombstone`() {
+        val timestamp = baseTime.plusHours(2)
+
+        assertStaleWrite {
+            requireRemoteWriteNotStale(
+                current = snapshot(
+                    updatedAt = timestamp,
+                    deletedAt = timestamp,
+                ),
+                proposed = snapshot(updatedAt = timestamp),
+            )
+        }
+    }
+
+    @Test
+    fun `conditional write allows newer payload and equal tombstone`() {
+        requireRemoteWriteNotStale(
+            current = snapshot(updatedAt = baseTime.plusHours(1)),
+            proposed = snapshot(updatedAt = baseTime.plusHours(2)),
+        )
+        val timestamp = baseTime.plusHours(2)
+        requireRemoteWriteNotStale(
+            current = snapshot(updatedAt = timestamp),
+            proposed = snapshot(
+                updatedAt = timestamp,
+                deletedAt = timestamp,
+            ),
+        )
+    }
+
     private fun snapshot(
         updatedAt: LocalDateTime = baseTime.plusHours(1),
         deletedAt: LocalDateTime? = null,
@@ -153,6 +194,15 @@ class CloudMovementRemoteBoundaryTest {
             block()
             fail("Expected InvalidRemoteMovementWriteException.")
         } catch (_: InvalidRemoteMovementWriteException) {
+            // Expected.
+        }
+    }
+
+    private fun assertStaleWrite(block: () -> Unit) {
+        try {
+            block()
+            fail("Expected StaleRemoteMovementWriteException.")
+        } catch (_: StaleRemoteMovementWriteException) {
             // Expected.
         }
     }

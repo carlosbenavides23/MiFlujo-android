@@ -20,6 +20,10 @@ class InvalidRemoteMovementWriteException(
     cause: Throwable? = null,
 ) : IllegalArgumentException(message, cause)
 
+class StaleRemoteMovementWriteException(
+    message: String,
+) : IllegalStateException(message)
+
 object CloudMovementPath {
     fun collection(uid: String): String {
         requireValidPathSegment("uid", uid)
@@ -85,6 +89,31 @@ fun decodeRemoteMovementDocument(
         RemoteMovementInput.Invalid(
             documentId = documentId,
             reason = InvalidRemoteItemReason.INVALID_DOCUMENT,
+        )
+    }
+}
+
+fun requireRemoteWriteNotStale(
+    current: MovementRemoteSnapshot,
+    proposed: MovementRemoteSnapshot,
+) {
+    if (current.uuid != proposed.uuid) {
+        throw StaleRemoteMovementWriteException(
+            "Current and proposed remote movements must use the same UUID.",
+        )
+    }
+    if (current.updatedAt > proposed.updatedAt) {
+        throw StaleRemoteMovementWriteException(
+            "Remote movement is newer than the proposed write.",
+        )
+    }
+    if (
+        current.updatedAt == proposed.updatedAt &&
+        current.deletedAt != null &&
+        proposed.deletedAt == null
+    ) {
+        throw StaleRemoteMovementWriteException(
+            "A remote tombstone wins a timestamp tie against a visible movement.",
         )
     }
 }

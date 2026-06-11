@@ -5,6 +5,7 @@ import com.carlos.miflujo.data.cloud.auth.CloudAccount
 import com.carlos.miflujo.data.cloud.auth.CloudAccountRepository
 import com.carlos.miflujo.data.cloud.auth.CloudAccountStatus
 import com.carlos.miflujo.data.cloud.firestore.CloudMovementRemoteDataSource
+import com.carlos.miflujo.data.cloud.firestore.requireRemoteWriteNotStale
 import com.carlos.miflujo.domain.model.Currency
 import com.carlos.miflujo.domain.model.Movement
 import com.carlos.miflujo.domain.model.MovementCategory
@@ -266,6 +267,125 @@ class CloudSyncEngineTest {
         }
 
     @Test
+    fun `stale visible upload cannot overwrite a newer remote tombstone`() = runBlocking {
+        val localMovement = movement(
+            updatedAt = baseTime.plusHours(2),
+            syncStatus = SyncStatus.PENDING_UPLOAD,
+        )
+        val remoteOlder = movement(
+            id = 0L,
+            updatedAt = baseTime.plusHours(1),
+            detail = "Remote older",
+        ).toRemoteSnapshot()
+        val remoteNewerTombstone = movement(
+            id = 0L,
+            updatedAt = baseTime.plusHours(3),
+            deletedAt = baseTime.plusHours(3),
+        ).toRemoteSnapshot()
+        val local = FakeLocalDataSource(localMovement)
+        val remote = FakeRemoteDataSource(valid(remoteOlder)).apply {
+            currentByUuid[remoteOlder.uuid] = remoteOlder
+            onVisibleWrite = {
+                currentByUuid[remoteOlder.uuid] = remoteNewerTombstone
+            }
+        }
+
+        val result = engine(local = local, remote = remote).syncNow()
+
+        assertEquals(CloudSyncStatus.PARTIAL, result.status)
+        assertEquals(0, result.uploaded)
+        assertEquals(1, result.remoteErrors)
+        assertEquals(1, result.localErrors)
+        assertEquals(remoteNewerTombstone, remote.currentByUuid[testUuid])
+        assertEquals(SyncStatus.SYNC_ERROR, local.singleMovement().syncStatus)
+    }
+
+    @Test
+    fun `remote update does not overwrite local edit made after reconciliation snapshot`() =
+        runBlocking {
+            val original = movement(
+                updatedAt = baseTime.plusHours(1),
+                detail = "Original local",
+                syncStatus = SyncStatus.SYNCED,
+            )
+            val remoteNewer = movement(
+                id = 0L,
+                updatedAt = baseTime.plusHours(2),
+                detail = "Remote update",
+            ).toRemoteSnapshot()
+            val interveningEdit = original.copy(
+                updatedAt = baseTime.plusHours(3),
+                detail = "Intervening local edit",
+                syncStatus = SyncStatus.PENDING_UPLOAD,
+            )
+            val local = FakeLocalDataSource(original)
+            val remote = FakeRemoteDataSource(valid(remoteNewer)).apply {
+                onFetch = {
+                    local.replaceMovement(interveningEdit)
+                }
+            }
+
+            val result = engine(local = local, remote = remote).syncNow()
+
+            assertEquals(CloudSyncStatus.PARTIAL, result.status)
+            assertEquals(0, result.updatedLocal)
+            assertEquals(1, result.localErrors)
+            assertEquals(interveningEdit, local.singleMovement())
+        }
+
+    @Test
+    fun `local edit made during upload is not marked synced`() = runBlocking {
+        val original = movement(
+            updatedAt = baseTime.plusHours(2),
+            syncStatus = SyncStatus.PENDING_UPLOAD,
+        )
+        val interveningEdit = original.copy(
+            updatedAt = baseTime.plusHours(3),
+            detail = "Edited during upload",
+            syncStatus = SyncStatus.PENDING_UPLOAD,
+        )
+        val local = FakeLocalDataSource(original)
+        val remote = FakeRemoteDataSource().apply {
+            onVisibleWrite = {
+                local.replaceMovement(interveningEdit)
+            }
+        }
+
+        val result = engine(local = local, remote = remote).syncNow()
+
+        assertEquals(CloudSyncStatus.PARTIAL, result.status)
+        assertEquals(1, result.uploaded)
+        assertEquals(0, result.markedSynced)
+        assertEquals(1, result.localErrors)
+        assertEquals(interveningEdit, local.singleMovement())
+    }
+
+    @Test
+    fun `first upload in flight turns concurrent delete into tombstone`() = runBlocking {
+        val localOnly = movement(
+            syncStatus = SyncStatus.LOCAL_ONLY,
+            lastSyncedAt = null,
+        )
+        val deletionTime = baseTime.plusHours(4)
+        val local = FakeLocalDataSource(localOnly)
+        val remote = FakeRemoteDataSource().apply {
+            onVisibleWrite = {
+                local.deleteWithSyncSafety(localOnly.id, localOnly.uuid, deletionTime)
+            }
+        }
+
+        val result = engine(local = local, remote = remote).syncNow()
+
+        assertEquals(CloudSyncStatus.PARTIAL, result.status)
+        assertEquals(1, result.uploaded)
+        assertEquals(0, result.markedSynced)
+        assertEquals(1, result.localErrors)
+        assertEquals(1, local.movements.size)
+        assertEquals(SyncStatus.PENDING_DELETE, local.singleMovement().syncStatus)
+        assertEquals(deletionTime, local.singleMovement().deletedAt)
+    }
+
+    @Test
     fun `mark local sync error action changes only sync status`() = runBlocking {
         val invalid = movement(
             syncStatus = SyncStatus.PENDING_DELETE,
@@ -400,32 +520,88 @@ private class FakeLocalDataSource(
         return localId
     }
 
-    override suspend fun updateRemoteMovement(movement: Movement) {
-        val index = movementIndex(movement.id, movement.uuid)
+    override suspend fun prepareForUpload(
+        expectedLocal: Movement,
+        tombstone: Boolean,
+    ): Movement? {
+        val index = movementIndex(expectedLocal.id, expectedLocal.uuid)
+        if (!movements[index].matchesSyncVersion(expectedLocal)) {
+            return null
+        }
+        val prepared = movements[index].copy(
+            syncStatus = if (tombstone) {
+                SyncStatus.PENDING_DELETE
+            } else {
+                SyncStatus.PENDING_UPLOAD
+            },
+        )
+        movements[index] = prepared
+        return prepared
+    }
+
+    override suspend fun updateRemoteMovement(
+        expectedLocal: Movement,
+        movement: Movement,
+    ): Boolean {
+        val index = movementIndex(expectedLocal.id, expectedLocal.uuid)
+        if (!movements[index].matchesSyncVersion(expectedLocal)) {
+            return false
+        }
         movements[index] = movement
+        return true
     }
 
     override suspend fun markSynced(
-        localId: Long,
-        uuid: String,
+        expectedLocal: Movement,
         lastSyncedAt: LocalDateTime,
-    ) {
-        val index = movementIndex(localId, uuid)
+    ): Boolean {
+        val index = movementIndex(expectedLocal.id, expectedLocal.uuid)
+        if (!movements[index].matchesSyncVersion(expectedLocal)) {
+            return false
+        }
         movements[index] = movements[index].copy(
             syncStatus = SyncStatus.SYNCED,
             lastSyncedAt = lastSyncedAt,
         )
+        return true
     }
 
-    override suspend fun markSyncError(
-        localId: Long,
-        uuid: String,
-    ) {
-        val index = movementIndex(localId, uuid)
+    override suspend fun markSyncError(expectedLocal: Movement): Boolean {
+        val index = movementIndex(expectedLocal.id, expectedLocal.uuid)
+        if (!movements[index].matchesSyncVersion(expectedLocal)) {
+            return false
+        }
         movements[index] = movements[index].copy(syncStatus = SyncStatus.SYNC_ERROR)
+        return true
     }
 
     fun singleMovement(): Movement = movements.single()
+
+    fun replaceMovement(movement: Movement) {
+        val index = movementIndex(movement.id, movement.uuid)
+        movements[index] = movement
+    }
+
+    fun deleteWithSyncSafety(
+        localId: Long,
+        uuid: String,
+        deletionTime: LocalDateTime,
+    ) {
+        val index = movementIndex(localId, uuid)
+        val current = movements[index]
+        if (
+            current.syncStatus == SyncStatus.LOCAL_ONLY &&
+            current.lastSyncedAt == null
+        ) {
+            movements.removeAt(index)
+        } else {
+            movements[index] = current.copy(
+                updatedAt = maxOf(deletionTime, current.updatedAt),
+                syncStatus = SyncStatus.PENDING_DELETE,
+                deletedAt = maxOf(deletionTime, current.updatedAt),
+            )
+        }
+    }
 
     private fun movementIndex(
         localId: Long,
@@ -446,11 +622,15 @@ private class FakeRemoteDataSource(
     val fetchUids = mutableListOf<String>()
     val writeUids = mutableListOf<String>()
     val failingVisibleUuids = mutableSetOf<String>()
+    val currentByUuid = mutableMapOf<String, MovementRemoteSnapshot>()
+    var onFetch: (() -> Unit)? = null
+    var onVisibleWrite: (() -> Unit)? = null
     var fetchCalls: Int = 0
 
     override suspend fun fetchAll(uid: String): List<RemoteMovementInput> {
         fetchCalls += 1
         fetchUids += uid
+        onFetch?.invoke()
         return inputs.toList()
     }
 
@@ -459,10 +639,15 @@ private class FakeRemoteDataSource(
         movement: MovementRemoteSnapshot,
     ) {
         writeUids += uid
+        onVisibleWrite?.invoke()
         if (movement.uuid in failingVisibleUuids) {
             error("Remote write failed.")
         }
+        currentByUuid[movement.uuid]?.let { current ->
+            requireRemoteWriteNotStale(current, movement)
+        }
         visibleWrites += movement
+        currentByUuid[movement.uuid] = movement
     }
 
     override suspend fun upsertTombstone(
@@ -470,6 +655,17 @@ private class FakeRemoteDataSource(
         movement: MovementRemoteSnapshot,
     ) {
         writeUids += uid
+        currentByUuid[movement.uuid]?.let { current ->
+            requireRemoteWriteNotStale(current, movement)
+        }
         tombstoneWrites += movement
+        currentByUuid[movement.uuid] = movement
     }
 }
+
+private fun Movement.matchesSyncVersion(expected: Movement): Boolean =
+    id == expected.id &&
+        uuid == expected.uuid &&
+        updatedAt == expected.updatedAt &&
+        deletedAt == expected.deletedAt &&
+        syncStatus == expected.syncStatus

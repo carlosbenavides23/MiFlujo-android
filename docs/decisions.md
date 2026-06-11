@@ -664,6 +664,23 @@ documentos remotos y delega todas las decisiones de conflicto a
 - los errores por item marcan `SYNC_ERROR` cuando existe una fila local;
 - los documentos remotos inválidos se omiten y producen resultado parcial.
 
+Las escrituras remotas usan una transacción Firestore y comparan `updatedAt` contra
+el documento actual. Una versión remota más nueva rechaza el write; un tombstone
+remoto también gana un empate contra un payload visible. El rechazo produce error
+remoto por item y no descarta datos locales.
+
+Las actualizaciones descargadas y los cambios de metadata local usan compare-and-set
+transaccional sobre `id`, `uuid`, `updatedAt`, `deletedAt` y `syncStatus`. Si la fila
+cambió después de reconciliar o durante un upload, el motor no la sobrescribe ni la
+marca `SYNCED`; devuelve resultado parcial para reintentar con un snapshot nuevo.
+
+El delete local conserva borrado físico únicamente para filas `LOCAL_ONLY` sin
+historial de sync. Una fila que ya pudo existir remotamente se convierte en
+`PENDING_DELETE` con `deletedAt` y permanece en Room, evitando que un documento
+remoto anterior la resucite en la siguiente ejecución manual. Antes de iniciar un
+write remoto, el motor mueve la fila a estado pendiente mediante compare-and-set;
+así, un delete concurrente durante el primer upload también crea tombstone.
+
 `CloudSyncResult` distingue éxito, resultado parcial, sesión cerrada, cuenta no
 autorizada y fallo general, con conteos sin datos financieros.
 

@@ -91,11 +91,15 @@ class CloudSyncEngine(
 
         val counts = MutableCloudSyncCounts()
         val localByUuid = localMovements.associateBy(Movement::uuid)
+        val localByIdentity = localMovements.associateBy {
+            LocalMovementIdentity(it.id, it.uuid)
+        }
         plan.actions.forEach { action ->
             applyAction(
                 uid = uid,
                 action = action,
                 localByUuid = localByUuid,
+                localByIdentity = localByIdentity,
                 syncTime = syncTime,
                 counts = counts,
             )
@@ -107,6 +111,7 @@ class CloudSyncEngine(
         uid: String,
         action: SyncReconciliationAction,
         localByUuid: Map<String, Movement>,
+        localByIdentity: Map<LocalMovementIdentity, Movement>,
         syncTime: LocalDateTime,
         counts: MutableCloudSyncCounts,
     ) {
@@ -115,6 +120,7 @@ class CloudSyncEngine(
                 uid = uid,
                 local = localByUuid[action.payload.uuid],
                 syncTime = syncTime,
+                tombstone = false,
                 counts = counts,
             ) {
                 remoteDataSource.upsertVisible(uid, action.payload)
@@ -124,6 +130,7 @@ class CloudSyncEngine(
                 uid = uid,
                 local = localByUuid[action.payload.uuid],
                 syncTime = syncTime,
+                tombstone = true,
                 counts = counts,
             ) {
                 remoteDataSource.upsertTombstone(uid, action.payload)
@@ -140,37 +147,64 @@ class CloudSyncEngine(
             }
 
             is SyncReconciliationAction.UpdateLocalFromRemote -> {
+                val expectedLocal = localByIdentity[
+                    LocalMovementIdentity(action.movement.id, action.movement.uuid)
+                ]
+                if (expectedLocal == null) {
+                    counts.localErrors += 1
+                    return
+                }
                 try {
-                    localDataSource.updateRemoteMovement(action.movement)
-                    counts.updatedLocal += 1
+                    if (
+                        localDataSource.updateRemoteMovement(
+                            expectedLocal = expectedLocal,
+                            movement = action.movement,
+                        )
+                    ) {
+                        counts.updatedLocal += 1
+                    } else {
+                        counts.localErrors += 1
+                    }
                 } catch (exception: Exception) {
                     if (exception is CancellationException) throw exception
                     counts.localErrors += 1
-                    markSyncErrorBestEffort(
-                        localId = action.movement.id,
-                        uuid = action.movement.uuid,
-                    )
+                    markSyncErrorBestEffort(expectedLocal)
                 }
             }
 
             is SyncReconciliationAction.MarkLocalSynced -> {
+                val expectedLocal = localByIdentity[
+                    LocalMovementIdentity(action.localId, action.uuid)
+                ]
+                if (expectedLocal == null) {
+                    counts.localErrors += 1
+                    return
+                }
                 try {
-                    localDataSource.markSynced(
-                        localId = action.localId,
-                        uuid = action.uuid,
-                        lastSyncedAt = action.lastSyncedAt,
-                    )
-                    counts.markedSynced += 1
+                    if (
+                        localDataSource.markSynced(
+                            expectedLocal = expectedLocal,
+                            lastSyncedAt = action.lastSyncedAt,
+                        )
+                    ) {
+                        counts.markedSynced += 1
+                    } else {
+                        counts.localErrors += 1
+                    }
                 } catch (exception: Exception) {
                     if (exception is CancellationException) throw exception
                     counts.localErrors += 1
-                    markSyncErrorBestEffort(action.localId, action.uuid)
+                    markSyncErrorBestEffort(expectedLocal)
                 }
             }
 
             is SyncReconciliationAction.MarkLocalSyncError -> {
                 counts.localErrors += 1
-                markSyncErrorBestEffort(action.localId, action.uuid)
+                localByIdentity[
+                    LocalMovementIdentity(action.localId, action.uuid)
+                ]?.let { expectedLocal ->
+                    markSyncErrorBestEffort(expectedLocal)
+                }
             }
 
             is SyncReconciliationAction.SkipInvalidRemote -> {
@@ -184,10 +218,26 @@ class CloudSyncEngine(
         uid: String,
         local: Movement?,
         syncTime: LocalDateTime,
+        tombstone: Boolean,
         counts: MutableCloudSyncCounts,
         remoteWrite: suspend () -> Unit,
     ) {
         if (local == null) {
+            counts.localErrors += 1
+            return
+        }
+
+        val preparedLocal = try {
+            localDataSource.prepareForUpload(
+                expectedLocal = local,
+                tombstone = tombstone,
+            )
+        } catch (exception: Exception) {
+            if (exception is CancellationException) throw exception
+            counts.localErrors += 1
+            return
+        }
+        if (preparedLocal == null) {
             counts.localErrors += 1
             return
         }
@@ -199,35 +249,41 @@ class CloudSyncEngine(
             if (exception is CancellationException) throw exception
             counts.remoteErrors += 1
             counts.localErrors += 1
-            markSyncErrorBestEffort(local.id, local.uuid)
+            markSyncErrorBestEffort(preparedLocal)
             return
         }
 
         try {
-            localDataSource.markSynced(
-                localId = local.id,
-                uuid = local.uuid,
-                lastSyncedAt = syncTime,
-            )
-            counts.markedSynced += 1
+            if (
+                localDataSource.markSynced(
+                    expectedLocal = preparedLocal,
+                    lastSyncedAt = syncTime,
+                )
+            ) {
+                counts.markedSynced += 1
+            } else {
+                counts.localErrors += 1
+            }
         } catch (exception: Exception) {
             if (exception is CancellationException) throw exception
             counts.localErrors += 1
-            markSyncErrorBestEffort(local.id, local.uuid)
+            markSyncErrorBestEffort(preparedLocal)
         }
     }
 
-    private suspend fun markSyncErrorBestEffort(
-        localId: Long,
-        uuid: String,
-    ) {
+    private suspend fun markSyncErrorBestEffort(expectedLocal: Movement) {
         try {
-            localDataSource.markSyncError(localId, uuid)
+            localDataSource.markSyncError(expectedLocal)
         } catch (exception: Exception) {
             if (exception is CancellationException) throw exception
         }
     }
 }
+
+private data class LocalMovementIdentity(
+    val localId: Long,
+    val uuid: String,
+)
 
 private data class MutableCloudSyncCounts(
     var uploaded: Int = 0,

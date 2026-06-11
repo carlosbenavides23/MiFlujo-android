@@ -22,47 +22,45 @@ class RoomCloudSyncLocalDataSource(
         return movementDao.insertMovement(movement.toEntity())
     }
 
-    override suspend fun updateRemoteMovement(movement: Movement) {
+    override suspend fun prepareForUpload(
+        expectedLocal: Movement,
+        tombstone: Boolean,
+    ): Movement? = movementDao.prepareMovementForUploadIfUnchanged(
+        expected = expectedLocal.toEntity(),
+        pendingStatus = if (tombstone) {
+            SyncStatus.PENDING_DELETE
+        } else {
+            SyncStatus.PENDING_UPLOAD
+        },
+    )?.toDomain()
+
+    override suspend fun updateRemoteMovement(
+        expectedLocal: Movement,
+        movement: Movement,
+    ): Boolean {
         require(movement.id > 0L) {
             "Remote updates must preserve an existing Room id."
         }
-        requireSyncedRemoteMovement(movement)
-        check(movementDao.updateMovementFromSync(movement.toEntity()) == 1) {
-            "Remote movement update did not match one local row."
+        require(expectedLocal.id == movement.id && expectedLocal.uuid == movement.uuid) {
+            "Remote updates must target the reconciled local movement."
         }
+        requireSyncedRemoteMovement(movement)
+        return movementDao.updateMovementFromSyncIfUnchanged(
+            expected = expectedLocal.toEntity(),
+            replacement = movement.toEntity(),
+        )
     }
 
     override suspend fun markSynced(
-        localId: Long,
-        uuid: String,
+        expectedLocal: Movement,
         lastSyncedAt: LocalDateTime,
-    ) {
-        check(
-            movementDao.updateSyncMetadata(
-                localId = localId,
-                uuid = uuid,
-                syncStatus = SyncStatus.SYNCED,
-                lastSyncedAtEpochMillis = lastSyncedAt.toEpochMillis(),
-            ) == 1,
-        ) {
-            "Sync metadata update did not match one local row."
-        }
-    }
+    ): Boolean = movementDao.markSyncedIfUnchanged(
+        expected = expectedLocal.toEntity(),
+        lastSyncedAtEpochMillis = lastSyncedAt.toEpochMillis(),
+    )
 
-    override suspend fun markSyncError(
-        localId: Long,
-        uuid: String,
-    ) {
-        check(
-            movementDao.updateSyncStatus(
-                localId = localId,
-                uuid = uuid,
-                syncStatus = SyncStatus.SYNC_ERROR,
-            ) == 1,
-        ) {
-            "Sync error update did not match one local row."
-        }
-    }
+    override suspend fun markSyncError(expectedLocal: Movement): Boolean =
+        movementDao.markSyncErrorIfUnchanged(expectedLocal.toEntity())
 
     private fun requireSyncedRemoteMovement(movement: Movement) {
         require(movement.syncStatus == SyncStatus.SYNCED) {

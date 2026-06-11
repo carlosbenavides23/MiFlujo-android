@@ -132,8 +132,10 @@ schemaVersion
 - upsert de tombstone.
 
 `FirestoreCloudMovementRemoteDataSource` requiere el UID explícitamente en cada
-operación. Lee desde servidor y usa `movement.uuid` como document ID para `set`.
-No expone delete físico, no consulta `authorizedUsers` y no infiere otro UID.
+operación. Lee desde servidor y usa `movement.uuid` como document ID. Los upserts
+usan transacción: leen la versión remota actual y rechazan un payload con
+`updatedAt` anterior. Un tombstone remoto también gana un empate contra un payload
+visible. No expone delete físico, no consulta `authorizedUsers` y no infiere otro UID.
 
 Cada documento leído se convierte de forma independiente. Un documento inválido
 produce `RemoteMovementInput.Invalid` y no cancela el mapeo de los demás documentos.
@@ -184,6 +186,12 @@ Con Cloud Sync activo:
 - eliminar movimiento -> asignar `deletedAt` y `PENDING_DELETE`.
 
 La eliminacion con Cloud Sync activo usa soft delete/tombstone.
+
+Para impedir resurrecciones entre ejecuciones manuales, una fila que ya tiene
+metadata de sync también usa tombstone al eliminarse aunque no exista sync
+automático activo. Solo una fila `LOCAL_ONLY` nunca sincronizada conserva el
+borrado físico local. El motor cambia la fila a estado pendiente antes del write
+remoto, cerrando la carrera entre el primer upload y un delete local concurrente.
 
 Los tombstones:
 

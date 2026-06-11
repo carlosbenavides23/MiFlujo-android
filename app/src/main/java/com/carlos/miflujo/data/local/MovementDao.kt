@@ -28,6 +28,18 @@ interface MovementDao {
     @Query(
         """
         SELECT * FROM movements
+        WHERE id = :localId AND uuid = :uuid
+        LIMIT 1
+        """,
+    )
+    suspend fun getMovementByIdAndUuid(
+        localId: Long,
+        uuid: String,
+    ): MovementEntity?
+
+    @Query(
+        """
+        SELECT * FROM movements
         WHERE deleted_at_epoch_millis IS NULL
         ORDER BY date_epoch_day DESC, created_at_epoch_millis DESC, id DESC
         """,
@@ -45,33 +57,95 @@ interface MovementDao {
     @Update
     suspend fun updateMovementFromSync(movement: MovementEntity): Int
 
-    @Query(
-        """
-        UPDATE movements
-        SET sync_status = :syncStatus,
-            last_synced_at_epoch_millis = :lastSyncedAtEpochMillis
-        WHERE id = :localId AND uuid = :uuid
-        """,
-    )
-    suspend fun updateSyncMetadata(
+    @Transaction
+    suspend fun deleteMovementPreservingSyncState(
         localId: Long,
         uuid: String,
-        syncStatus: SyncStatus,
-        lastSyncedAtEpochMillis: Long?,
-    ): Int
+        deletionEpochMillis: Long,
+    ): Boolean {
+        val current = getMovementByIdAndUuid(localId, uuid) ?: return false
+        if (
+            current.syncStatus == SyncStatus.LOCAL_ONLY &&
+            current.lastSyncedAt == null
+        ) {
+            deleteMovement(current)
+            return true
+        }
+        if (current.deletedAt != null) {
+            return true
+        }
 
-    @Query(
-        """
-        UPDATE movements
-        SET sync_status = :syncStatus
-        WHERE id = :localId AND uuid = :uuid
-        """,
-    )
-    suspend fun updateSyncStatus(
-        localId: Long,
-        uuid: String,
-        syncStatus: SyncStatus,
-    ): Int
+        val tombstoneTime = maxOf(deletionEpochMillis, current.updatedAtEpochMillis)
+        return updateMovementFromSync(
+            current.copy(
+                updatedAtEpochMillis = tombstoneTime,
+                syncStatus = SyncStatus.PENDING_DELETE,
+                deletedAt = tombstoneTime,
+            ),
+        ) == 1
+    }
+
+    @Transaction
+    suspend fun updateMovementFromSyncIfUnchanged(
+        expected: MovementEntity,
+        replacement: MovementEntity,
+    ): Boolean {
+        require(expected.id == replacement.id && expected.uuid == replacement.uuid)
+        val current = getMovementByIdAndUuid(expected.id, expected.uuid) ?: return false
+        if (!current.matchesSyncVersion(expected)) {
+            return false
+        }
+        return updateMovementFromSync(replacement) == 1
+    }
+
+    @Transaction
+    suspend fun prepareMovementForUploadIfUnchanged(
+        expected: MovementEntity,
+        pendingStatus: SyncStatus,
+    ): MovementEntity? {
+        require(
+            pendingStatus == SyncStatus.PENDING_UPLOAD ||
+                pendingStatus == SyncStatus.PENDING_DELETE,
+        )
+        val current = getMovementByIdAndUuid(expected.id, expected.uuid) ?: return null
+        if (!current.matchesSyncVersion(expected)) {
+            return null
+        }
+        val prepared = current.copy(syncStatus = pendingStatus)
+        return if (prepared == current || updateMovementFromSync(prepared) == 1) {
+            prepared
+        } else {
+            null
+        }
+    }
+
+    @Transaction
+    suspend fun markSyncedIfUnchanged(
+        expected: MovementEntity,
+        lastSyncedAtEpochMillis: Long,
+    ): Boolean {
+        val current = getMovementByIdAndUuid(expected.id, expected.uuid) ?: return false
+        if (!current.matchesSyncVersion(expected)) {
+            return false
+        }
+        return updateMovementFromSync(
+            current.copy(
+                syncStatus = SyncStatus.SYNCED,
+                lastSyncedAt = lastSyncedAtEpochMillis,
+            ),
+        ) == 1
+    }
+
+    @Transaction
+    suspend fun markSyncErrorIfUnchanged(expected: MovementEntity): Boolean {
+        val current = getMovementByIdAndUuid(expected.id, expected.uuid) ?: return false
+        if (!current.matchesSyncVersion(expected)) {
+            return false
+        }
+        return updateMovementFromSync(
+            current.copy(syncStatus = SyncStatus.SYNC_ERROR),
+        ) == 1
+    }
 
     @Query("DELETE FROM movements")
     suspend fun deleteAllMovements()
@@ -107,3 +181,10 @@ interface MovementDao {
     )
     fun getRecentMovements(limit: Int): Flow<List<MovementEntity>>
 }
+
+private fun MovementEntity.matchesSyncVersion(expected: MovementEntity): Boolean =
+    id == expected.id &&
+        uuid == expected.uuid &&
+        updatedAtEpochMillis == expected.updatedAtEpochMillis &&
+        deletedAt == expected.deletedAt &&
+        syncStatus == expected.syncStatus

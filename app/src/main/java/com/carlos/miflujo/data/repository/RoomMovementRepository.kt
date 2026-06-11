@@ -5,11 +5,14 @@ import com.carlos.miflujo.data.model.toDomain
 import com.carlos.miflujo.data.model.toEntity
 import com.carlos.miflujo.domain.model.Movement
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.ZoneOffset
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 class RoomMovementRepository(
     private val movementDao: MovementDao,
+    private val currentTimeProvider: () -> LocalDateTime = LocalDateTime::now,
 ) : MovementRepository {
     override suspend fun insertMovement(movement: Movement): Long =
         movementDao.insertMovement(movement.toEntity())
@@ -19,7 +22,11 @@ class RoomMovementRepository(
     }
 
     override suspend fun deleteMovement(movement: Movement) {
-        movementDao.deleteMovement(movement.toEntity())
+        movementDao.deleteMovementPreservingSyncState(
+            localId = movement.id,
+            uuid = movement.uuid,
+            deletionEpochMillis = currentTimeProvider().toEpochMillis(),
+        )
     }
 
     override suspend fun getAllMovements(): List<Movement> =
@@ -43,3 +50,6 @@ class RoomMovementRepository(
         .getRecentMovements(limit)
         .map { movements -> movements.map { it.toDomain() } }
 }
+
+private fun LocalDateTime.toEpochMillis(): Long =
+    toInstant(ZoneOffset.UTC).toEpochMilli()

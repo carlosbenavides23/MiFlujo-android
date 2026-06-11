@@ -8,16 +8,20 @@ interface CloudSyncLocalDataSource {
 
     suspend fun insertRemoteMovement(movement: Movement): Long
 
-    suspend fun updateRemoteMovement(movement: Movement)
+    suspend fun prepareForUpload(
+        expectedLocal: Movement,
+        tombstone: Boolean,
+    ): Movement?
+
+    suspend fun updateRemoteMovement(
+        expectedLocal: Movement,
+        movement: Movement,
+    ): Boolean
 
     suspend fun markSynced(
-        localId: Long,
-        uuid: String,
+        expectedLocal: Movement,
         lastSyncedAt: LocalDateTime,
-    )
+    ): Boolean
 
-    suspend fun markSyncError(
-        localId: Long,
-        uuid: String,
-    )
+    suspend fun markSyncError(expectedLocal: Movement): Boolean
 }
