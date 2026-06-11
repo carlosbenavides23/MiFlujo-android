@@ -602,3 +602,27 @@ campos requeridos, enums y reglas de negocio. Un DTO remoto válido produce un
 
 Esta decisión agrega únicamente el contrato y mapeo puros. No activa lecturas,
 escrituras ni sincronización de movimientos con Firestore.
+
+## 046 - Núcleo puro de reconciliación Cloud Sync
+
+`MovementSyncReconciler` recibe movimientos locales, snapshots remotos puros y un
+tiempo de sync explícito. Devuelve `SyncReconciliationPlan` con acciones declarativas;
+no ejecuta escrituras Room o Firestore.
+
+Las acciones distinguen uploads visibles, uploads de tombstones, inserciones y
+actualizaciones locales, marcado synced, errores locales y remotos inválidos.
+Los payloads remotos no contienen ID Room, `syncStatus` ni `lastSyncedAt`.
+
+UUID decide identidad y `updatedAt` decide conflictos. Los tombstones ganan empates
+contra registros visibles. Si dos registros visibles tienen el mismo `updatedAt`
+pero contenido distinto, un local pendiente, local-only o en error gana y solicita
+upload; si el local ya estaba `SYNCED`, gana remoto. Esta regla protege cambios
+locales todavía no confirmados sin volver a subir registros ya sincronizados.
+
+Aceptar un remoto para una fila local preserva el ID Room y el `createdAt` local,
+mantiene tombstones en vez de borrar físicamente y asigna `SYNCED` con el tiempo de
+sync recibido. Un remoto nuevo usa ID local `0` hasta que la futura capa de
+persistencia lo inserte.
+
+Esta fase no agrega llamadas Firestore, ejecución de planes, scheduler, background
+sync, cambios Room, DAO, backup, reglas ni UI.

@@ -215,6 +215,25 @@ Reglas:
 - `createdAt` no cambia durante reconciliacion.
 - `updatedAt` no debe regenerarse durante download si se esta aceptando el valor remoto.
 
+La capa pura `MovementSyncReconciler` no escribe Room ni Firestore. Recibe snapshots
+locales y remotos, además de un tiempo de sync explícito, y devuelve un plan
+inspeccionable con acciones de upload, inserción/actualización local, marcado synced
+y errores por item.
+
+Reglas adicionales:
+
+- Un tombstone remoto con `updatedAt` mayor o igual al local gana contra un local visible.
+- Un tombstone local con `updatedAt` mayor o igual al remoto gana contra un remoto visible.
+- Si los timestamps son iguales y los datos remotos son equivalentes, se marca el
+  movimiento local como synced.
+- Si los timestamps son iguales, ambos son visibles y los datos difieren, un local
+  pendiente, local-only o en error gana y solicita upload. Si el local ya estaba
+  `SYNCED`, gana remoto para no subir un registro sin cambios locales pendientes.
+- Datos remotos inválidos se omiten mediante una acción de error y no detienen el
+  resto del plan.
+- `PENDING_DELETE` sin `deletedAt` produce error local por item.
+- Los payloads de upload no contienen ID Room, `syncStatus` ni `lastSyncedAt`.
+
 ## Triggers de sync
 
 Cloud Sync puede ejecutarse cuando:

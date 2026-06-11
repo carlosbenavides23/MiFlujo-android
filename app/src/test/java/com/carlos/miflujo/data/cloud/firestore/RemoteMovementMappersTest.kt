@@ -6,6 +6,7 @@ import com.carlos.miflujo.domain.model.MovementCategory
 import com.carlos.miflujo.domain.model.MovementSubcategory
 import com.carlos.miflujo.domain.model.MovementType
 import com.carlos.miflujo.domain.model.SyncStatus
+import com.carlos.miflujo.domain.sync.MovementRemoteSchemaVersion
 import java.time.LocalDate
 import java.time.LocalDateTime
 import org.junit.Assert.assertEquals
@@ -37,7 +38,7 @@ class RemoteMovementMappersTest {
         val remote = movement.toRemoteDto()
 
         assertEquals(movement.uuid, remote.uuid)
-        assertEquals(RemoteMovementSchemaVersion, remote.schemaVersion)
+        assertEquals(MovementRemoteSchemaVersion, remote.schemaVersion)
         assertEquals("2026-06-11", remote.date)
         assertEquals(123_456_789, remote.deletedAt?.nanoseconds)
     }
@@ -81,7 +82,7 @@ class RemoteMovementMappersTest {
             valid.copy(createdAt = null),
             valid.copy(updatedAt = null),
             valid.copy(schemaVersion = 0),
-            valid.copy(schemaVersion = RemoteMovementSchemaVersion + 1),
+            valid.copy(schemaVersion = MovementRemoteSchemaVersion + 1),
         ).forEach { remote ->
             assertInvalidRemoteMovement {
                 remote.toDomain(documentId = testUuid)

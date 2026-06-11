@@ -6,6 +6,9 @@ import com.carlos.miflujo.domain.model.MovementCategory
 import com.carlos.miflujo.domain.model.MovementSubcategory
 import com.carlos.miflujo.domain.model.MovementType
 import com.carlos.miflujo.domain.model.SyncStatus
+import com.carlos.miflujo.domain.sync.MovementRemoteSchemaVersion
+import com.carlos.miflujo.domain.sync.MovementRemoteSnapshot
+import com.carlos.miflujo.domain.sync.toRemoteSnapshot
 import com.carlos.miflujo.domain.validation.MovementBusinessRuleValidator
 import com.google.firebase.Timestamp
 import java.time.DateTimeException
@@ -40,7 +43,7 @@ fun Movement.toRemoteDto(): RemoteMovementDto {
         createdAt = createdAt.toFirestoreTimestamp(),
         updatedAt = updatedAt.toFirestoreTimestamp(),
         deletedAt = deletedAt?.toFirestoreTimestamp(),
-        schemaVersion = RemoteMovementSchemaVersion,
+        schemaVersion = MovementRemoteSchemaVersion,
     )
 }
 
@@ -52,7 +55,7 @@ fun RemoteMovementDto.toDomain(documentId: String): Movement {
     }
 
     val parsedSchemaVersion = required("schemaVersion", schemaVersion)
-    if (parsedSchemaVersion != RemoteMovementSchemaVersion) {
+    if (parsedSchemaVersion != MovementRemoteSchemaVersion) {
         invalidRemoteMovement("Unsupported remote movement schema version.")
     }
 
@@ -85,6 +88,9 @@ fun RemoteMovementDto.toDomain(documentId: String): Movement {
         deletedAt = deletedAt?.toLocalDateTimeUtc(),
     )
 }
+
+fun RemoteMovementDto.toRemoteSnapshot(documentId: String): MovementRemoteSnapshot =
+    toDomain(documentId).toRemoteSnapshot()
 
 private fun requireCanonicalUuid(value: String) {
     val canonicalUuid = try {
@@ -156,5 +162,3 @@ private fun invalidRemoteMovement(
     message: String,
     cause: Throwable? = null,
 ): Nothing = throw InvalidRemoteMovementException(message, cause)
-
-internal const val RemoteMovementSchemaVersion = 1
