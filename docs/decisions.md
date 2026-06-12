@@ -513,7 +513,10 @@ Con Cloud Sync activo:
 
 La reconciliación usará UUID para identidad y `updatedAt` generado por la app para conflictos. Descargar nunca borrará físicamente filas Room.
 
-Crear backup local siempre estará permitido. Restaurar quedará bloqueado mientras Cloud Sync esté activo. Backup schema v1 nunca se restaurará con sync activo; cualquier soporte futuro requerirá schema v2 o superior y una política explícita.
+Crear backup local siempre estará permitido. Restaurar quedará bloqueado después de
+la primera ejecución completada de Cloud Sync en la instalación. Backup schema v1
+nunca se restaurará después de esa activación; cualquier soporte futuro requerirá
+schema v2 o superior y una política explícita.
 
 Los triggers serán foreground, red recuperada con la app abierta, aproximadamente cada 90 segundos en foreground con pendientes, `Sincronizar ahora` y WorkManager con restricción de red como respaldo. Salir de la app no será trigger y WorkManager periódico no implementará el timer de 90 segundos.
 
@@ -687,3 +690,51 @@ autorizada y fallo general, con conteos sin datos financieros.
 El motor queda registrado en el app container, pero ninguna UI ni lifecycle lo
 invoca automáticamente. Esta decisión no agrega scheduler, WorkManager, sync al
 inicio, indicador Home, cambios de backup ni cambios de reglas Firestore.
+
+## 049 - Control manual de Cloud Sync en Ajustes
+
+Ajustes muestra la acción explícita `Sincronizar ahora` únicamente para una cuenta
+autorizada. `SettingsViewModel` invoca `CloudSyncEngine` mediante `CloudSyncRunner`;
+los composables solo reciben estado y callbacks.
+
+Un state holder pequeño representa `idle`, ejecución, éxito, resultado parcial,
+sesión cerrada, cuenta no autorizada y fallo. Durante la ejecución bloquea llamadas
+repetidas y la UI deshabilita el botón. Los resultados muestran conteos operativos
+sin detalles financieros.
+
+La sincronización solo inicia al tocar el botón. Esta decisión no agrega ejecución
+en startup, cierre, foreground, login, scheduler, WorkManager, background,
+notificaciones ni indicador Home.
+
+## 050 - Fallback legacy para inicio de sesión con Google
+
+Credential Manager sigue siendo el primer intento de inicio de sesión desde la
+acción explícita de Ajustes. Si termina con cancelación o sin credencial antes de
+devolver un token, Ajustes lanza una sola vez el flujo legacy de
+`GoogleSignInClient`.
+
+Ambos caminos usan el web client ID generado como `default_web_client_id`. El
+launcher legacy solo devuelve el ID token a la capa de datos; la conversión a
+credencial Firebase, `FirebaseAuth.signInWithCredential`, la verificación de
+autorización y el refresh del estado de Ajustes permanecen compartidos.
+
+Cancelar el fallback o recibir un resultado sin ID token mantiene la sesión sin
+completar y muestra feedback visible. El fallback nunca se inicia por lifecycle ni
+se relanza automáticamente. Esta decisión no cambia sync, scheduler, Room, reglas
+Firestore, backup, restore ni comportamiento de movimientos.
+
+## 051 - Bloqueo persistente de restore después de activar Cloud Sync
+
+La primera ejecución manual de Cloud Sync que termine con `SUCCESS` o `PARTIAL`
+guarda un flag local persistente en preferencias. `SIGNED_OUT`, `UNAUTHORIZED` y
+`FAILURE` no activan el flag. El flag sobrevive reinicios y cierre de sesión, no se
+sincroniza con Firestore y no usa Room.
+
+Después de activar el flag, Ajustes mantiene disponible la creación de backups pero
+bloquea la restauración local destructiva. Esto evita que un restore reemplace Room
+sin tombstones y que una sincronización posterior mezcle o resucite registros
+remotos.
+
+Mientras una sincronización manual está ejecutándose, Ajustes deshabilita y el
+ViewModel rechaza defensivamente inicio de sesión, cierre de sesión y refresh de
+autorización. No se cancela la sincronización en curso.

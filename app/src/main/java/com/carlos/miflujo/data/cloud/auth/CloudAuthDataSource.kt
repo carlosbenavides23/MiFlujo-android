@@ -7,5 +7,7 @@ interface CloudAuthDataSource {
 
     suspend fun signInWithGoogle(context: Context): CloudAccount
 
+    suspend fun signInWithGoogleIdToken(idToken: String): CloudAccount
+
     suspend fun signOut(context: Context)
 }

@@ -503,6 +503,10 @@ private class FakeCloudAccountRepository(
         error("Not used in sync engine tests.")
     }
 
+    override suspend fun signInWithGoogleIdToken(idToken: String): CloudAccountStatus {
+        error("Not used in sync engine tests.")
+    }
+
     override suspend fun signOut(context: Context) = Unit
 }
 

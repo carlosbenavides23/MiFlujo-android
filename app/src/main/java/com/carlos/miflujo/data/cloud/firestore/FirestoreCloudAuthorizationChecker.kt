@@ -1,6 +1,7 @@
 package com.carlos.miflujo.data.cloud.firestore
 
 import android.util.Log
+import com.carlos.miflujo.data.cloud.auth.MiFlujoAuthLogTag
 import com.google.android.gms.tasks.Task
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
@@ -16,27 +17,30 @@ class FirestoreCloudAuthorizationChecker(
     override suspend fun isAuthorized(uid: String): Boolean {
         return try {
             Log.d(
-                CloudAuthorizationLogTag,
-                "Reading $AuthorizedUsersCollection/${uid.toShortLogUid()}.",
+                MiFlujoAuthLogTag,
+                "Reading authorization document: uidLength=${uid.length}.",
             )
             val document = firestore.collection(AuthorizedUsersCollection)
                 .document(uid)
                 .get(Source.SERVER)
                 .awaitResult()
             Log.d(
-                CloudAuthorizationLogTag,
+                MiFlujoAuthLogTag,
                 "Authorization document exists: ${document.exists()}.",
             )
             val isEnabled = document.getBoolean(EnabledField) == true
-            Log.d(CloudAuthorizationLogTag, "Authorization enabled is true: $isEnabled.")
+            Log.d(
+                MiFlujoAuthLogTag,
+                "Authorization check result: " +
+                    if (isEnabled) "Authorized." else "Unauthorized.",
+            )
             isEnabled
         } catch (exception: Exception) {
             if (exception is CancellationException) throw exception
             Log.w(
-                CloudAuthorizationLogTag,
-                "Authorization read failed: class=${exception.javaClass.name}, " +
-                    "message=${exception.message}.",
-                exception,
+                MiFlujoAuthLogTag,
+                "Authorization check result: Failure. class=${exception.javaClass.name}, " +
+                    "message=Authorization document could not be read.",
             )
             false
         }
@@ -58,6 +62,3 @@ private suspend fun Task<DocumentSnapshot>.awaitResult(): DocumentSnapshot =
 
 private const val AuthorizedUsersCollection = "authorizedUsers"
 private const val EnabledField = "enabled"
-private const val CloudAuthorizationLogTag = "MiFlujoCloudAuthorization"
-
-private fun String.toShortLogUid(): String = take(6) + "..."

@@ -8,7 +8,9 @@ import com.carlos.miflujo.data.cloud.auth.FirebaseCloudAuthDataSource
 import com.carlos.miflujo.data.cloud.firestore.FirestoreCloudMovementRemoteDataSource
 import com.carlos.miflujo.data.cloud.firestore.FirestoreCloudAuthorizationChecker
 import com.carlos.miflujo.data.cloud.sync.CloudSyncEngine
+import com.carlos.miflujo.data.cloud.sync.CloudSyncActivationStore
 import com.carlos.miflujo.data.cloud.sync.RoomCloudSyncLocalDataSource
+import com.carlos.miflujo.data.cloud.sync.SharedPreferencesCloudSyncActivationStore
 import com.carlos.miflujo.data.local.MiFlujoDatabase
 import com.carlos.miflujo.data.local.MIGRATION_1_2
 import com.carlos.miflujo.data.local.MIGRATION_2_3
@@ -22,6 +24,7 @@ interface MiFlujoAppContainer {
     val movementRepository: MovementRepository
     val cloudAccountRepository: CloudAccountRepository
     val cloudSyncEngine: CloudSyncEngine
+    val cloudSyncActivationStore: CloudSyncActivationStore
 }
 
 class DefaultMiFlujoAppContainer(
@@ -47,7 +50,8 @@ class DefaultMiFlujoAppContainer(
         DefaultCloudAccountRepository(
             authDataSource = FirebaseCloudAuthDataSource(
                 firebaseAuth = FirebaseAuth.getInstance(),
-                googleWebClientId = applicationContext.getString(R.string.google_web_client_id),
+                googleWebClientId = applicationContext.getString(R.string.default_web_client_id),
+                googleWebClientIdSource = "generated resource default_web_client_id",
             ),
             authorizationChecker = FirestoreCloudAuthorizationChecker(
                 firestore = FirebaseFirestore.getInstance(),
@@ -63,6 +67,10 @@ class DefaultMiFlujoAppContainer(
                 firestore = FirebaseFirestore.getInstance(),
             ),
         )
+    }
+
+    override val cloudSyncActivationStore: CloudSyncActivationStore by lazy {
+        SharedPreferencesCloudSyncActivationStore(applicationContext)
     }
 
     private companion object {
@@ -86,5 +94,13 @@ object MiFlujoAppProvider {
 
     fun cloudAccountRepository(context: Context): CloudAccountRepository {
         return container(context).cloudAccountRepository
+    }
+
+    fun cloudSyncEngine(context: Context): CloudSyncEngine {
+        return container(context).cloudSyncEngine
+    }
+
+    fun cloudSyncActivationStore(context: Context): CloudSyncActivationStore {
+        return container(context).cloudSyncActivationStore
     }
 }

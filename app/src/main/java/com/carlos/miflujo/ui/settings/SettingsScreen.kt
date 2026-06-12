@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -39,6 +40,8 @@ fun SettingsScreen(
     pendingRestoreMovementCount: Int?,
     cloudAccountStatus: CloudAccountStatus,
     isCloudAccountOperationInProgress: Boolean,
+    manualCloudSyncState: ManualCloudSyncUiState,
+    cloudSyncActivated: Boolean,
     onSaveBackup: () -> Unit,
     onShareBackup: () -> Unit,
     onRestoreBackup: () -> Unit,
@@ -46,6 +49,7 @@ fun SettingsScreen(
     onConfirmRestore: () -> Unit,
     onSignInWithGoogle: () -> Unit,
     onRefreshCloudAuthorization: () -> Unit,
+    onSyncNow: () -> Unit,
     onSignOut: () -> Unit,
     onCopyUid: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -69,8 +73,10 @@ fun SettingsScreen(
         CloudSyncSection(
             status = cloudAccountStatus,
             isOperationInProgress = isCloudAccountOperationInProgress,
+            manualSyncState = manualCloudSyncState,
             onSignInWithGoogle = onSignInWithGoogle,
             onRefreshCloudAuthorization = onRefreshCloudAuthorization,
+            onSyncNow = onSyncNow,
             onSignOut = onSignOut,
             onCopyUid = onCopyUid,
         )
@@ -88,9 +94,20 @@ fun SettingsScreen(
                 ),
                 SettingsOption(
                     title = "Restaurar respaldo",
-                    description = "Recupera movimientos desde un archivo de respaldo anterior.",
-                    enabled = !isBackupOperationInProgress,
-                    status = if (isRestoringBackup) "Restaurando respaldo..." else "Restaurar",
+                    description = if (cloudSyncActivated) {
+                        "Restaurar respaldo no está disponible después de activar Cloud Sync."
+                    } else {
+                        "Recupera movimientos desde un archivo de respaldo anterior."
+                    },
+                    enabled = isRestoreBackupEnabled(
+                        isBackupOperationInProgress = isBackupOperationInProgress,
+                        cloudSyncActivated = cloudSyncActivated,
+                    ),
+                    status = when {
+                        cloudSyncActivated -> "No disponible"
+                        isRestoringBackup -> "Restaurando respaldo..."
+                        else -> "Restaurar"
+                    },
                     onClick = onRestoreBackup,
                 ),
             ),
@@ -139,11 +156,17 @@ fun SettingsScreen(
 private fun CloudSyncSection(
     status: CloudAccountStatus,
     isOperationInProgress: Boolean,
+    manualSyncState: ManualCloudSyncUiState,
     onSignInWithGoogle: () -> Unit,
     onRefreshCloudAuthorization: () -> Unit,
+    onSyncNow: () -> Unit,
     onSignOut: () -> Unit,
     onCopyUid: (String) -> Unit,
 ) {
+    val accountActionsEnabled = areCloudAccountActionsEnabled(
+        isAccountOperationInProgress = isOperationInProgress,
+        manualSyncState = manualSyncState,
+    )
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -178,7 +201,7 @@ private fun CloudSyncSection(
                         )
                         Button(
                             onClick = onSignInWithGoogle,
-                            enabled = !isOperationInProgress,
+                            enabled = accountActionsEnabled,
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text(
@@ -194,13 +217,32 @@ private fun CloudSyncSection(
                     is CloudAccountStatus.Authorized -> {
                         CloudStatusText(
                             title = "Cuenta autorizada",
-                            description = "Cloud Sync todavía no está activado. No se han subido ni " +
-                                "descargado movimientos.",
+                            description = "Puedes sincronizar manualmente. MiFlujo no ejecutará " +
+                                "Cloud Sync automáticamente.",
                         )
                         CloudAccountIdentity(account = status.account)
+                        Button(
+                            onClick = onSyncNow,
+                            enabled = !isOperationInProgress &&
+                                manualSyncState !is ManualCloudSyncUiState.Running,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            if (manualSyncState is ManualCloudSyncUiState.Running) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                                Text(
+                                    text = "Sincronizando...",
+                                    modifier = Modifier.padding(start = 8.dp),
+                                )
+                            } else {
+                                Text(text = "Sincronizar ahora")
+                            }
+                        }
                         OutlinedButton(
                             onClick = onSignOut,
-                            enabled = !isOperationInProgress,
+                            enabled = accountActionsEnabled,
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text(text = "Cerrar sesión")
@@ -221,7 +263,7 @@ private fun CloudSyncSection(
                         )
                         Button(
                             onClick = onRefreshCloudAuthorization,
-                            enabled = !isOperationInProgress,
+                            enabled = accountActionsEnabled,
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text(
@@ -243,16 +285,72 @@ private fun CloudSyncSection(
                         }
                         TextButton(
                             onClick = onSignOut,
-                            enabled = !isOperationInProgress,
+                            enabled = accountActionsEnabled,
                             modifier = Modifier.align(Alignment.End),
                         ) {
                             Text(text = "Cerrar sesión")
                         }
                     }
                 }
+                ManualCloudSyncResult(state = manualSyncState)
             }
         }
     }
+}
+
+internal fun isRestoreBackupEnabled(
+    isBackupOperationInProgress: Boolean,
+    cloudSyncActivated: Boolean,
+): Boolean = !isBackupOperationInProgress && !cloudSyncActivated
+
+internal fun areCloudAccountActionsEnabled(
+    isAccountOperationInProgress: Boolean,
+    manualSyncState: ManualCloudSyncUiState,
+): Boolean =
+    !isAccountOperationInProgress && manualSyncState !is ManualCloudSyncUiState.Running
+
+@Composable
+private fun ManualCloudSyncResult(state: ManualCloudSyncUiState) {
+    val message = when (state) {
+        ManualCloudSyncUiState.Idle,
+        ManualCloudSyncUiState.Running,
+        -> return
+        is ManualCloudSyncUiState.Success -> "Sincronización completada."
+        is ManualCloudSyncUiState.Partial ->
+            "Sincronización parcial. Algunos elementos se reintentarán después."
+        ManualCloudSyncUiState.SignedOut -> "Inicia sesión para sincronizar."
+        ManualCloudSyncUiState.Unauthorized ->
+            "Tu cuenta no está autorizada para Cloud Sync."
+        ManualCloudSyncUiState.Failure ->
+            "No se pudo sincronizar. Intenta de nuevo."
+    }
+
+    Column(
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        when (state) {
+            is ManualCloudSyncUiState.Success -> SyncCountsText(state.counts)
+            is ManualCloudSyncUiState.Partial -> SyncCountsText(state.counts)
+            else -> Unit
+        }
+    }
+}
+
+@Composable
+private fun SyncCountsText(counts: ManualCloudSyncCounts) {
+    Text(
+        text = "Subidos: ${counts.uploaded} · Descargados: ${counts.downloaded} · " +
+            "Actualizados: ${counts.updatedLocal} · Confirmados: ${counts.markedSynced} · " +
+            "Omitidos: ${counts.skippedRemote} · Errores locales: ${counts.localErrors} · " +
+            "Errores remotos: ${counts.remoteErrors}",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 @Composable

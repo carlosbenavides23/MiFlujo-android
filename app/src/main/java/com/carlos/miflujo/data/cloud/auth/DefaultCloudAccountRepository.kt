@@ -8,12 +8,28 @@ class DefaultCloudAccountRepository(
     private val authorizationChecker: CloudAuthorizationChecker,
 ) : CloudAccountRepository {
     override suspend fun getCurrentStatus(): CloudAccountStatus {
-        val account = authDataSource.currentAccount() ?: return CloudAccountStatus.SignedOut
+        val account = authDataSource.currentAccount()
+        if (account == null) {
+            logMiFlujoAuthDebug("Authorization check result: SignedOut.")
+            return CloudAccountStatus.SignedOut
+        }
         return account.toStatus()
     }
 
     override suspend fun signInWithGoogle(context: Context): CloudAccountStatus {
-        return authDataSource.signInWithGoogle(context).toStatus()
+        val account = authDataSource.signInWithGoogle(context)
+        logMiFlujoAuthDebug(
+            "Firebase account received by repository: uidLength=${account.uid.length}.",
+        )
+        return account.toStatus()
+    }
+
+    override suspend fun signInWithGoogleIdToken(idToken: String): CloudAccountStatus {
+        val account = authDataSource.signInWithGoogleIdToken(idToken)
+        logMiFlujoAuthDebug(
+            "Firebase account received by repository: uidLength=${account.uid.length}.",
+        )
+        return account.toStatus()
     }
 
     override suspend fun signOut(context: Context) {
@@ -21,10 +37,23 @@ class DefaultCloudAccountRepository(
     }
 
     private suspend fun CloudAccount.toStatus(): CloudAccountStatus {
-        return if (authorizationChecker.isAuthorized(uid)) {
-            CloudAccountStatus.Authorized(this)
-        } else {
-            CloudAccountStatus.Unauthorized(this)
+        logMiFlujoAuthDebug(
+            "Before Firestore authorization check: uidLength=${uid.length}.",
+        )
+        return try {
+            if (authorizationChecker.isAuthorized(uid)) {
+                logMiFlujoAuthDebug("Authorization check result: Authorized.")
+                CloudAccountStatus.Authorized(this)
+            } else {
+                logMiFlujoAuthDebug("Authorization check result: Unauthorized.")
+                CloudAccountStatus.Unauthorized(this)
+            }
+        } catch (exception: Exception) {
+            logMiFlujoAuthError(
+                "Authorization check result: Failure. class=${exception.javaClass.name}, " +
+                    "message=Authorization request failed.",
+            )
+            throw exception
         }
     }
 }
