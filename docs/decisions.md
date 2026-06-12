@@ -513,7 +513,10 @@ Con Cloud Sync activo:
 
 La reconciliación usará UUID para identidad y `updatedAt` generado por la app para conflictos. Descargar nunca borrará físicamente filas Room.
 
-Crear backup local siempre estará permitido. Restaurar quedará bloqueado mientras Cloud Sync esté activo. Backup schema v1 nunca se restaurará con sync activo; cualquier soporte futuro requerirá schema v2 o superior y una política explícita.
+Crear backup local siempre estará permitido. Restaurar quedará bloqueado después de
+la primera ejecución completada de Cloud Sync en la instalación. Backup schema v1
+nunca se restaurará después de esa activación; cualquier soporte futuro requerirá
+schema v2 o superior y una política explícita.
 
 Los triggers serán foreground, red recuperada con la app abierta, aproximadamente cada 90 segundos en foreground con pendientes, `Sincronizar ahora` y WorkManager con restricción de red como respaldo. Salir de la app no será trigger y WorkManager periódico no implementará el timer de 90 segundos.
 
@@ -719,3 +722,19 @@ Cancelar el fallback o recibir un resultado sin ID token mantiene la sesión sin
 completar y muestra feedback visible. El fallback nunca se inicia por lifecycle ni
 se relanza automáticamente. Esta decisión no cambia sync, scheduler, Room, reglas
 Firestore, backup, restore ni comportamiento de movimientos.
+
+## 051 - Bloqueo persistente de restore después de activar Cloud Sync
+
+La primera ejecución manual de Cloud Sync que termine con `SUCCESS` o `PARTIAL`
+guarda un flag local persistente en preferencias. `SIGNED_OUT`, `UNAUTHORIZED` y
+`FAILURE` no activan el flag. El flag sobrevive reinicios y cierre de sesión, no se
+sincroniza con Firestore y no usa Room.
+
+Después de activar el flag, Ajustes mantiene disponible la creación de backups pero
+bloquea la restauración local destructiva. Esto evita que un restore reemplace Room
+sin tombstones y que una sincronización posterior mezcle o resucite registros
+remotos.
+
+Mientras una sincronización manual está ejecutándose, Ajustes deshabilita y el
+ViewModel rechaza defensivamente inicio de sesión, cierre de sesión y refresh de
+autorización. No se cancela la sincronización en curso.

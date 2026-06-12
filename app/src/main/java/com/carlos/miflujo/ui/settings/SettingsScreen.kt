@@ -41,6 +41,7 @@ fun SettingsScreen(
     cloudAccountStatus: CloudAccountStatus,
     isCloudAccountOperationInProgress: Boolean,
     manualCloudSyncState: ManualCloudSyncUiState,
+    cloudSyncActivated: Boolean,
     onSaveBackup: () -> Unit,
     onShareBackup: () -> Unit,
     onRestoreBackup: () -> Unit,
@@ -93,9 +94,20 @@ fun SettingsScreen(
                 ),
                 SettingsOption(
                     title = "Restaurar respaldo",
-                    description = "Recupera movimientos desde un archivo de respaldo anterior.",
-                    enabled = !isBackupOperationInProgress,
-                    status = if (isRestoringBackup) "Restaurando respaldo..." else "Restaurar",
+                    description = if (cloudSyncActivated) {
+                        "Restaurar respaldo no está disponible después de activar Cloud Sync."
+                    } else {
+                        "Recupera movimientos desde un archivo de respaldo anterior."
+                    },
+                    enabled = isRestoreBackupEnabled(
+                        isBackupOperationInProgress = isBackupOperationInProgress,
+                        cloudSyncActivated = cloudSyncActivated,
+                    ),
+                    status = when {
+                        cloudSyncActivated -> "No disponible"
+                        isRestoringBackup -> "Restaurando respaldo..."
+                        else -> "Restaurar"
+                    },
                     onClick = onRestoreBackup,
                 ),
             ),
@@ -151,6 +163,10 @@ private fun CloudSyncSection(
     onSignOut: () -> Unit,
     onCopyUid: (String) -> Unit,
 ) {
+    val accountActionsEnabled = areCloudAccountActionsEnabled(
+        isAccountOperationInProgress = isOperationInProgress,
+        manualSyncState = manualSyncState,
+    )
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -185,7 +201,7 @@ private fun CloudSyncSection(
                         )
                         Button(
                             onClick = onSignInWithGoogle,
-                            enabled = !isOperationInProgress,
+                            enabled = accountActionsEnabled,
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text(
@@ -226,7 +242,7 @@ private fun CloudSyncSection(
                         }
                         OutlinedButton(
                             onClick = onSignOut,
-                            enabled = !isOperationInProgress,
+                            enabled = accountActionsEnabled,
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text(text = "Cerrar sesión")
@@ -247,7 +263,7 @@ private fun CloudSyncSection(
                         )
                         Button(
                             onClick = onRefreshCloudAuthorization,
-                            enabled = !isOperationInProgress,
+                            enabled = accountActionsEnabled,
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text(
@@ -269,7 +285,7 @@ private fun CloudSyncSection(
                         }
                         TextButton(
                             onClick = onSignOut,
-                            enabled = !isOperationInProgress,
+                            enabled = accountActionsEnabled,
                             modifier = Modifier.align(Alignment.End),
                         ) {
                             Text(text = "Cerrar sesión")
@@ -281,6 +297,17 @@ private fun CloudSyncSection(
         }
     }
 }
+
+internal fun isRestoreBackupEnabled(
+    isBackupOperationInProgress: Boolean,
+    cloudSyncActivated: Boolean,
+): Boolean = !isBackupOperationInProgress && !cloudSyncActivated
+
+internal fun areCloudAccountActionsEnabled(
+    isAccountOperationInProgress: Boolean,
+    manualSyncState: ManualCloudSyncUiState,
+): Boolean =
+    !isAccountOperationInProgress && manualSyncState !is ManualCloudSyncUiState.Running
 
 @Composable
 private fun ManualCloudSyncResult(state: ManualCloudSyncUiState) {

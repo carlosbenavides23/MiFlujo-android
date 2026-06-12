@@ -1,5 +1,6 @@
 package com.carlos.miflujo.ui.settings
 
+import com.carlos.miflujo.data.cloud.sync.CloudSyncActivationStore
 import com.carlos.miflujo.data.cloud.sync.CloudSyncResult
 import com.carlos.miflujo.data.cloud.sync.CloudSyncRunner
 import com.carlos.miflujo.data.cloud.sync.CloudSyncStatus
@@ -12,26 +13,37 @@ import org.junit.Test
 class ManualCloudSyncStateHolderTest {
     @Test
     fun `signed out result is rendered safely`() = runBlocking {
-        val holder = holder(CloudSyncResult(status = CloudSyncStatus.SIGNED_OUT))
+        val activationStore = FakeCloudSyncActivationStore()
+        val holder = holder(
+            result = CloudSyncResult(status = CloudSyncStatus.SIGNED_OUT),
+            activationStore = activationStore,
+        )
 
         holder.syncNow()
 
         assertEquals(ManualCloudSyncUiState.SignedOut, holder.state.value)
+        assertEquals(false, activationStore.activated)
     }
 
     @Test
     fun `unauthorized result is rendered safely`() = runBlocking {
-        val holder = holder(CloudSyncResult(status = CloudSyncStatus.UNAUTHORIZED))
+        val activationStore = FakeCloudSyncActivationStore()
+        val holder = holder(
+            result = CloudSyncResult(status = CloudSyncStatus.UNAUTHORIZED),
+            activationStore = activationStore,
+        )
 
         holder.syncNow()
 
         assertEquals(ManualCloudSyncUiState.Unauthorized, holder.state.value)
+        assertEquals(false, activationStore.activated)
     }
 
     @Test
     fun `successful sync shows success state and counts`() = runBlocking {
         val result = syncResult(status = CloudSyncStatus.SUCCESS)
-        val holder = holder(result)
+        val activationStore = FakeCloudSyncActivationStore()
+        val holder = holder(result, activationStore)
 
         holder.syncNow()
 
@@ -39,12 +51,15 @@ class ManualCloudSyncStateHolderTest {
             ManualCloudSyncUiState.Success(result.toExpectedCounts()),
             holder.state.value,
         )
+        assertEquals(true, activationStore.activated)
+        assertEquals(true, holder.cloudSyncActivated.value)
     }
 
     @Test
     fun `partial sync shows partial state and relevant counts`() = runBlocking {
         val result = syncResult(status = CloudSyncStatus.PARTIAL)
-        val holder = holder(result)
+        val activationStore = FakeCloudSyncActivationStore()
+        val holder = holder(result, activationStore)
 
         holder.syncNow()
 
@@ -52,15 +67,38 @@ class ManualCloudSyncStateHolderTest {
             ManualCloudSyncUiState.Partial(result.toExpectedCounts()),
             holder.state.value,
         )
+        assertEquals(true, activationStore.activated)
+        assertEquals(true, holder.cloudSyncActivated.value)
     }
 
     @Test
     fun `sync failure shows failure state`() = runBlocking {
-        val holder = holder(CloudSyncResult(status = CloudSyncStatus.FAILURE))
+        val activationStore = FakeCloudSyncActivationStore()
+        val holder = holder(
+            result = CloudSyncResult(status = CloudSyncStatus.FAILURE),
+            activationStore = activationStore,
+        )
 
         holder.syncNow()
 
         assertEquals(ManualCloudSyncUiState.Failure, holder.state.value)
+        assertEquals(false, activationStore.activated)
+    }
+
+    @Test
+    fun `activation remains visible when state holder is recreated`() = runBlocking {
+        val activationStore = FakeCloudSyncActivationStore()
+        holder(
+            result = CloudSyncResult(status = CloudSyncStatus.SUCCESS),
+            activationStore = activationStore,
+        ).syncNow()
+
+        val recreatedHolder = holder(
+            result = CloudSyncResult(status = CloudSyncStatus.FAILURE),
+            activationStore = activationStore,
+        )
+
+        assertEquals(true, recreatedHolder.cloudSyncActivated.value)
     }
 
     @Test
@@ -69,12 +107,13 @@ class ManualCloudSyncStateHolderTest {
         val release = CompletableDeferred<Unit>()
         var callCount = 0
         val holder = ManualCloudSyncStateHolder(
-            CloudSyncRunner {
+            cloudSyncRunner = CloudSyncRunner {
                 callCount += 1
                 started.complete(Unit)
                 release.await()
                 CloudSyncResult(status = CloudSyncStatus.SUCCESS)
             },
+            cloudSyncActivationStore = FakeCloudSyncActivationStore(),
         )
 
         val firstSync = async { holder.syncNow() }
@@ -104,8 +143,13 @@ class ManualCloudSyncStateHolderTest {
         )
     }
 
-    private fun holder(result: CloudSyncResult): ManualCloudSyncStateHolder =
-        ManualCloudSyncStateHolder(CloudSyncRunner { result })
+    private fun holder(
+        result: CloudSyncResult,
+        activationStore: CloudSyncActivationStore = FakeCloudSyncActivationStore(),
+    ): ManualCloudSyncStateHolder = ManualCloudSyncStateHolder(
+        cloudSyncRunner = CloudSyncRunner { result },
+        cloudSyncActivationStore = activationStore,
+    )
 
     private fun syncResult(status: CloudSyncStatus): CloudSyncResult = CloudSyncResult(
         status = status,
@@ -128,4 +172,16 @@ class ManualCloudSyncStateHolderTest {
             localErrors = localErrors,
             remoteErrors = remoteErrors,
         )
+}
+
+private class FakeCloudSyncActivationStore(
+    initialValue: Boolean = false,
+) : CloudSyncActivationStore {
+    var activated = initialValue
+
+    override fun isActivated(): Boolean = activated
+
+    override fun markActivated() {
+        activated = true
+    }
 }

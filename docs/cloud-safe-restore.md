@@ -114,9 +114,10 @@ Este modo aplica para:
 - usuarios sin login,
 - usuarios autorizados que no activaron Cloud Sync.
 
-## Caso 2: Cloud Sync activo
+## Caso 2: Cloud Sync activado al menos una vez
 
-Cuando Cloud Sync está activo, no se debe ejecutar restore destructivo directo.
+Después de que Cloud Sync complete una ejecución `SUCCESS` o `PARTIAL`, no se debe
+ejecutar restore destructivo directo en esa instalación.
 
 Riesgo:
 
@@ -140,23 +141,23 @@ Esto no debe ocurrir accidentalmente.
 En `v0.4.0`:
 
 ```text
-Restore local queda bloqueado mientras Cloud Sync está activo.
+Restore local queda bloqueado después de activar Cloud Sync por primera vez.
 ```
 
-Si Cloud Sync está activo y el usuario intenta restaurar un respaldo, la app debe bloquear el flujo y mostrar una explicación.
+El bloqueo persiste después de reiniciar la app o cerrar sesión. Si el usuario
+intenta restaurar un respaldo, la app debe bloquear el flujo y mostrar una
+explicación.
 
 Mensaje conceptual:
 
 ```text
-Cloud Sync está activado.
-Para evitar pérdida de datos, desactiva Cloud Sync antes de restaurar un respaldo local.
+Restaurar respaldo no está disponible después de activar Cloud Sync.
 ```
 
 Acciones posibles:
 
 ```text
-Cancelar
-Ir a Cloud Sync
+Cerrar
 ```
 
 ## Caso 3: Restore con sync pausado en una versión futura
@@ -356,8 +357,10 @@ MiFlujo conservará backup local JSON para todos los usuarios.
 
 Cloud Sync será una función opcional y privada/controlada, inicialmente para Carlos y el usuario principal.
 
-La restauración local destructiva seguirá siendo válida cuando Cloud Sync esté apagado.
+La restauración local destructiva seguirá siendo válida mientras Cloud Sync nunca
+haya completado una ejecución en esa instalación.
 
-Cuando Cloud Sync esté activo, `v0.4.0` debe bloquear la restauración local. El usuario debe desactivar Cloud Sync antes de restaurar.
+Después de una ejecución `SUCCESS` o `PARTIAL`, `v0.4.0` debe bloquear la
+restauración local aunque la cuenta cierre sesión.
 
 La prioridad es evitar que un backup viejo provoque pérdida o eliminación accidental de datos remotos.

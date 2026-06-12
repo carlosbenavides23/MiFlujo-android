@@ -1,5 +1,6 @@
 package com.carlos.miflujo.ui.settings
 
+import com.carlos.miflujo.data.cloud.sync.CloudSyncActivationStore
 import com.carlos.miflujo.data.cloud.sync.CloudSyncResult
 import com.carlos.miflujo.data.cloud.sync.CloudSyncRunner
 import com.carlos.miflujo.data.cloud.sync.CloudSyncStatus
@@ -41,13 +42,18 @@ data class ManualCloudSyncCounts(
 
 class ManualCloudSyncStateHolder(
     private val cloudSyncRunner: CloudSyncRunner,
+    private val cloudSyncActivationStore: CloudSyncActivationStore,
 ) {
     private val running = AtomicBoolean(false)
     private val mutableState = MutableStateFlow<ManualCloudSyncUiState>(
         ManualCloudSyncUiState.Idle,
     )
+    private val mutableCloudSyncActivated = MutableStateFlow(
+        cloudSyncActivationStore.isActivated(),
+    )
 
     val state: StateFlow<ManualCloudSyncUiState> = mutableState.asStateFlow()
+    val cloudSyncActivated: StateFlow<Boolean> = mutableCloudSyncActivated.asStateFlow()
 
     suspend fun syncNow() {
         logMiFlujoSyncDebug("Manual Cloud Sync requested.")
@@ -63,6 +69,9 @@ class ManualCloudSyncStateHolder(
             logMiFlujoSyncDebug(
                 result.toSafeSyncLogMessage("Manual Cloud Sync runner returned"),
             )
+            if (result.status.activatesCloudSync()) {
+                markCloudSyncActivated()
+            }
             mutableState.value = result.toUiState()
         } catch (exception: Exception) {
             if (exception is CancellationException) throw exception
@@ -75,7 +84,20 @@ class ManualCloudSyncStateHolder(
             running.set(false)
         }
     }
+
+    private fun markCloudSyncActivated() {
+        if (mutableCloudSyncActivated.value) return
+
+        runCatching { cloudSyncActivationStore.markActivated() }
+            .onFailure {
+                logMiFlujoSyncError("Cloud Sync activation flag could not be persisted.")
+            }
+        mutableCloudSyncActivated.value = true
+    }
 }
+
+private fun CloudSyncStatus.activatesCloudSync(): Boolean =
+    this == CloudSyncStatus.SUCCESS || this == CloudSyncStatus.PARTIAL
 
 private fun CloudSyncResult.toUiState(): ManualCloudSyncUiState {
     val counts = ManualCloudSyncCounts(

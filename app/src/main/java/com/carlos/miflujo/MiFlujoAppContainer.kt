@@ -8,7 +8,9 @@ import com.carlos.miflujo.data.cloud.auth.FirebaseCloudAuthDataSource
 import com.carlos.miflujo.data.cloud.firestore.FirestoreCloudMovementRemoteDataSource
 import com.carlos.miflujo.data.cloud.firestore.FirestoreCloudAuthorizationChecker
 import com.carlos.miflujo.data.cloud.sync.CloudSyncEngine
+import com.carlos.miflujo.data.cloud.sync.CloudSyncActivationStore
 import com.carlos.miflujo.data.cloud.sync.RoomCloudSyncLocalDataSource
+import com.carlos.miflujo.data.cloud.sync.SharedPreferencesCloudSyncActivationStore
 import com.carlos.miflujo.data.local.MiFlujoDatabase
 import com.carlos.miflujo.data.local.MIGRATION_1_2
 import com.carlos.miflujo.data.local.MIGRATION_2_3
@@ -22,6 +24,7 @@ interface MiFlujoAppContainer {
     val movementRepository: MovementRepository
     val cloudAccountRepository: CloudAccountRepository
     val cloudSyncEngine: CloudSyncEngine
+    val cloudSyncActivationStore: CloudSyncActivationStore
 }
 
 class DefaultMiFlujoAppContainer(
@@ -66,6 +69,10 @@ class DefaultMiFlujoAppContainer(
         )
     }
 
+    override val cloudSyncActivationStore: CloudSyncActivationStore by lazy {
+        SharedPreferencesCloudSyncActivationStore(applicationContext)
+    }
+
     private companion object {
         const val DATABASE_NAME = "miflujo.db"
     }
@@ -91,5 +98,9 @@ object MiFlujoAppProvider {
 
     fun cloudSyncEngine(context: Context): CloudSyncEngine {
         return container(context).cloudSyncEngine
+    }
+
+    fun cloudSyncActivationStore(context: Context): CloudSyncActivationStore {
+        return container(context).cloudSyncActivationStore
     }
 }

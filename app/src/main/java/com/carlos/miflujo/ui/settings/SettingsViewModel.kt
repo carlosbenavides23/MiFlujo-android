@@ -15,6 +15,7 @@ import com.carlos.miflujo.data.cloud.auth.CloudSignInCanceledException
 import com.carlos.miflujo.data.cloud.auth.MiFlujoAuthLogTag
 import com.carlos.miflujo.data.cloud.auth.UnsupportedCloudCredentialException
 import com.carlos.miflujo.data.cloud.sync.CloudSyncRunner
+import com.carlos.miflujo.data.cloud.sync.CloudSyncActivationStore
 import com.carlos.miflujo.data.cloud.sync.logMiFlujoSyncDebug
 import com.carlos.miflujo.data.repository.MovementRepository
 import com.carlos.miflujo.ui.backup.BackupDocument
@@ -47,8 +48,12 @@ class SettingsViewModel(
     private val movementRepository: MovementRepository,
     private val cloudAccountRepository: CloudAccountRepository,
     cloudSyncRunner: CloudSyncRunner,
+    cloudSyncActivationStore: CloudSyncActivationStore,
 ) : ViewModel() {
-    private val manualCloudSyncStateHolder = ManualCloudSyncStateHolder(cloudSyncRunner)
+    private val manualCloudSyncStateHolder = ManualCloudSyncStateHolder(
+        cloudSyncRunner = cloudSyncRunner,
+        cloudSyncActivationStore = cloudSyncActivationStore,
+    )
     private val mutableUiState = MutableStateFlow(SettingsUiState())
     private val exportFeedback = MutableSharedFlow<BackupExportFeedback>(extraBufferCapacity = 1)
     private val createDocumentRequests = MutableSharedFlow<CreateBackupDocumentRequest>(
@@ -63,6 +68,7 @@ class SettingsViewModel(
     private var exportJob: Job? = null
     private var restoreJob: Job? = null
     private var cloudAccountJob: Job? = null
+    private var manualCloudSyncJob: Job? = null
     private var isLegacyGoogleSignInPending = false
     private var pendingBackupDocument: BackupDocument? = null
     private var pendingRestoreMovements: List<Movement>? = null
@@ -79,6 +85,8 @@ class SettingsViewModel(
         cloudAccountFeedback.asSharedFlow()
     val manualCloudSyncState: StateFlow<ManualCloudSyncUiState> =
         manualCloudSyncStateHolder.state
+    val cloudSyncActivated: StateFlow<Boolean> =
+        manualCloudSyncStateHolder.cloudSyncActivated
 
     init {
         refreshCloudAccountStatus()
@@ -92,8 +100,13 @@ class SettingsViewModel(
                 "isActivity=${context is Activity}.",
         )
         if (
-            cloudAccountJob?.isActive == true ||
-            mutableUiState.value.isCloudAccountOperationInProgress
+            !canStartCloudAccountAction(
+                isCloudAccountOperationInProgress =
+                    mutableUiState.value.isCloudAccountOperationInProgress,
+                isCloudAccountJobActive = cloudAccountJob?.isActive == true,
+                isManualCloudSyncJobActive = manualCloudSyncJob?.isActive == true,
+                manualCloudSyncState = manualCloudSyncState.value,
+            )
         ) {
             Log.d(MiFlujoAuthLogTag, "Settings sign-in ignored: account operation already running.")
             return
@@ -185,7 +198,21 @@ class SettingsViewModel(
     }
 
     fun signOut(context: Context) {
-        if (cloudAccountJob?.isActive == true) return
+        if (
+            !canStartCloudAccountAction(
+                isCloudAccountOperationInProgress =
+                    mutableUiState.value.isCloudAccountOperationInProgress,
+                isCloudAccountJobActive = cloudAccountJob?.isActive == true,
+                isManualCloudSyncJobActive = manualCloudSyncJob?.isActive == true,
+                manualCloudSyncState = manualCloudSyncState.value,
+            )
+        ) {
+            Log.d(
+                MiFlujoAuthLogTag,
+                "Cloud account sign-out ignored: account operation or manual sync is running.",
+            )
+            return
+        }
 
         mutableUiState.value = mutableUiState.value.copy(isCloudAccountOperationInProgress = true)
         cloudAccountJob = viewModelScope.launch {
@@ -288,7 +315,7 @@ class SettingsViewModel(
     }
 
     fun requestBackupRestore() {
-        if (!canStartBackupOperation()) return
+        if (!canStartRestoreOperation()) return
 
         mutableUiState.value = mutableUiState.value.copy(isRestoringBackup = true)
         if (!openBackupDocumentRequests.tryEmit(Unit)) {
@@ -301,7 +328,14 @@ class SettingsViewModel(
         context: Context,
         sourceUri: Uri,
     ) {
-        if (!mutableUiState.value.isRestoringBackup || restoreJob?.isActive == true) return
+        if (
+            cloudSyncActivated.value ||
+            !mutableUiState.value.isRestoringBackup ||
+            restoreJob?.isActive == true
+        ) {
+            if (cloudSyncActivated.value) finishRestore()
+            return
+        }
 
         restoreJob = viewModelScope.launch {
             try {
@@ -347,7 +381,14 @@ class SettingsViewModel(
 
     fun confirmPendingRestore() {
         val movements = pendingRestoreMovements ?: return
-        if (restoreJob?.isActive == true || mutableUiState.value.isRestoringBackup) return
+        if (
+            cloudSyncActivated.value ||
+            restoreJob?.isActive == true ||
+            mutableUiState.value.isRestoringBackup
+        ) {
+            if (cloudSyncActivated.value) finishRestore()
+            return
+        }
 
         mutableUiState.value = mutableUiState.value.copy(
             isRestoringBackup = true,
@@ -372,8 +413,19 @@ class SettingsViewModel(
             restoreJob?.isActive != true &&
             !mutableUiState.value.isBackupOperationInProgress
 
+    private fun canStartRestoreOperation(): Boolean =
+        !cloudSyncActivated.value && canStartBackupOperation()
+
     fun refreshCloudAccountStatus() {
-        if (cloudAccountJob?.isActive == true) {
+        if (
+            !canStartCloudAccountAction(
+                isCloudAccountOperationInProgress =
+                    mutableUiState.value.isCloudAccountOperationInProgress,
+                isCloudAccountJobActive = cloudAccountJob?.isActive == true,
+                isManualCloudSyncJobActive = manualCloudSyncJob?.isActive == true,
+                manualCloudSyncState = manualCloudSyncState.value,
+            )
+        ) {
             Log.d(MiFlujoAuthLogTag, "Cloud account refresh skipped: operation already running.")
             return
         }
@@ -453,8 +505,23 @@ class SettingsViewModel(
 
     fun syncNow() {
         logMiFlujoSyncDebug("Manual Cloud Sync button action starts.")
-        viewModelScope.launch {
-            manualCloudSyncStateHolder.syncNow()
+        if (
+            mutableUiState.value.isCloudAccountOperationInProgress ||
+            cloudAccountJob?.isActive == true ||
+            manualCloudSyncJob?.isActive == true
+        ) {
+            logMiFlujoSyncDebug("Manual Cloud Sync ignored: account operation already running.")
+            return
+        }
+        manualCloudSyncJob = viewModelScope.launch {
+            try {
+                manualCloudSyncStateHolder.syncNow()
+                if (cloudSyncActivated.value) {
+                    finishRestore()
+                }
+            } finally {
+                manualCloudSyncJob = null
+            }
         }
     }
 
@@ -539,10 +606,22 @@ internal fun fallbackFeedbackForIdToken(idToken: String?): CloudAccountFeedback.
     return CloudAccountFeedback.SignInIncomplete
 }
 
+internal fun canStartCloudAccountAction(
+    isCloudAccountOperationInProgress: Boolean,
+    isCloudAccountJobActive: Boolean,
+    isManualCloudSyncJobActive: Boolean,
+    manualCloudSyncState: ManualCloudSyncUiState,
+): Boolean =
+    !isCloudAccountOperationInProgress &&
+        !isCloudAccountJobActive &&
+        !isManualCloudSyncJobActive &&
+        manualCloudSyncState !is ManualCloudSyncUiState.Running
+
 class SettingsViewModelFactory(
     private val movementRepository: MovementRepository,
     private val cloudAccountRepository: CloudAccountRepository,
     private val cloudSyncRunner: CloudSyncRunner,
+    private val cloudSyncActivationStore: CloudSyncActivationStore,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -551,6 +630,7 @@ class SettingsViewModelFactory(
                 movementRepository = movementRepository,
                 cloudAccountRepository = cloudAccountRepository,
                 cloudSyncRunner = cloudSyncRunner,
+                cloudSyncActivationStore = cloudSyncActivationStore,
             ) as T
         }
 

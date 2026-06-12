@@ -101,6 +101,9 @@ fun MiFlujoApp() {
     val cloudSyncEngine = remember(context) {
         MiFlujoAppProvider.cloudSyncEngine(context)
     }
+    val cloudSyncActivationStore = remember(context) {
+        MiFlujoAppProvider.cloudSyncActivationStore(context)
+    }
     val homeViewModel = remember(activity, movementRepository) {
         ViewModelProvider(
             activity,
@@ -124,6 +127,7 @@ fun MiFlujoApp() {
         movementRepository,
         cloudAccountRepository,
         cloudSyncEngine,
+        cloudSyncActivationStore,
     ) {
         ViewModelProvider(
             activity,
@@ -131,6 +135,7 @@ fun MiFlujoApp() {
                 movementRepository = movementRepository,
                 cloudAccountRepository = cloudAccountRepository,
                 cloudSyncRunner = cloudSyncEngine,
+                cloudSyncActivationStore = cloudSyncActivationStore,
             ),
         )[SettingsViewModel::class.java]
     }
@@ -139,6 +144,7 @@ fun MiFlujoApp() {
     val reportUiState by reportViewModel.uiState.collectAsState()
     val settingsUiState by settingsViewModel.uiState.collectAsState()
     val manualCloudSyncState by settingsViewModel.manualCloudSyncState.collectAsState()
+    val cloudSyncActivated by settingsViewModel.cloudSyncActivated.collectAsState()
     val feedback by movementViewModel.feedback.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val legacyGoogleSignInFallback = remember(activity) {
@@ -421,6 +427,7 @@ fun MiFlujoApp() {
                     isCloudAccountOperationInProgress =
                         settingsUiState.isCloudAccountOperationInProgress,
                     manualCloudSyncState = manualCloudSyncState,
+                    cloudSyncActivated = cloudSyncActivated,
                     onSaveBackup = settingsViewModel::prepareBackupForSave,
                     onShareBackup = {
                         settingsViewModel.shareBackup(context)
