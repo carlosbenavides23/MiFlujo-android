@@ -1,6 +1,7 @@
 package com.carlos.miflujo.ui.settings
 
 import com.carlos.miflujo.data.cloud.sync.CloudSyncActivationStore
+import com.carlos.miflujo.data.cloud.sync.CloudSyncEnabledStore
 import com.carlos.miflujo.data.cloud.sync.CloudSyncResult
 import com.carlos.miflujo.data.cloud.sync.CloudSyncRunner
 import com.carlos.miflujo.data.cloud.sync.CloudSyncStatus
@@ -43,6 +44,7 @@ data class ManualCloudSyncCounts(
 class ManualCloudSyncStateHolder(
     private val cloudSyncRunner: CloudSyncRunner,
     private val cloudSyncActivationStore: CloudSyncActivationStore,
+    private val cloudSyncEnabledStore: CloudSyncEnabledStore,
 ) {
     private val running = AtomicBoolean(false)
     private val mutableState = MutableStateFlow<ManualCloudSyncUiState>(
@@ -51,9 +53,27 @@ class ManualCloudSyncStateHolder(
     private val mutableCloudSyncActivated = MutableStateFlow(
         cloudSyncActivationStore.isActivated(),
     )
+    private val mutableCloudSyncEnabled = MutableStateFlow(
+        cloudSyncEnabledStore.isEnabled(),
+    )
 
     val state: StateFlow<ManualCloudSyncUiState> = mutableState.asStateFlow()
     val cloudSyncActivated: StateFlow<Boolean> = mutableCloudSyncActivated.asStateFlow()
+    val cloudSyncEnabled: StateFlow<Boolean> = mutableCloudSyncEnabled.asStateFlow()
+
+    fun setCloudSyncEnabled(enabled: Boolean) {
+        val persisted = runCatching { cloudSyncEnabledStore.setEnabled(enabled) }
+            .onFailure {
+                logMiFlujoSyncError("Cloud Sync enabled preference could not be toggled.")
+            }
+            .getOrDefault(false)
+
+        if (persisted) {
+            mutableCloudSyncEnabled.value = enabled
+        } else {
+            logMiFlujoSyncError("Cloud Sync enabled preference persistence failed.")
+        }
+    }
 
     suspend fun syncNow() {
         logMiFlujoSyncDebug("Manual Cloud Sync requested.")

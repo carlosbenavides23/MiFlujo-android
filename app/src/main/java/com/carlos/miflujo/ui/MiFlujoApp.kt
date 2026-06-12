@@ -103,6 +103,9 @@ fun MiFlujoApp() {
     val cloudSyncActivationStore = remember(context) {
         MiFlujoAppProvider.cloudSyncActivationStore(context)
     }
+    val cloudSyncEnabledStore = remember(context) {
+        MiFlujoAppProvider.cloudSyncEnabledStore(context)
+    }
     val homeViewModel = remember(activity, movementRepository) {
         ViewModelProvider(
             activity,
@@ -127,6 +130,7 @@ fun MiFlujoApp() {
         cloudAccountRepository,
         cloudSyncEngine,
         cloudSyncActivationStore,
+        cloudSyncEnabledStore,
     ) {
         ViewModelProvider(
             activity,
@@ -135,6 +139,7 @@ fun MiFlujoApp() {
                 cloudAccountRepository = cloudAccountRepository,
                 cloudSyncRunner = cloudSyncEngine,
                 cloudSyncActivationStore = cloudSyncActivationStore,
+                cloudSyncEnabledStore = cloudSyncEnabledStore,
             ),
         )[SettingsViewModel::class.java]
     }
@@ -144,6 +149,7 @@ fun MiFlujoApp() {
     val settingsUiState by settingsViewModel.uiState.collectAsState()
     val manualCloudSyncState by settingsViewModel.manualCloudSyncState.collectAsState()
     val cloudSyncActivated by settingsViewModel.cloudSyncActivated.collectAsState()
+    val cloudSyncEnabled by settingsViewModel.cloudSyncEnabled.collectAsState()
     val feedback by movementViewModel.feedback.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val legacyGoogleSignInFallback = remember(activity) {
@@ -432,6 +438,7 @@ fun MiFlujoApp() {
                         settingsUiState.isCloudAccountOperationInProgress,
                     manualCloudSyncState = manualCloudSyncState,
                     cloudSyncActivated = cloudSyncActivated,
+                    cloudSyncEnabled = cloudSyncEnabled,
                     onSaveBackup = settingsViewModel::prepareBackupForSave,
                     onShareBackup = {
                         settingsViewModel.shareBackup(context)
@@ -445,6 +452,7 @@ fun MiFlujoApp() {
                     onRefreshCloudAuthorization =
                         settingsViewModel::refreshCloudAccountStatus,
                     onSyncNow = settingsViewModel::syncNow,
+                    onToggleCloudSyncEnabled = settingsViewModel::setCloudSyncEnabled,
                     onSignOut = settingsViewModel::signOut,
                     onCopyUid = { uid ->
                         context.copyCloudUid(uid)

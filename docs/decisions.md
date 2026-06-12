@@ -750,3 +750,132 @@ remotos.
 Mientras una sincronización manual está ejecutándose, Ajustes deshabilita y el
 ViewModel rechaza defensivamente inicio de sesión, cierre de sesión y refresh de
 autorización. No se cancela la sincronización en curso.
+
+## 052 - Preferencia local cloudSyncEnabled independiente de cloudSyncActivated
+
+MiFlujo distingue dos flags locales de Cloud Sync:
+
+```text
+cloudSyncActivated -> flag irreversible de seguridad, se activa con el primer
+                       sync exitoso o parcial, bloquea restore local destructivo.
+cloudSyncEnabled   -> preferencia de usuario, togglable on/off, controla si la
+                       UI de sync manual está activa.
+```
+
+`cloudSyncEnabled` se almacena en SharedPreferences en el mismo archivo que
+`cloudSyncActivated` (`miflujo_cloud_sync_preferences`), con una clave
+independiente (`cloud_sync_enabled`).
+
+Valor por defecto:
+
+```text
+Si Cloud Sync nunca fue activado  -> false
+Si Cloud Sync ya fue activado     -> true
+```
+
+Cuando `cloudSyncActivated` ya es `true`, el default de `cloudSyncEnabled` es
+`true` porque es el valor más seguro y amigable: el usuario ya sincronizó y
+espera que la sincronización siga activa. Una vez que el usuario establece un
+valor explícito, el default basado en activación ya no se consulta.
+
+El botón `Sincronizar ahora` solo se habilita cuando:
+
+```text
+Cuenta autorizada AND cloudSyncEnabled = true AND no hay operación en curso
+```
+
+Si la cuenta está autorizada pero `cloudSyncEnabled = false`, Ajustes muestra:
+
+```text
+Cloud Sync está desactivado. Puedes activarlo para sincronizar manualmente.
+```
+
+Activar `cloudSyncEnabled` no inicia sync automáticamente.
+
+Toggling `cloudSyncEnabled` no modifica `cloudSyncActivated`. Toggling
+`cloudSyncActivated` no modifica `cloudSyncEnabled`. Las dos preferencias son
+independientes en lectura, escritura y persistencia.
+
+Esta decisión no agrega scheduler, background sync, indicador Home, cambios
+Room, cambios Firestore, cambios de backup ni cambios de restore.
+
+## 053. Verificar certificado del APK real ante OAuth statusCode=10
+
+Durante la integración de Google Sign-In y Firebase Auth para Cloud Sync, MiFlujo
+falló repetidamente antes de completar la autenticación con Firebase:
+
+```text
+GoogleSignInClient fallback result received: resultCode=0
+ApiException statusCode=10
+```
+
+Una app canary separada funcionó correctamente usando el mismo package name, el
+mismo SHA debug esperado en Firebase, el mismo `google-services.json`, el mismo
+`default_web_client_id`, `firebase-auth:24.0.1` y
+`play-services-auth:21.1.1`.
+
+Durante el diagnóstico se probaron y descartaron estas hipótesis:
+
+- Launcher de Activity Result en Compose.
+- Dependencias directas de Credential Manager y Google ID.
+- Versión de `play-services-auth`.
+- Versión de Firebase Auth.
+- Desajuste de `google-services.json`.
+- Activity puente frente al flujo normal.
+- Limpieza mediante `signOut` y `revokeAccess`.
+
+La causa raíz fue que el APK de MiFlujo que fallaba era un artefacto anterior,
+experimental o desactualizado, firmado con un certificado distinto al registrado
+en Firebase y Google Cloud. El APK recompilado desde un árbol limpio usó el
+debug keystore esperado y Google Sign-In funcionó.
+
+El incidente reapareció después de desinstalar e instalar nuevamente porque se
+volvió a instalar el mismo artefacto incorrecto. El APK instalado era idéntico a:
+
+```text
+app/build/intermediates/apk/debug/app-debug.apk
+```
+
+Ese archivo usaba un certificado distinto al mostrado por `signingReport`. En
+cambio, el APK correcto era:
+
+```text
+app/build/outputs/apk/debug/app-debug.apk
+```
+
+Un `clean` seguido de `assembleDebug` eliminó el intermediario desactualizado y
+regeneró el APK con el certificado esperado. Desinstalar por sí solo no corrige
+OAuth si después se instala nuevamente el mismo APK firmado incorrectamente.
+
+```bash
+./gradlew clean :app:assembleDebug
+```
+
+Ante OAuth `statusCode=10`, se debe verificar primero el certificado del APK real
+que se está probando antes de cambiar código. No basta con revisar únicamente el
+resultado de Gradle `signingReport`.
+
+Para verificar el APK generado:
+
+```bash
+~/Android/Sdk/build-tools/36.1.0/apksigner verify --print-certs \
+  app/build/outputs/apk/debug/app-debug.apk
+```
+
+Para verificar exactamente el APK instalado en el dispositivo:
+
+```bash
+installed_apk=$(adb shell pm path com.carlos.miflujo | sed 's/^package://' | tr -d '\r')
+adb pull "$installed_apk" /tmp/miflujo-installed.apk
+
+~/Android/Sdk/build-tools/36.1.0/apksigner verify --print-certs \
+  /tmp/miflujo-installed.apk
+```
+
+Resultado final validado:
+
+- Google Sign-In completó correctamente.
+- Firebase Auth completó correctamente.
+- La autorización de Firestore devolvió `Authorized`.
+- El cierre de sesión completó correctamente.
+- Un nuevo inicio de sesión completó correctamente.

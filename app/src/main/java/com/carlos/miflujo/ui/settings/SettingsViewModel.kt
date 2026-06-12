@@ -12,6 +12,7 @@ import com.carlos.miflujo.data.cloud.auth.LegacyGoogleSignInResult
 import com.carlos.miflujo.data.cloud.auth.MiFlujoAuthLogTag
 import com.carlos.miflujo.data.cloud.sync.CloudSyncRunner
 import com.carlos.miflujo.data.cloud.sync.CloudSyncActivationStore
+import com.carlos.miflujo.data.cloud.sync.CloudSyncEnabledStore
 import com.carlos.miflujo.data.cloud.sync.logMiFlujoSyncDebug
 import com.carlos.miflujo.data.repository.MovementRepository
 import com.carlos.miflujo.ui.backup.BackupDocument
@@ -45,10 +46,12 @@ class SettingsViewModel(
     private val cloudAccountRepository: CloudAccountRepository,
     cloudSyncRunner: CloudSyncRunner,
     cloudSyncActivationStore: CloudSyncActivationStore,
+    cloudSyncEnabledStore: CloudSyncEnabledStore,
 ) : ViewModel() {
     private val manualCloudSyncStateHolder = ManualCloudSyncStateHolder(
         cloudSyncRunner = cloudSyncRunner,
         cloudSyncActivationStore = cloudSyncActivationStore,
+        cloudSyncEnabledStore = cloudSyncEnabledStore,
     )
     private val mutableUiState = MutableStateFlow(SettingsUiState())
     private val exportFeedback = MutableSharedFlow<BackupExportFeedback>(extraBufferCapacity = 1)
@@ -87,6 +90,8 @@ class SettingsViewModel(
         manualCloudSyncStateHolder.state
     val cloudSyncActivated: StateFlow<Boolean> =
         manualCloudSyncStateHolder.cloudSyncActivated
+    val cloudSyncEnabled: StateFlow<Boolean> =
+        manualCloudSyncStateHolder.cloudSyncEnabled
 
     init {
         refreshCloudAccountStatus()
@@ -473,14 +478,23 @@ class SettingsViewModel(
         Log.d(MiFlujoAuthLogTag, "SettingsViewModel state updated: account operation finished.")
     }
 
+    fun setCloudSyncEnabled(enabled: Boolean) {
+        manualCloudSyncStateHolder.setCloudSyncEnabled(enabled)
+    }
+
     fun syncNow() {
         logMiFlujoSyncDebug("Manual Cloud Sync button action starts.")
         if (
+            !cloudSyncEnabled.value ||
             mutableUiState.value.isCloudAccountOperationInProgress ||
             cloudAccountJob?.isActive == true ||
             manualCloudSyncJob?.isActive == true
         ) {
-            logMiFlujoSyncDebug("Manual Cloud Sync ignored: account operation already running.")
+            if (!cloudSyncEnabled.value) {
+                logMiFlujoSyncDebug("Manual Cloud Sync ignored: cloudSyncEnabled is false.")
+            } else {
+                logMiFlujoSyncDebug("Manual Cloud Sync ignored: account operation already running.")
+            }
             return
         }
         manualCloudSyncJob = viewModelScope.launch {
@@ -595,6 +609,7 @@ class SettingsViewModelFactory(
     private val cloudAccountRepository: CloudAccountRepository,
     private val cloudSyncRunner: CloudSyncRunner,
     private val cloudSyncActivationStore: CloudSyncActivationStore,
+    private val cloudSyncEnabledStore: CloudSyncEnabledStore,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -604,6 +619,7 @@ class SettingsViewModelFactory(
                 cloudAccountRepository = cloudAccountRepository,
                 cloudSyncRunner = cloudSyncRunner,
                 cloudSyncActivationStore = cloudSyncActivationStore,
+                cloudSyncEnabledStore = cloudSyncEnabledStore,
             ) as T
         }
 

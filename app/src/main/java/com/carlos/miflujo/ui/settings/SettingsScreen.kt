@@ -17,6 +17,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -42,6 +43,7 @@ fun SettingsScreen(
     isCloudAccountOperationInProgress: Boolean,
     manualCloudSyncState: ManualCloudSyncUiState,
     cloudSyncActivated: Boolean,
+    cloudSyncEnabled: Boolean,
     onSaveBackup: () -> Unit,
     onShareBackup: () -> Unit,
     onRestoreBackup: () -> Unit,
@@ -50,6 +52,7 @@ fun SettingsScreen(
     onSignInWithGoogle: () -> Unit,
     onRefreshCloudAuthorization: () -> Unit,
     onSyncNow: () -> Unit,
+    onToggleCloudSyncEnabled: (Boolean) -> Unit,
     onSignOut: () -> Unit,
     onCopyUid: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -74,9 +77,11 @@ fun SettingsScreen(
             status = cloudAccountStatus,
             isOperationInProgress = isCloudAccountOperationInProgress,
             manualSyncState = manualCloudSyncState,
+            cloudSyncEnabled = cloudSyncEnabled,
             onSignInWithGoogle = onSignInWithGoogle,
             onRefreshCloudAuthorization = onRefreshCloudAuthorization,
             onSyncNow = onSyncNow,
+            onToggleCloudSyncEnabled = onToggleCloudSyncEnabled,
             onSignOut = onSignOut,
             onCopyUid = onCopyUid,
         )
@@ -157,9 +162,11 @@ private fun CloudSyncSection(
     status: CloudAccountStatus,
     isOperationInProgress: Boolean,
     manualSyncState: ManualCloudSyncUiState,
+    cloudSyncEnabled: Boolean,
     onSignInWithGoogle: () -> Unit,
     onRefreshCloudAuthorization: () -> Unit,
     onSyncNow: () -> Unit,
+    onToggleCloudSyncEnabled: (Boolean) -> Unit,
     onSignOut: () -> Unit,
     onCopyUid: (String) -> Unit,
 ) {
@@ -217,14 +224,28 @@ private fun CloudSyncSection(
                     is CloudAccountStatus.Authorized -> {
                         CloudStatusText(
                             title = "Cuenta autorizada",
-                            description = "Puedes sincronizar manualmente. MiFlujo no ejecutará " +
-                                "Cloud Sync automáticamente.",
+                            description = if (cloudSyncEnabled) {
+                                "Puedes sincronizar manualmente. MiFlujo no ejecutará " +
+                                    "Cloud Sync automáticamente."
+                            } else {
+                                "Cloud Sync está desactivado. Puedes activarlo para " +
+                                    "sincronizar manualmente."
+                            },
                         )
                         CloudAccountIdentity(account = status.account)
+                        CloudSyncEnabledToggle(
+                            enabled = cloudSyncEnabled,
+                            onToggle = onToggleCloudSyncEnabled,
+                            isOperationInProgress = isOperationInProgress ||
+                                manualSyncState is ManualCloudSyncUiState.Running,
+                        )
                         Button(
                             onClick = onSyncNow,
-                            enabled = !isOperationInProgress &&
-                                manualSyncState !is ManualCloudSyncUiState.Running,
+                            enabled = isManualSyncEnabled(
+                                cloudSyncEnabled = cloudSyncEnabled,
+                                isAccountOperationInProgress = isOperationInProgress,
+                                manualSyncState = manualSyncState,
+                            ),
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             if (manualSyncState is ManualCloudSyncUiState.Running) {
@@ -308,6 +329,39 @@ internal fun areCloudAccountActionsEnabled(
     manualSyncState: ManualCloudSyncUiState,
 ): Boolean =
     !isAccountOperationInProgress && manualSyncState !is ManualCloudSyncUiState.Running
+
+internal fun isManualSyncEnabled(
+    cloudSyncEnabled: Boolean,
+    isAccountOperationInProgress: Boolean,
+    manualSyncState: ManualCloudSyncUiState,
+): Boolean =
+    cloudSyncEnabled &&
+        !isAccountOperationInProgress &&
+        manualSyncState !is ManualCloudSyncUiState.Running
+
+@Composable
+private fun CloudSyncEnabledToggle(
+    enabled: Boolean,
+    onToggle: (Boolean) -> Unit,
+    isOperationInProgress: Boolean,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = if (enabled) "Cloud Sync activado" else "Cloud Sync desactivado",
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f),
+        )
+        Switch(
+            checked = enabled,
+            onCheckedChange = onToggle,
+            enabled = !isOperationInProgress,
+        )
+    }
+}
 
 @Composable
 private fun ManualCloudSyncResult(state: ManualCloudSyncUiState) {
