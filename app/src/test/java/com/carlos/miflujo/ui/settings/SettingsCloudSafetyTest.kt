@@ -58,4 +58,48 @@ class SettingsCloudSafetyTest {
             ),
         )
     }
+
+    @Test
+    fun `manual sync is disabled when cloudSyncEnabled is false`() {
+        assertFalse(
+            isManualSyncEnabled(
+                cloudSyncEnabled = false,
+                isAccountOperationInProgress = false,
+                manualSyncState = ManualCloudSyncUiState.Idle,
+            ),
+        )
+    }
+
+    @Test
+    fun `manual sync is enabled when cloudSyncEnabled is true and no operation is running`() {
+        assertTrue(
+            isManualSyncEnabled(
+                cloudSyncEnabled = true,
+                isAccountOperationInProgress = false,
+                manualSyncState = ManualCloudSyncUiState.Idle,
+            ),
+        )
+    }
+
+    @Test
+    fun `manual sync is disabled when cloudSyncEnabled is true but operation is running`() {
+        assertFalse(
+            isManualSyncEnabled(
+                cloudSyncEnabled = true,
+                isAccountOperationInProgress = true,
+                manualSyncState = ManualCloudSyncUiState.Idle,
+            ),
+        )
+    }
+
+    @Test
+    fun `manual sync is disabled when cloudSyncEnabled is true but sync is running`() {
+        assertFalse(
+            isManualSyncEnabled(
+                cloudSyncEnabled = true,
+                isAccountOperationInProgress = false,
+                manualSyncState = ManualCloudSyncUiState.Running,
+            ),
+        )
+    }
 }

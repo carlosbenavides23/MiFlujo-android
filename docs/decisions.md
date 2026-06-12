@@ -750,3 +750,51 @@ remotos.
 Mientras una sincronización manual está ejecutándose, Ajustes deshabilita y el
 ViewModel rechaza defensivamente inicio de sesión, cierre de sesión y refresh de
 autorización. No se cancela la sincronización en curso.
+
+## 052 - Preferencia local cloudSyncEnabled independiente de cloudSyncActivated
+
+MiFlujo distingue dos flags locales de Cloud Sync:
+
+```text
+cloudSyncActivated -> flag irreversible de seguridad, se activa con el primer
+                       sync exitoso o parcial, bloquea restore local destructivo.
+cloudSyncEnabled   -> preferencia de usuario, togglable on/off, controla si la
+                       UI de sync manual está activa.
+```
+
+`cloudSyncEnabled` se almacena en SharedPreferences en el mismo archivo que
+`cloudSyncActivated` (`miflujo_cloud_sync_preferences`), con una clave
+independiente (`cloud_sync_enabled`).
+
+Valor por defecto:
+
+```text
+Si Cloud Sync nunca fue activado  -> false
+Si Cloud Sync ya fue activado     -> true
+```
+
+Cuando `cloudSyncActivated` ya es `true`, el default de `cloudSyncEnabled` es
+`true` porque es el valor más seguro y amigable: el usuario ya sincronizó y
+espera que la sincronización siga activa. Una vez que el usuario establece un
+valor explícito, el default basado en activación ya no se consulta.
+
+El botón `Sincronizar ahora` solo se habilita cuando:
+
+```text
+Cuenta autorizada AND cloudSyncEnabled = true AND no hay operación en curso
+```
+
+Si la cuenta está autorizada pero `cloudSyncEnabled = false`, Ajustes muestra:
+
+```text
+Cloud Sync está desactivado. Puedes activarlo para sincronizar manualmente.
+```
+
+Activar `cloudSyncEnabled` no inicia sync automáticamente.
+
+Toggling `cloudSyncEnabled` no modifica `cloudSyncActivated`. Toggling
+`cloudSyncActivated` no modifica `cloudSyncEnabled`. Las dos preferencias son
+independientes en lectura, escritura y persistencia.
+
+Esta decisión no agrega scheduler, background sync, indicador Home, cambios
+Room, cambios Firestore, cambios de backup ni cambios de restore.

@@ -1,6 +1,7 @@
 package com.carlos.miflujo.ui.settings
 
 import com.carlos.miflujo.data.cloud.sync.CloudSyncActivationStore
+import com.carlos.miflujo.data.cloud.sync.CloudSyncEnabledStore
 import com.carlos.miflujo.data.cloud.sync.CloudSyncResult
 import com.carlos.miflujo.data.cloud.sync.CloudSyncRunner
 import com.carlos.miflujo.data.cloud.sync.CloudSyncStatus
@@ -114,6 +115,7 @@ class ManualCloudSyncStateHolderTest {
                 CloudSyncResult(status = CloudSyncStatus.SUCCESS)
             },
             cloudSyncActivationStore = FakeCloudSyncActivationStore(),
+            cloudSyncEnabledStore = FakeCloudSyncEnabledStore(),
         )
 
         val firstSync = async { holder.syncNow() }
@@ -143,12 +145,70 @@ class ManualCloudSyncStateHolderTest {
         )
     }
 
+    @Test
+    fun `cloudSyncEnabled defaults to false when not activated`() = runBlocking {
+        val enabledStore = FakeCloudSyncEnabledStore()
+        val holder = holder(
+            result = CloudSyncResult(status = CloudSyncStatus.FAILURE),
+            enabledStore = enabledStore,
+        )
+
+        assertEquals(false, holder.cloudSyncEnabled.value)
+    }
+
+    @Test
+    fun `cloudSyncEnabled can be toggled on and off`() = runBlocking {
+        val enabledStore = FakeCloudSyncEnabledStore()
+        val holder = holder(
+            result = CloudSyncResult(status = CloudSyncStatus.FAILURE),
+            enabledStore = enabledStore,
+        )
+
+        holder.setCloudSyncEnabled(true)
+        assertEquals(true, holder.cloudSyncEnabled.value)
+        assertEquals(true, enabledStore.enabled)
+
+        holder.setCloudSyncEnabled(false)
+        assertEquals(false, holder.cloudSyncEnabled.value)
+        assertEquals(false, enabledStore.enabled)
+    }
+
+    @Test
+    fun `cloudSyncActivated remains independent after toggling enabled`() = runBlocking {
+        val activationStore = FakeCloudSyncActivationStore()
+        val enabledStore = FakeCloudSyncEnabledStore()
+        val holder = holder(
+            result = CloudSyncResult(status = CloudSyncStatus.FAILURE),
+            activationStore = activationStore,
+            enabledStore = enabledStore,
+        )
+
+        holder.setCloudSyncEnabled(true)
+        assertEquals(false, activationStore.activated)
+        assertEquals(false, holder.cloudSyncActivated.value)
+    }
+
+    @Test
+    fun `cloudSyncEnabled state does not change if persistence fails`() = runBlocking {
+        val enabledStore = FakeCloudSyncEnabledStore(initialValue = false, shouldFailPersistence = true)
+        val holder = holder(
+            result = CloudSyncResult(status = CloudSyncStatus.FAILURE),
+            enabledStore = enabledStore,
+        )
+
+        holder.setCloudSyncEnabled(true)
+        assertEquals(false, holder.cloudSyncEnabled.value)
+        assertEquals(false, enabledStore.enabled)
+    }
+
     private fun holder(
         result: CloudSyncResult,
         activationStore: CloudSyncActivationStore = FakeCloudSyncActivationStore(),
+        enabledStore: CloudSyncEnabledStore = FakeCloudSyncEnabledStore(),
     ): ManualCloudSyncStateHolder = ManualCloudSyncStateHolder(
         cloudSyncRunner = CloudSyncRunner { result },
         cloudSyncActivationStore = activationStore,
+        cloudSyncEnabledStore = enabledStore,
     )
 
     private fun syncResult(status: CloudSyncStatus): CloudSyncResult = CloudSyncResult(
@@ -183,5 +243,20 @@ private class FakeCloudSyncActivationStore(
 
     override fun markActivated() {
         activated = true
+    }
+}
+
+private class FakeCloudSyncEnabledStore(
+    initialValue: Boolean = false,
+    val shouldFailPersistence: Boolean = false,
+) : CloudSyncEnabledStore {
+    var enabled = initialValue
+
+    override fun isEnabled(): Boolean = enabled
+
+    override fun setEnabled(value: Boolean): Boolean {
+        if (shouldFailPersistence) return false
+        enabled = value
+        return true
     }
 }
