@@ -58,6 +58,7 @@ class SettingsViewModel(
     private val restoreFeedback = MutableSharedFlow<BackupRestoreFeedback>(extraBufferCapacity = 1)
     private val openBackupDocumentRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     private val legacyGoogleSignInRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    private val legacyGoogleSignOutRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     private val cloudAccountFeedback = MutableSharedFlow<CloudAccountFeedback>(
         extraBufferCapacity = 1,
     )
@@ -66,6 +67,7 @@ class SettingsViewModel(
     private var cloudAccountJob: Job? = null
     private var manualCloudSyncJob: Job? = null
     private var isLegacyGoogleSignInPending = false
+    private var isLegacyGoogleSignOutPending = false
     private var pendingBackupDocument: BackupDocument? = null
     private var pendingRestoreMovements: List<Movement>? = null
 
@@ -77,6 +79,8 @@ class SettingsViewModel(
     val openBackupDocumentRequestEvents: SharedFlow<Unit> = openBackupDocumentRequests.asSharedFlow()
     val legacyGoogleSignInRequestEvents: SharedFlow<Unit> =
         legacyGoogleSignInRequests.asSharedFlow()
+    val legacyGoogleSignOutRequestEvents: SharedFlow<Unit> =
+        legacyGoogleSignOutRequests.asSharedFlow()
     val cloudAccountFeedbackEvents: SharedFlow<CloudAccountFeedback> =
         cloudAccountFeedback.asSharedFlow()
     val manualCloudSyncState: StateFlow<ManualCloudSyncUiState> =
@@ -150,7 +154,7 @@ class SettingsViewModel(
         finishCloudAccountOperation()
     }
 
-    fun signOut(context: Context) {
+    fun signOut() {
         if (
             !canStartCloudAccountAction(
                 isCloudAccountOperationInProgress =
@@ -168,6 +172,22 @@ class SettingsViewModel(
         }
 
         mutableUiState.value = mutableUiState.value.copy(isCloudAccountOperationInProgress = true)
+        isLegacyGoogleSignOutPending = true
+        if (!legacyGoogleSignOutRequests.tryEmit(Unit)) {
+            isLegacyGoogleSignOutPending = false
+            Log.e(MiFlujoAuthLogTag, "Legacy GoogleSignInClient sign-out request was not delivered.")
+            cloudAccountFeedback.tryEmit(CloudAccountFeedback.SignOutFailed)
+            finishCloudAccountOperation()
+        }
+    }
+
+    fun completeLegacyGoogleSignOut(context: Context) {
+        if (!isLegacyGoogleSignOutPending) {
+            Log.d(MiFlujoAuthLogTag, "Ignoring legacy sign-out completion without a pending request.")
+            return
+        }
+        isLegacyGoogleSignOutPending = false
+
         cloudAccountJob = viewModelScope.launch {
             try {
                 cloudAccountRepository.signOut(context)
@@ -179,9 +199,7 @@ class SettingsViewModel(
                 Log.e(MiFlujoAuthLogTag, "Cloud account sign-out failed.")
                 cloudAccountFeedback.tryEmit(CloudAccountFeedback.SignOutFailed)
             } finally {
-                mutableUiState.value = mutableUiState.value.copy(
-                    isCloudAccountOperationInProgress = false,
-                )
+                finishCloudAccountOperation()
                 cloudAccountJob = null
             }
         }
@@ -452,7 +470,7 @@ class SettingsViewModel(
         mutableUiState.value = mutableUiState.value.copy(
             isCloudAccountOperationInProgress = false,
         )
-        Log.d(MiFlujoAuthLogTag, "SettingsViewModel state updated: sign-in finished.")
+        Log.d(MiFlujoAuthLogTag, "SettingsViewModel state updated: account operation finished.")
     }
 
     fun syncNow() {

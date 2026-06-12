@@ -25,6 +25,31 @@ class LegacyGoogleSignInFallback(
 
     fun signInIntent(): Intent = client.signInIntent
 
+    fun signOut(onComplete: () -> Unit) {
+        Log.d(MiFlujoAuthLogTag, "Legacy GoogleSignInClient sign-out started.")
+        try {
+            client.signOut().addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    Log.d(MiFlujoAuthLogTag, "Legacy GoogleSignInClient session cleared.")
+                } else {
+                    Log.e(
+                        MiFlujoAuthLogTag,
+                        "Legacy GoogleSignInClient sign-out failed: " +
+                            "class=${task.exception?.javaClass?.name ?: "unknown"}.",
+                    )
+                }
+                onComplete()
+            }
+        } catch (exception: Exception) {
+            Log.e(
+                MiFlujoAuthLogTag,
+                "Legacy GoogleSignInClient sign-out failed: " +
+                    "class=${exception.javaClass.name}.",
+            )
+            onComplete()
+        }
+    }
+
     fun parseResult(data: Intent?): LegacyGoogleSignInResult {
         return try {
             val idToken = GoogleSignIn.getSignedInAccountFromIntent(data)

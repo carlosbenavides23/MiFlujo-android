@@ -729,6 +729,12 @@ Credential Manager puede reevaluarse después, pero no debe bloquear el camino
 compatibilidad confirmado. Esta decisión no cambia sync, scheduler, Room, reglas
 Firestore, backup, restore ni comportamiento de movimientos.
 
+Cerrar sesión limpia primero la cuenta seleccionada por `GoogleSignInClient` desde
+la capa UI propietaria de la Activity. Después, aunque esa limpieza legacy falle,
+el ViewModel continúa con el cierre de Firebase Auth y la limpieza del estado de
+Credential Manager mediante el repositorio. Ninguna referencia a Activity se
+guarda en el ViewModel.
+
 ## 051 - Bloqueo persistente de restore después de activar Cloud Sync
 
 La primera ejecución manual de Cloud Sync que termine con `SUCCESS` o `PARTIAL`

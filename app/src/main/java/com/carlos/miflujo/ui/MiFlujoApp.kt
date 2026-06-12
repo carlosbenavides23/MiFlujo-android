@@ -261,6 +261,14 @@ fun MiFlujoApp() {
     }
 
     LaunchedEffect(settingsViewModel) {
+        settingsViewModel.legacyGoogleSignOutRequestEvents.collect {
+            legacyGoogleSignInFallback.signOut {
+                settingsViewModel.completeLegacyGoogleSignOut(context.applicationContext)
+            }
+        }
+    }
+
+    LaunchedEffect(settingsViewModel) {
         settingsViewModel.createDocumentRequestEvents.collect { request ->
             try {
                 createBackupDocumentLauncher.launch(request.fileName)
@@ -437,9 +445,7 @@ fun MiFlujoApp() {
                     onRefreshCloudAuthorization =
                         settingsViewModel::refreshCloudAccountStatus,
                     onSyncNow = settingsViewModel::syncNow,
-                    onSignOut = {
-                        settingsViewModel.signOut(activity)
-                    },
+                    onSignOut = settingsViewModel::signOut,
                     onCopyUid = { uid ->
                         context.copyCloudUid(uid)
                         Toast.makeText(context, "UID copiado.", Toast.LENGTH_SHORT).show()
