@@ -1,6 +1,5 @@
 package com.carlos.miflujo.ui.settings
 
-import android.app.Activity
 import android.content.Context
 import android.net.Uri
 import android.util.Log
@@ -9,11 +8,8 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.carlos.miflujo.data.cloud.auth.CloudAccountRepository
 import com.carlos.miflujo.data.cloud.auth.CloudAccountStatus
-import com.carlos.miflujo.data.cloud.auth.CloudCredentialRequestException
-import com.carlos.miflujo.data.cloud.auth.CloudNoGoogleCredentialException
-import com.carlos.miflujo.data.cloud.auth.CloudSignInCanceledException
+import com.carlos.miflujo.data.cloud.auth.LegacyGoogleSignInResult
 import com.carlos.miflujo.data.cloud.auth.MiFlujoAuthLogTag
-import com.carlos.miflujo.data.cloud.auth.UnsupportedCloudCredentialException
 import com.carlos.miflujo.data.cloud.sync.CloudSyncRunner
 import com.carlos.miflujo.data.cloud.sync.CloudSyncActivationStore
 import com.carlos.miflujo.data.cloud.sync.logMiFlujoSyncDebug
@@ -62,6 +58,7 @@ class SettingsViewModel(
     private val restoreFeedback = MutableSharedFlow<BackupRestoreFeedback>(extraBufferCapacity = 1)
     private val openBackupDocumentRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     private val legacyGoogleSignInRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    private val legacyGoogleSignOutRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     private val cloudAccountFeedback = MutableSharedFlow<CloudAccountFeedback>(
         extraBufferCapacity = 1,
     )
@@ -70,6 +67,7 @@ class SettingsViewModel(
     private var cloudAccountJob: Job? = null
     private var manualCloudSyncJob: Job? = null
     private var isLegacyGoogleSignInPending = false
+    private var isLegacyGoogleSignOutPending = false
     private var pendingBackupDocument: BackupDocument? = null
     private var pendingRestoreMovements: List<Movement>? = null
 
@@ -81,6 +79,8 @@ class SettingsViewModel(
     val openBackupDocumentRequestEvents: SharedFlow<Unit> = openBackupDocumentRequests.asSharedFlow()
     val legacyGoogleSignInRequestEvents: SharedFlow<Unit> =
         legacyGoogleSignInRequests.asSharedFlow()
+    val legacyGoogleSignOutRequestEvents: SharedFlow<Unit> =
+        legacyGoogleSignOutRequests.asSharedFlow()
     val cloudAccountFeedbackEvents: SharedFlow<CloudAccountFeedback> =
         cloudAccountFeedback.asSharedFlow()
     val manualCloudSyncState: StateFlow<ManualCloudSyncUiState> =
@@ -92,13 +92,8 @@ class SettingsViewModel(
         refreshCloudAccountStatus()
     }
 
-    fun signInWithGoogle(context: Context) {
+    fun signInWithGoogle() {
         Log.d(MiFlujoAuthLogTag, "Settings sign-in button action starts.")
-        Log.d(
-            MiFlujoAuthLogTag,
-            "Settings sign-in context: class=${context.javaClass.name}, " +
-                "isActivity=${context is Activity}.",
-        )
         if (
             !canStartCloudAccountAction(
                 isCloudAccountOperationInProgress =
@@ -114,65 +109,27 @@ class SettingsViewModel(
 
         mutableUiState.value = mutableUiState.value.copy(isCloudAccountOperationInProgress = true)
         Log.d(MiFlujoAuthLogTag, "SettingsViewModel state updated: sign-in running.")
-        cloudAccountJob = viewModelScope.launch {
-            var fallbackRequested = false
-            try {
-                val signInStatus = cloudAccountRepository.signInWithGoogle(context)
-                completeSuccessfulSignIn(signInStatus)
-            } catch (exception: Exception) {
-                if (exception is CancellationException) throw exception
-                if (exception.shouldStartLegacyGoogleSignInFallback()) {
-                    fallbackRequested = requestLegacyGoogleSignInFallback()
-                } else {
-                    when (exception) {
-                        is CloudCredentialRequestException -> {
-                            Log.e(
-                                MiFlujoAuthLogTag,
-                                "Credential Manager sign-in failed and will be shown to the user.",
-                            )
-                        }
-                        is UnsupportedCloudCredentialException -> {
-                            Log.e(
-                                MiFlujoAuthLogTag,
-                                "Unsupported credential returned to Settings sign-in.",
-                            )
-                        }
-                        else -> {
-                            Log.e(
-                                MiFlujoAuthLogTag,
-                                "Google sign-in failed: class=${exception.javaClass.name}, " +
-                                    "message=Sign-in could not be completed.",
-                            )
-                        }
-                    }
-                    cloudAccountFeedback.tryEmit(exception.toCloudAccountFeedback())
-                }
-            } finally {
-                if (!fallbackRequested) {
-                    finishCloudAccountOperation()
-                }
-                cloudAccountJob = null
-            }
+        if (!requestLegacyGoogleSignIn()) {
+            finishCloudAccountOperation()
         }
     }
 
-    fun completeLegacyGoogleSignIn(idToken: String?) {
+    fun completeLegacyGoogleSignIn(result: LegacyGoogleSignInResult) {
         if (!isLegacyGoogleSignInPending) {
             Log.d(MiFlujoAuthLogTag, "Ignoring legacy fallback result without a pending request.")
             return
         }
         isLegacyGoogleSignInPending = false
 
-        val validIdToken = idToken?.takeIf { it.isNotBlank() }
-        if (validIdToken == null) {
-            cloudAccountFeedback.tryEmit(fallbackFeedbackForIdToken(idToken))
+        if (result !is LegacyGoogleSignInResult.Success) {
+            cloudAccountFeedback.tryEmit(fallbackFeedbackForResult(result))
             finishCloudAccountOperation()
             return
         }
 
         cloudAccountJob = viewModelScope.launch {
             try {
-                val signInStatus = cloudAccountRepository.signInWithGoogleIdToken(validIdToken)
+                val signInStatus = cloudAccountRepository.signInWithGoogleIdToken(result.idToken)
                 completeSuccessfulSignIn(signInStatus)
             } catch (exception: Exception) {
                 if (exception is CancellationException) throw exception
@@ -197,7 +154,7 @@ class SettingsViewModel(
         finishCloudAccountOperation()
     }
 
-    fun signOut(context: Context) {
+    fun signOut() {
         if (
             !canStartCloudAccountAction(
                 isCloudAccountOperationInProgress =
@@ -215,6 +172,22 @@ class SettingsViewModel(
         }
 
         mutableUiState.value = mutableUiState.value.copy(isCloudAccountOperationInProgress = true)
+        isLegacyGoogleSignOutPending = true
+        if (!legacyGoogleSignOutRequests.tryEmit(Unit)) {
+            isLegacyGoogleSignOutPending = false
+            Log.e(MiFlujoAuthLogTag, "Legacy GoogleSignInClient sign-out request was not delivered.")
+            cloudAccountFeedback.tryEmit(CloudAccountFeedback.SignOutFailed)
+            finishCloudAccountOperation()
+        }
+    }
+
+    fun completeLegacyGoogleSignOut(context: Context) {
+        if (!isLegacyGoogleSignOutPending) {
+            Log.d(MiFlujoAuthLogTag, "Ignoring legacy sign-out completion without a pending request.")
+            return
+        }
+        isLegacyGoogleSignOutPending = false
+
         cloudAccountJob = viewModelScope.launch {
             try {
                 cloudAccountRepository.signOut(context)
@@ -226,9 +199,7 @@ class SettingsViewModel(
                 Log.e(MiFlujoAuthLogTag, "Cloud account sign-out failed.")
                 cloudAccountFeedback.tryEmit(CloudAccountFeedback.SignOutFailed)
             } finally {
-                mutableUiState.value = mutableUiState.value.copy(
-                    isCloudAccountOperationInProgress = false,
-                )
+                finishCloudAccountOperation()
                 cloudAccountJob = null
             }
         }
@@ -481,11 +452,10 @@ class SettingsViewModel(
         updateCloudAccountStatus(refreshedStatus)
     }
 
-    private fun requestLegacyGoogleSignInFallback(): Boolean {
+    private fun requestLegacyGoogleSignIn(): Boolean {
         Log.d(
             MiFlujoAuthLogTag,
-            "Credential Manager failed before returning a credential; " +
-                "starting GoogleSignInClient fallback.",
+            "Explicit sign-in path selected: legacy/canary-compatible.",
         )
         isLegacyGoogleSignInPending = true
         if (legacyGoogleSignInRequests.tryEmit(Unit)) return true
@@ -500,7 +470,7 @@ class SettingsViewModel(
         mutableUiState.value = mutableUiState.value.copy(
             isCloudAccountOperationInProgress = false,
         )
-        Log.d(MiFlujoAuthLogTag, "SettingsViewModel state updated: sign-in finished.")
+        Log.d(MiFlujoAuthLogTag, "SettingsViewModel state updated: account operation finished.")
     }
 
     fun syncNow() {
@@ -583,27 +553,30 @@ sealed class CloudAccountFeedback(
     data object UnsupportedCredential : CloudAccountFeedback(
         "La cuenta seleccionada no pudo procesarse. Intenta nuevamente. MiFlujo continúa en modo local.",
     )
+    data object GoogleSignInConfigurationError : CloudAccountFeedback(
+        "No se pudo iniciar sesión porque la configuración de Google no está completa. MiFlujo continúa en modo local.",
+    )
     data object SignInFailed : CloudAccountFeedback(
-        "No se pudo iniciar sesión con Google. MiFlujo continúa en modo local.",
+        "No se pudo iniciar sesión con Google. Intenta nuevamente.",
     )
     data object SignOutFailed : CloudAccountFeedback(
         "No se pudo cerrar la sesión. Intenta nuevamente.",
     )
 }
 
-internal fun Exception.toCloudAccountFeedback(): CloudAccountFeedback = when (this) {
-    is CloudSignInCanceledException -> CloudAccountFeedback.SignInIncomplete
-    is CloudNoGoogleCredentialException -> CloudAccountFeedback.NoGoogleCredentialAvailable
-    is UnsupportedCloudCredentialException -> CloudAccountFeedback.UnsupportedCredential
-    else -> CloudAccountFeedback.SignInFailed
-}
+internal fun Exception.toCloudAccountFeedback(): CloudAccountFeedback =
+    CloudAccountFeedback.SignInFailed
 
-internal fun Exception.shouldStartLegacyGoogleSignInFallback(): Boolean =
-    this is CloudSignInCanceledException || this is CloudNoGoogleCredentialException
-
-internal fun fallbackFeedbackForIdToken(idToken: String?): CloudAccountFeedback.SignInIncomplete {
-    check(idToken.isNullOrBlank())
-    return CloudAccountFeedback.SignInIncomplete
+internal fun fallbackFeedbackForResult(
+    result: LegacyGoogleSignInResult,
+): CloudAccountFeedback = when (result) {
+    LegacyGoogleSignInResult.Canceled -> CloudAccountFeedback.SignInIncomplete
+    LegacyGoogleSignInResult.ConfigurationError ->
+        CloudAccountFeedback.GoogleSignInConfigurationError
+    LegacyGoogleSignInResult.MissingIdToken,
+    LegacyGoogleSignInResult.Failure,
+    -> CloudAccountFeedback.SignInFailed
+    is LegacyGoogleSignInResult.Success -> error("A successful fallback result has no feedback.")
 }
 
 internal fun canStartCloudAccountAction(

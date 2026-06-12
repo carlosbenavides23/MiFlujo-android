@@ -706,22 +706,34 @@ La sincronización solo inicia al tocar el botón. Esta decisión no agrega ejec
 en startup, cierre, foreground, login, scheduler, WorkManager, background,
 notificaciones ni indicador Home.
 
-## 050 - Fallback legacy para inicio de sesión con Google
+## 050 - Inicio de sesión legacy compatible con canary
 
-Credential Manager sigue siendo el primer intento de inicio de sesión desde la
-acción explícita de Ajustes. Si termina con cancelación o sin credencial antes de
-devolver un token, Ajustes lanza una sola vez el flujo legacy de
-`GoogleSignInClient`.
+La acción explícita de inicio de sesión en Ajustes usa temporalmente
+`GoogleSignInClient` directamente. Credential Manager queda fuera de este botón
+porque cancelaba antes de devolver credenciales y un canary aislado confirmó que
+el flujo legacy funciona con la misma app Firebase, package, firma y web client ID.
 
-Ambos caminos usan el web client ID generado como `default_web_client_id`. El
-launcher legacy solo devuelve el ID token a la capa de datos; la conversión a
-credencial Firebase, `FirebaseAuth.signInWithCredential`, la verificación de
-autorización y el refresh del estado de Ajustes permanecen compartidos.
+El cliente legacy se crea con la Activity que posee la UI, usa el web client ID
+generado como `default_web_client_id`, solicita ID token y email, y procesa una
+sola vez el Intent devuelto por Google. El launcher solo devuelve el ID token a la
+capa de datos; la conversión a credencial Firebase,
+`FirebaseAuth.signInWithCredential`, la verificación de autorización y el refresh
+del estado de Ajustes permanecen compartidos.
 
-Cancelar el fallback o recibir un resultado sin ID token mantiene la sesión sin
-completar y muestra feedback visible. El fallback nunca se inicia por lifecycle ni
-se relanza automáticamente. Esta decisión no cambia sync, scheduler, Room, reglas
+Cancelar el fallback mantiene la sesión sin completar y muestra feedback visible
+de cancelación. Recibir un resultado sin ID token muestra un fallo seguro distinto.
+El código legacy `10` (`DEVELOPER_ERROR`) muestra feedback de configuración sin
+exponer client IDs, tokens ni datos de cuenta en logs.
+El flujo legacy nunca se inicia por lifecycle ni se relanza automáticamente.
+Credential Manager puede reevaluarse después, pero no debe bloquear el camino
+compatibilidad confirmado. Esta decisión no cambia sync, scheduler, Room, reglas
 Firestore, backup, restore ni comportamiento de movimientos.
+
+Cerrar sesión limpia primero la cuenta seleccionada por `GoogleSignInClient` desde
+la capa UI propietaria de la Activity. Después, aunque esa limpieza legacy falle,
+el ViewModel continúa con el cierre de Firebase Auth y la limpieza del estado de
+Credential Manager mediante el repositorio. Ninguna referencia a Activity se
+guarda en el ViewModel.
 
 ## 051 - Bloqueo persistente de restore después de activar Cloud Sync
 

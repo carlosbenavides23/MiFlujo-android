@@ -1,6 +1,5 @@
 package com.carlos.miflujo.ui
 
-import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -160,18 +159,9 @@ fun MiFlujoApp() {
             MiFlujoAuthLogTag,
             "GoogleSignInClient fallback result received: resultCode=${result.resultCode}.",
         )
-        if (result.resultCode != Activity.RESULT_OK) {
-            Log.d(
-                MiFlujoAuthLogTag,
-                "GoogleSignInClient fallback canceled by resultCode=${result.resultCode}.",
-            )
-        }
-        val idToken = legacyGoogleSignInFallback.extractIdToken(result.data)
-        Log.d(
-            MiFlujoAuthLogTag,
-            "GoogleSignInClient fallback ID token present=${idToken != null}.",
+        settingsViewModel.completeLegacyGoogleSignIn(
+            legacyGoogleSignInFallback.parseResult(result.data),
         )
-        settingsViewModel.completeLegacyGoogleSignIn(idToken)
     }
     val createBackupDocumentLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument(BackupJsonMimeType),
@@ -258,8 +248,22 @@ fun MiFlujoApp() {
         settingsViewModel.legacyGoogleSignInRequestEvents.collect {
             try {
                 legacyGoogleSignInLauncher.launch(legacyGoogleSignInFallback.signInIntent())
-            } catch (_: Exception) {
+                Log.d(MiFlujoAuthLogTag, "GoogleSignInClient fallback intent launched.")
+            } catch (exception: Exception) {
+                Log.e(
+                    MiFlujoAuthLogTag,
+                    "GoogleSignInClient fallback launch failed: " +
+                        "class=${exception.javaClass.name}.",
+                )
                 settingsViewModel.handleLegacyGoogleSignInLaunchFailure()
+            }
+        }
+    }
+
+    LaunchedEffect(settingsViewModel) {
+        settingsViewModel.legacyGoogleSignOutRequestEvents.collect {
+            legacyGoogleSignInFallback.signOut {
+                settingsViewModel.completeLegacyGoogleSignOut(context.applicationContext)
             }
         }
     }
@@ -436,14 +440,12 @@ fun MiFlujoApp() {
                     onCancelRestore = settingsViewModel::cancelPendingRestore,
                     onConfirmRestore = settingsViewModel::confirmPendingRestore,
                     onSignInWithGoogle = {
-                        settingsViewModel.signInWithGoogle(activity)
+                        settingsViewModel.signInWithGoogle()
                     },
                     onRefreshCloudAuthorization =
                         settingsViewModel::refreshCloudAccountStatus,
                     onSyncNow = settingsViewModel::syncNow,
-                    onSignOut = {
-                        settingsViewModel.signOut(activity)
-                    },
+                    onSignOut = settingsViewModel::signOut,
                     onCopyUid = { uid ->
                         context.copyCloudUid(uid)
                         Toast.makeText(context, "UID copiado.", Toast.LENGTH_SHORT).show()

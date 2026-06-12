@@ -1,13 +1,13 @@
 package com.carlos.miflujo.ui.settings
 
-import com.carlos.miflujo.data.cloud.auth.CloudSignInCanceledException
+import com.carlos.miflujo.data.cloud.auth.LegacyGoogleSignInResult
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class CloudAccountFeedbackTest {
     @Test
-    fun `fallback cancellation without ID token maps to required visible feedback`() {
-        val feedback = fallbackFeedbackForIdToken(null)
+    fun `fallback cancellation maps to required visible feedback`() {
+        val feedback = fallbackFeedbackForResult(LegacyGoogleSignInResult.Canceled)
 
         assertEquals(
             CloudAccountFeedback.SignInIncomplete,
@@ -20,31 +20,31 @@ class CloudAccountFeedbackTest {
     }
 
     @Test
-    fun `credential manager cancellation requests legacy fallback`() {
+    fun `fallback missing ID token maps to required visible failure`() {
+        val feedback = fallbackFeedbackForResult(LegacyGoogleSignInResult.MissingIdToken)
+
+        assertEquals(CloudAccountFeedback.SignInFailed, feedback)
         assertEquals(
-            true,
-            CloudSignInCanceledException(
-                IllegalStateException("Credential Manager canceled."),
-            ).shouldStartLegacyGoogleSignInFallback(),
+            "No se pudo iniciar sesión con Google. Intenta nuevamente.",
+            feedback.message,
         )
     }
 
     @Test
-    fun `credential manager no credential requests legacy fallback`() {
+    fun `fallback developer error maps to visible configuration feedback`() {
+        val feedback = fallbackFeedbackForResult(LegacyGoogleSignInResult.ConfigurationError)
+
+        assertEquals(CloudAccountFeedback.GoogleSignInConfigurationError, feedback)
         assertEquals(
-            true,
-            com.carlos.miflujo.data.cloud.auth.CloudNoGoogleCredentialException(
-                IllegalStateException("No credential."),
-            ).shouldStartLegacyGoogleSignInFallback(),
+            "No se pudo iniciar sesión porque la configuración de Google no está completa. MiFlujo continúa en modo local.",
+            feedback.message,
         )
     }
 
     @Test
-    fun `other credential failure does not request legacy fallback`() {
-        assertEquals(
-            false,
-            IllegalStateException("Firebase failure.")
-                .shouldStartLegacyGoogleSignInFallback(),
-        )
+    fun `firebase failure maps to safe visible failure`() {
+        val feedback = IllegalStateException("Firebase failure.").toCloudAccountFeedback()
+
+        assertEquals(CloudAccountFeedback.SignInFailed, feedback)
     }
 }
