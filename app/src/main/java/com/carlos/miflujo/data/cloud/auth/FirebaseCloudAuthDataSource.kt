@@ -108,7 +108,7 @@ class FirebaseCloudAuthDataSource(
         val request = GetCredentialRequest.Builder()
             .addCredentialOption(googleIdOption)
             .build()
-        Log.d(MiFlujoAuthLogTag, "Before CredentialManager.getCredential.")
+        Log.d(MiFlujoAuthLogTag, "Primary Credential Manager sign-in started.")
         val credentialResponse = try {
             credentialManager.getCredential(
                 context = activity,
