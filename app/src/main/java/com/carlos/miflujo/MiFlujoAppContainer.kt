@@ -47,7 +47,8 @@ class DefaultMiFlujoAppContainer(
         DefaultCloudAccountRepository(
             authDataSource = FirebaseCloudAuthDataSource(
                 firebaseAuth = FirebaseAuth.getInstance(),
-                googleWebClientId = applicationContext.getString(R.string.google_web_client_id),
+                googleWebClientId = applicationContext.getString(R.string.default_web_client_id),
+                googleWebClientIdSource = "generated resource default_web_client_id",
             ),
             authorizationChecker = FirestoreCloudAuthorizationChecker(
                 firestore = FirebaseFirestore.getInstance(),
@@ -86,5 +87,9 @@ object MiFlujoAppProvider {
 
     fun cloudAccountRepository(context: Context): CloudAccountRepository {
         return container(context).cloudAccountRepository
+    }
+
+    fun cloudSyncEngine(context: Context): CloudSyncEngine {
+        return container(context).cloudSyncEngine
     }
 }

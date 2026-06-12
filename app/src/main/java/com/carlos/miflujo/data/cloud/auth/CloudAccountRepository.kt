@@ -26,6 +26,8 @@ interface CloudAccountRepository {
 
     suspend fun signInWithGoogle(context: Context): CloudAccountStatus
 
+    suspend fun signInWithGoogleIdToken(idToken: String): CloudAccountStatus
+
     suspend fun signOut(context: Context)
 }
 
@@ -33,6 +35,18 @@ class CloudSignInCanceledException(
     cause: Throwable,
 ) : Exception(cause)
 
-class CloudSignInTimedOutException(
+class CloudNoGoogleCredentialException(
     cause: Throwable,
 ) : Exception(cause)
+
+class CloudCredentialRequestException(
+    cause: Throwable,
+) : Exception(cause)
+
+class CloudActivityContextRequiredException : Exception(
+    "Google sign-in requires an Activity context.",
+)
+
+class UnsupportedCloudCredentialException(
+    message: String,
+) : Exception(message)

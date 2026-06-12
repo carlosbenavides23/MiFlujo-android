@@ -1,9 +1,11 @@
 package com.carlos.miflujo.ui
 
+import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.ContextWrapper
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -54,6 +56,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import com.carlos.miflujo.MiFlujoAppProvider
+import com.carlos.miflujo.R
+import com.carlos.miflujo.data.cloud.auth.LegacyGoogleSignInFallback
+import com.carlos.miflujo.data.cloud.auth.MiFlujoAuthLogTag
 import com.carlos.miflujo.ui.home.HomeScreen
 import com.carlos.miflujo.ui.home.HomeViewModel
 import com.carlos.miflujo.ui.home.HomeViewModelFactory
@@ -93,6 +98,9 @@ fun MiFlujoApp() {
     val cloudAccountRepository = remember(context) {
         MiFlujoAppProvider.cloudAccountRepository(context)
     }
+    val cloudSyncEngine = remember(context) {
+        MiFlujoAppProvider.cloudSyncEngine(context)
+    }
     val homeViewModel = remember(activity, movementRepository) {
         ViewModelProvider(
             activity,
@@ -111,12 +119,18 @@ fun MiFlujoApp() {
             ReportViewModelFactory(movementRepository),
         )[ReportViewModel::class.java]
     }
-    val settingsViewModel = remember(activity, movementRepository, cloudAccountRepository) {
+    val settingsViewModel = remember(
+        activity,
+        movementRepository,
+        cloudAccountRepository,
+        cloudSyncEngine,
+    ) {
         ViewModelProvider(
             activity,
             SettingsViewModelFactory(
                 movementRepository = movementRepository,
                 cloudAccountRepository = cloudAccountRepository,
+                cloudSyncRunner = cloudSyncEngine,
             ),
         )[SettingsViewModel::class.java]
     }
@@ -124,8 +138,35 @@ fun MiFlujoApp() {
     val movementUiState by movementViewModel.uiState.collectAsState()
     val reportUiState by reportViewModel.uiState.collectAsState()
     val settingsUiState by settingsViewModel.uiState.collectAsState()
+    val manualCloudSyncState by settingsViewModel.manualCloudSyncState.collectAsState()
     val feedback by movementViewModel.feedback.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    val legacyGoogleSignInFallback = remember(activity) {
+        LegacyGoogleSignInFallback(
+            activity = activity,
+            googleWebClientId = activity.getString(R.string.default_web_client_id),
+        )
+    }
+    val legacyGoogleSignInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        Log.d(
+            MiFlujoAuthLogTag,
+            "GoogleSignInClient fallback result received: resultCode=${result.resultCode}.",
+        )
+        if (result.resultCode != Activity.RESULT_OK) {
+            Log.d(
+                MiFlujoAuthLogTag,
+                "GoogleSignInClient fallback canceled by resultCode=${result.resultCode}.",
+            )
+        }
+        val idToken = legacyGoogleSignInFallback.extractIdToken(result.data)
+        Log.d(
+            MiFlujoAuthLogTag,
+            "GoogleSignInClient fallback ID token present=${idToken != null}.",
+        )
+        settingsViewModel.completeLegacyGoogleSignIn(idToken)
+    }
     val createBackupDocumentLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument(BackupJsonMimeType),
     ) { destinationUri ->
@@ -204,6 +245,16 @@ fun MiFlujoApp() {
                 feedbackEvent.message,
                 Toast.LENGTH_LONG,
             ).show()
+        }
+    }
+
+    LaunchedEffect(settingsViewModel) {
+        settingsViewModel.legacyGoogleSignInRequestEvents.collect {
+            try {
+                legacyGoogleSignInLauncher.launch(legacyGoogleSignInFallback.signInIntent())
+            } catch (_: Exception) {
+                settingsViewModel.handleLegacyGoogleSignInLaunchFailure()
+            }
         }
     }
 
@@ -369,6 +420,7 @@ fun MiFlujoApp() {
                     cloudAccountStatus = settingsUiState.cloudAccountStatus,
                     isCloudAccountOperationInProgress =
                         settingsUiState.isCloudAccountOperationInProgress,
+                    manualCloudSyncState = manualCloudSyncState,
                     onSaveBackup = settingsViewModel::prepareBackupForSave,
                     onShareBackup = {
                         settingsViewModel.shareBackup(context)
@@ -381,6 +433,7 @@ fun MiFlujoApp() {
                     },
                     onRefreshCloudAuthorization =
                         settingsViewModel::refreshCloudAccountStatus,
+                    onSyncNow = settingsViewModel::syncNow,
                     onSignOut = {
                         settingsViewModel.signOut(activity)
                     },

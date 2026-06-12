@@ -687,3 +687,35 @@ autorizada y fallo general, con conteos sin datos financieros.
 El motor queda registrado en el app container, pero ninguna UI ni lifecycle lo
 invoca automáticamente. Esta decisión no agrega scheduler, WorkManager, sync al
 inicio, indicador Home, cambios de backup ni cambios de reglas Firestore.
+
+## 049 - Control manual de Cloud Sync en Ajustes
+
+Ajustes muestra la acción explícita `Sincronizar ahora` únicamente para una cuenta
+autorizada. `SettingsViewModel` invoca `CloudSyncEngine` mediante `CloudSyncRunner`;
+los composables solo reciben estado y callbacks.
+
+Un state holder pequeño representa `idle`, ejecución, éxito, resultado parcial,
+sesión cerrada, cuenta no autorizada y fallo. Durante la ejecución bloquea llamadas
+repetidas y la UI deshabilita el botón. Los resultados muestran conteos operativos
+sin detalles financieros.
+
+La sincronización solo inicia al tocar el botón. Esta decisión no agrega ejecución
+en startup, cierre, foreground, login, scheduler, WorkManager, background,
+notificaciones ni indicador Home.
+
+## 050 - Fallback legacy para inicio de sesión con Google
+
+Credential Manager sigue siendo el primer intento de inicio de sesión desde la
+acción explícita de Ajustes. Si termina con cancelación o sin credencial antes de
+devolver un token, Ajustes lanza una sola vez el flujo legacy de
+`GoogleSignInClient`.
+
+Ambos caminos usan el web client ID generado como `default_web_client_id`. El
+launcher legacy solo devuelve el ID token a la capa de datos; la conversión a
+credencial Firebase, `FirebaseAuth.signInWithCredential`, la verificación de
+autorización y el refresh del estado de Ajustes permanecen compartidos.
+
+Cancelar el fallback o recibir un resultado sin ID token mantiene la sesión sin
+completar y muestra feedback visible. El fallback nunca se inicia por lifecycle ni
+se relanza automáticamente. Esta decisión no cambia sync, scheduler, Room, reglas
+Firestore, backup, restore ni comportamiento de movimientos.

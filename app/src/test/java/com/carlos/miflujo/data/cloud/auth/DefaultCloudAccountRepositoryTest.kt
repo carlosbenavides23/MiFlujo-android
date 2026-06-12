@@ -4,6 +4,7 @@ import android.content.Context
 import com.carlos.miflujo.data.cloud.firestore.CloudAuthorizationChecker
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.fail
 import org.junit.Test
 
 class DefaultCloudAccountRepositoryTest {
@@ -36,6 +37,38 @@ class DefaultCloudAccountRepositoryTest {
         )
     }
 
+    @Test
+    fun `authorization checker failure is not converted into an authorized status`() = runBlocking {
+        val repository = DefaultCloudAccountRepository(
+            authDataSource = FakeCloudAuthDataSource(testAccount()),
+            authorizationChecker = CloudAuthorizationChecker {
+                throw IllegalStateException("Authorization unavailable.")
+            },
+        )
+
+        try {
+            repository.getCurrentStatus()
+            fail("Expected authorization failure.")
+        } catch (_: IllegalStateException) {
+            // Expected.
+        }
+    }
+
+    @Test
+    fun `fallback ID token uses normal Firebase account and authorization flow`() = runBlocking {
+        val account = testAccount()
+        val authDataSource = FakeCloudAuthDataSource(account)
+        val repository = DefaultCloudAccountRepository(
+            authDataSource = authDataSource,
+            authorizationChecker = CloudAuthorizationChecker { true },
+        )
+
+        val status = repository.signInWithGoogleIdToken("fallback-id-token")
+
+        assertEquals("fallback-id-token", authDataSource.receivedIdToken)
+        assertEquals(CloudAccountStatus.Authorized(account), status)
+    }
+
     private fun createRepository(
         account: CloudAccount?,
         isAuthorized: Boolean,
@@ -54,10 +87,17 @@ class DefaultCloudAccountRepositoryTest {
 private class FakeCloudAuthDataSource(
     private val account: CloudAccount?,
 ) : CloudAuthDataSource {
+    var receivedIdToken: String? = null
+
     override fun currentAccount(): CloudAccount? = account
 
     override suspend fun signInWithGoogle(context: Context): CloudAccount {
         error("Not used in this test.")
+    }
+
+    override suspend fun signInWithGoogleIdToken(idToken: String): CloudAccount {
+        receivedIdToken = idToken
+        return checkNotNull(account)
     }
 
     override suspend fun signOut(context: Context) = Unit

@@ -30,22 +30,34 @@ data class CloudSyncResult(
     val remoteErrors: Int = 0,
 )
 
+fun interface CloudSyncRunner {
+    suspend fun syncNow(): CloudSyncResult
+}
+
 class CloudSyncEngine(
     private val cloudAccountRepository: CloudAccountRepository,
     private val localDataSource: CloudSyncLocalDataSource,
     private val remoteDataSource: CloudMovementRemoteDataSource,
     private val syncTimeProvider: () -> LocalDateTime = LocalDateTime::now,
-) {
+) : CloudSyncRunner {
     private val syncMutex = Mutex()
 
-    suspend fun syncNow(): CloudSyncResult = syncMutex.withLock {
-        when (val accountStatus = currentAccountStatus()) {
+    override suspend fun syncNow(): CloudSyncResult = syncMutex.withLock {
+        logMiFlujoSyncDebug("CloudSyncEngine syncNow starts.")
+        val accountStatus = currentAccountStatus()
+        logMiFlujoSyncDebug(
+            "CloudSyncEngine account status before remote work: " +
+                "${accountStatus.toSafeSyncAccountStatus()}.",
+        )
+        val result = when (accountStatus) {
             CloudAccountStatus.SignedOut -> CloudSyncResult(CloudSyncStatus.SIGNED_OUT)
             is CloudAccountStatus.Unauthorized -> CloudSyncResult(CloudSyncStatus.UNAUTHORIZED)
             CloudAccountStatus.Loading -> CloudSyncResult(CloudSyncStatus.FAILURE)
             is CloudAccountStatus.Authorized -> syncAuthorized(accountStatus.account.uid)
             null -> CloudSyncResult(CloudSyncStatus.FAILURE)
         }
+        logMiFlujoSyncDebug(result.toSafeSyncLogMessage("CloudSyncEngine final result"))
+        result
     }
 
     private suspend fun currentAccountStatus(): CloudAccountStatus? = try {
@@ -66,6 +78,9 @@ class CloudSyncEngine(
                 localErrors = 1,
             )
         }
+        logMiFlujoSyncDebug(
+            "CloudSyncEngine local snapshot count=${localMovements.size}.",
+        )
         val remoteInputs = try {
             remoteDataSource.fetchAll(uid)
         } catch (exception: Exception) {
@@ -75,6 +90,9 @@ class CloudSyncEngine(
                 remoteErrors = 1,
             )
         }
+        logMiFlujoSyncDebug(
+            "CloudSyncEngine remote snapshot count=${remoteInputs.size}.",
+        )
         val plan = try {
             MovementSyncReconciler.reconcile(
                 localMovements = localMovements,
@@ -278,6 +296,15 @@ class CloudSyncEngine(
             if (exception is CancellationException) throw exception
         }
     }
+}
+
+private fun CloudAccountStatus?.toSafeSyncAccountStatus(): String = when (this) {
+    is CloudAccountStatus.Authorized -> "Authorized"
+    CloudAccountStatus.SignedOut -> "SignedOut"
+    is CloudAccountStatus.Unauthorized -> "Unauthorized"
+    CloudAccountStatus.Loading,
+    null,
+    -> "Failure"
 }
 
 private data class LocalMovementIdentity(
