@@ -83,6 +83,7 @@ fun SettingsScreen(
             isOperationInProgress = isCloudAccountOperationInProgress,
             manualSyncState = manualCloudSyncState,
             isOffline = isOffline,
+            cloudSyncActivated = cloudSyncActivated,
             cloudSyncEnabled = cloudSyncEnabled,
             lastSyncTimestamp = lastSyncTimestamp,
             onSignInWithGoogle = onSignInWithGoogle,
@@ -170,6 +171,7 @@ private fun CloudSyncSection(
     isOperationInProgress: Boolean,
     manualSyncState: ManualCloudSyncUiState,
     isOffline: Boolean,
+    cloudSyncActivated: Boolean,
     cloudSyncEnabled: Boolean,
     lastSyncTimestamp: Long?,
     onSignInWithGoogle: () -> Unit,
@@ -179,9 +181,14 @@ private fun CloudSyncSection(
     onSignOut: () -> Unit,
     onCopyUid: (String) -> Unit,
 ) {
-    val accountActionsEnabled = areCloudAccountActionsEnabled(
+    val presentation = mapToCloudSyncSettingsPresentation(
+        cloudSyncActivated = cloudSyncActivated,
+        cloudSyncEnabled = cloudSyncEnabled,
+        lastSyncTimestamp = lastSyncTimestamp,
+        isOffline = isOffline,
+        cloudAccountStatus = status,
+        manualCloudSyncState = manualSyncState,
         isAccountOperationInProgress = isOperationInProgress,
-        manualSyncState = manualSyncState,
     )
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -198,160 +205,130 @@ private fun CloudSyncSection(
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                when (status) {
-                    CloudAccountStatus.Loading -> {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            CircularProgressIndicator()
-                            Text(text = "Comprobando estado de la cuenta...")
-                        }
+                if (presentation.status == CloudSyncSettingsStatus.LOADING && isOperationInProgress) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        CircularProgressIndicator()
+                        Text(text = "Comprobando estado de la cuenta...")
                     }
+                } else {
+                    CloudStatusText(
+                        title = presentation.title,
+                        description = presentation.description,
+                    )
+                }
 
-                    CloudAccountStatus.SignedOut -> {
-                        CloudStatusText(
-                            title = "Sin sesión",
-                            description = "MiFlujo funciona en modo local. Iniciar sesión no activa " +
-                                "la sincronización automáticamente.",
-                        )
-                        Button(
-                            onClick = onSignInWithGoogle,
-                            enabled = accountActionsEnabled,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(
-                                text = if (isOperationInProgress) {
-                                    "Iniciando sesión..."
-                                } else {
-                                    "Iniciar sesión con Google"
-                                },
-                            )
-                        }
-                    }
+                if (presentation.showCloudAccountIdentity && presentation.account != null) {
+                    CloudAccountIdentity(account = presentation.account)
+                }
 
-                    is CloudAccountStatus.Authorized -> {
-                        CloudStatusText(
-                            title = "Cuenta autorizada",
-                            description = if (cloudSyncEnabled) {
-                                "Puedes sincronizar manualmente. MiFlujo no ejecutará " +
-                                    "Cloud Sync automáticamente."
-                            } else {
-                                "Cloud Sync está desactivado. Puedes activarlo para " +
-                                    "sincronizar manualmente."
-                            },
-                        )
-                        CloudAccountIdentity(account = status.account)
-                        CloudSyncEnabledToggle(
-                            enabled = cloudSyncEnabled,
-                            onToggle = onToggleCloudSyncEnabled,
-                            isOperationInProgress = isOperationInProgress ||
-                                manualSyncState is ManualCloudSyncUiState.Running,
-                        )
-                        LastSyncTimestampText(lastSyncTimestamp = lastSyncTimestamp)
-                        Button(
-                            onClick = onSyncNow,
-                            enabled = isManualSyncEnabled(
-                                cloudSyncEnabled = cloudSyncEnabled,
-                                isAccountOperationInProgress = isOperationInProgress,
-                                manualSyncState = manualSyncState,
-                            ),
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            if (manualSyncState is ManualCloudSyncUiState.Running) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(20.dp),
-                                    strokeWidth = 2.dp,
-                                )
-                                Text(
-                                    text = "Sincronizando...",
-                                    modifier = Modifier.padding(start = 8.dp),
-                                )
-                            } else {
-                                Text(text = "Sincronizar ahora")
-                            }
-                        }
-                        OutlinedButton(
-                            onClick = onSignOut,
-                            enabled = accountActionsEnabled,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(text = "Cerrar sesión")
-                        }
-                    }
+                if (presentation.showCloudSyncEnabledToggle) {
+                    CloudSyncEnabledToggle(
+                        enabled = cloudSyncEnabled,
+                        onToggle = onToggleCloudSyncEnabled,
+                        isOperationInProgress = isOperationInProgress ||
+                            manualSyncState is ManualCloudSyncUiState.Running,
+                    )
+                }
 
-                    is CloudAccountStatus.Unauthorized -> {
-                        CloudStatusText(
-                            title = "Cuenta no autorizada",
-                            description = "Esta cuenta no tiene acceso a Cloud Sync. MiFlujo continúa " +
-                                "funcionando solo con los datos locales.",
-                        )
-                        CloudAccountIdentity(account = status.account)
+                if (presentation.showLastSyncTimestamp) {
+                    LastSyncTimestampText(lastSyncTimestamp = lastSyncTimestamp)
+                }
+
+                if (presentation.showSignInButton) {
+                    Button(
+                        onClick = onSignInWithGoogle,
+                        enabled = presentation.isAccountActionsEnabled,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
                         Text(
-                            text = "UID\n${status.account.uid}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Button(
-                            onClick = onRefreshCloudAuthorization,
-                            enabled = accountActionsEnabled,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(
-                                text = if (isOperationInProgress) {
-                                    "Verificando..."
-                                } else {
-                                    "Verificar autorización"
-                                },
-                            )
-                        }
-                        OutlinedButton(
-                            onClick = {
-                                onCopyUid(status.account.uid)
+                            text = if (isOperationInProgress) {
+                                "Iniciando sesión..."
+                            } else {
+                                "Iniciar sesión con Google"
                             },
-                            enabled = !isOperationInProgress,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(text = "Copiar UID")
-                        }
-                        TextButton(
-                            onClick = onSignOut,
-                            enabled = accountActionsEnabled,
-                            modifier = Modifier.align(Alignment.End),
-                        ) {
-                            Text(text = "Cerrar sesión")
+                        )
+                    }
+                }
+
+                if (presentation.showUnauthorizedActions) {
+                    Text(
+                        text = "UID\n${presentation.account?.uid}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Button(
+                        onClick = onRefreshCloudAuthorization,
+                        enabled = presentation.isAccountActionsEnabled,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = if (isOperationInProgress) {
+                                "Verificando..."
+                            } else {
+                                "Verificar autorización"
+                            },
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            presentation.account?.uid?.let(onCopyUid)
+                        },
+                        enabled = !isOperationInProgress,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(text = "Copiar UID")
+                    }
+                }
+
+                if (presentation.showSyncNowButton) {
+                    Button(
+                        onClick = onSyncNow,
+                        enabled = presentation.isManualSyncEnabled,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        if (manualSyncState is ManualCloudSyncUiState.Running) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                            )
+                            Text(
+                                text = "Sincronizando...",
+                                modifier = Modifier.padding(start = 8.dp),
+                            )
+                        } else {
+                            Text(text = "Sincronizar ahora")
                         }
                     }
                 }
+
+                if (presentation.showSignOutButton) {
+                    OutlinedButton(
+                        onClick = onSignOut,
+                        enabled = presentation.isAccountActionsEnabled,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(text = "Cerrar sesión")
+                    }
+                }
+
                 ManualCloudSyncResult(
                     state = manualSyncState,
-                    cloudAccountStatus = status,
-                    isOffline = isOffline,
                 )
             }
         }
     }
 }
 
+
 internal fun isRestoreBackupEnabled(
     isBackupOperationInProgress: Boolean,
     cloudSyncActivated: Boolean,
 ): Boolean = !isBackupOperationInProgress && !cloudSyncActivated
 
-internal fun areCloudAccountActionsEnabled(
-    isAccountOperationInProgress: Boolean,
-    manualSyncState: ManualCloudSyncUiState,
-): Boolean =
-    !isAccountOperationInProgress && manualSyncState !is ManualCloudSyncUiState.Running
 
-internal fun isManualSyncEnabled(
-    cloudSyncEnabled: Boolean,
-    isAccountOperationInProgress: Boolean,
-    manualSyncState: ManualCloudSyncUiState,
-): Boolean =
-    cloudSyncEnabled &&
-        !isAccountOperationInProgress &&
-        manualSyncState !is ManualCloudSyncUiState.Running
 
 @Composable
 private fun CloudSyncEnabledToggle(
@@ -399,20 +376,7 @@ private fun LastSyncTimestampText(lastSyncTimestamp: Long?) {
 
 internal fun manualCloudSyncResultMessage(
     state: ManualCloudSyncUiState,
-    cloudAccountStatus: CloudAccountStatus,
-    isOffline: Boolean,
 ): String? {
-    if (
-        isOffline &&
-        (
-            state is ManualCloudSyncUiState.Unauthorized ||
-                state is ManualCloudSyncUiState.SignedOut ||
-                state is ManualCloudSyncUiState.Failure
-            )
-    ) {
-        return "Sin internet. MiFlujo sigue funcionando localmente."
-    }
-
     return when (state) {
         ManualCloudSyncUiState.Idle,
         ManualCloudSyncUiState.Running,
@@ -420,29 +384,16 @@ internal fun manualCloudSyncResultMessage(
         is ManualCloudSyncUiState.Success -> "Sincronización completada."
         is ManualCloudSyncUiState.Partial ->
             "Sincronización parcial. Algunos elementos se reintentarán después."
-        ManualCloudSyncUiState.SignedOut -> "Inicia sesión para sincronizar."
-        ManualCloudSyncUiState.Unauthorized -> {
-            if (cloudAccountStatus is CloudAccountStatus.Unauthorized) {
-                "Tu cuenta no está autorizada para Cloud Sync."
-            } else {
-                "No se pudo sincronizar. Intenta de nuevo."
-            }
-        }
-        ManualCloudSyncUiState.Failure ->
-            "No se pudo sincronizar. Intenta de nuevo."
+        else -> null
     }
 }
 
 @Composable
 private fun ManualCloudSyncResult(
     state: ManualCloudSyncUiState,
-    cloudAccountStatus: CloudAccountStatus,
-    isOffline: Boolean,
 ) {
     val message = manualCloudSyncResultMessage(
         state = state,
-        cloudAccountStatus = cloudAccountStatus,
-        isOffline = isOffline,
     ) ?: return
 
     Column(

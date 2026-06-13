@@ -18,12 +18,6 @@ class SettingsCloudSafetyTest {
     @Test
     fun `account actions are disabled while manual sync is running`() {
         assertFalse(
-            areCloudAccountActionsEnabled(
-                isAccountOperationInProgress = false,
-                manualSyncState = ManualCloudSyncUiState.Running,
-            ),
-        )
-        assertFalse(
             canStartCloudAccountAction(
                 isCloudAccountOperationInProgress = false,
                 isCloudAccountJobActive = false,
@@ -44,12 +38,6 @@ class SettingsCloudSafetyTest {
     @Test
     fun `account actions remain available when no operation is running`() {
         assertTrue(
-            areCloudAccountActionsEnabled(
-                isAccountOperationInProgress = false,
-                manualSyncState = ManualCloudSyncUiState.Idle,
-            ),
-        )
-        assertTrue(
             canStartCloudAccountAction(
                 isCloudAccountOperationInProgress = false,
                 isCloudAccountJobActive = false,
@@ -61,45 +49,59 @@ class SettingsCloudSafetyTest {
 
     @Test
     fun `manual sync is disabled when cloudSyncEnabled is false`() {
-        assertFalse(
-            isManualSyncEnabled(
-                cloudSyncEnabled = false,
-                isAccountOperationInProgress = false,
-                manualSyncState = ManualCloudSyncUiState.Idle,
-            ),
+        val presentation = mapToCloudSyncSettingsPresentation(
+            cloudSyncActivated = true,
+            cloudSyncEnabled = false,
+            lastSyncTimestamp = null,
+            isOffline = false,
+            cloudAccountStatus = com.carlos.miflujo.data.cloud.auth.CloudAccountStatus.Loading, // Doesn't matter
+            manualCloudSyncState = ManualCloudSyncUiState.Idle,
+            isAccountOperationInProgress = false,
         )
+        assertFalse(presentation.isManualSyncEnabled)
     }
 
     @Test
-    fun `manual sync is enabled when cloudSyncEnabled is true and no operation is running`() {
-        assertTrue(
-            isManualSyncEnabled(
-                cloudSyncEnabled = true,
-                isAccountOperationInProgress = false,
-                manualSyncState = ManualCloudSyncUiState.Idle,
-            ),
+    fun `manual sync is disabled when offline`() {
+        val presentation = mapToCloudSyncSettingsPresentation(
+            cloudSyncActivated = true,
+            cloudSyncEnabled = true,
+            lastSyncTimestamp = null,
+            isOffline = true,
+            cloudAccountStatus = com.carlos.miflujo.data.cloud.auth.CloudAccountStatus.Loading,
+            manualCloudSyncState = ManualCloudSyncUiState.Idle,
+            isAccountOperationInProgress = false,
         )
+        assertFalse(presentation.isManualSyncEnabled)
     }
 
     @Test
-    fun `manual sync is disabled when cloudSyncEnabled is true but operation is running`() {
-        assertFalse(
-            isManualSyncEnabled(
-                cloudSyncEnabled = true,
-                isAccountOperationInProgress = true,
-                manualSyncState = ManualCloudSyncUiState.Idle,
-            ),
+    fun `manual sync and account actions are disabled when manual sync is running`() {
+        val presentation = mapToCloudSyncSettingsPresentation(
+            cloudSyncActivated = true,
+            cloudSyncEnabled = true,
+            lastSyncTimestamp = null,
+            isOffline = false,
+            cloudAccountStatus = com.carlos.miflujo.data.cloud.auth.CloudAccountStatus.Loading,
+            manualCloudSyncState = ManualCloudSyncUiState.Running,
+            isAccountOperationInProgress = false,
         )
+        assertFalse(presentation.isManualSyncEnabled)
+        assertFalse(presentation.isAccountActionsEnabled)
     }
 
     @Test
-    fun `manual sync is disabled when cloudSyncEnabled is true but sync is running`() {
-        assertFalse(
-            isManualSyncEnabled(
-                cloudSyncEnabled = true,
-                isAccountOperationInProgress = false,
-                manualSyncState = ManualCloudSyncUiState.Running,
-            ),
+    fun `manual sync and account actions are disabled when account operation is running`() {
+        val presentation = mapToCloudSyncSettingsPresentation(
+            cloudSyncActivated = true,
+            cloudSyncEnabled = true,
+            lastSyncTimestamp = null,
+            isOffline = false,
+            cloudAccountStatus = com.carlos.miflujo.data.cloud.auth.CloudAccountStatus.Loading,
+            manualCloudSyncState = ManualCloudSyncUiState.Idle,
+            isAccountOperationInProgress = true,
         )
+        assertFalse(presentation.isManualSyncEnabled)
+        assertFalse(presentation.isAccountActionsEnabled)
     }
 }
