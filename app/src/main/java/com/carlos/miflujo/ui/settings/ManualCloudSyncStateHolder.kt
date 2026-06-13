@@ -66,6 +66,8 @@ class ManualCloudSyncStateHolder(
     val cloudSyncActivated: StateFlow<Boolean> = mutableCloudSyncActivated.asStateFlow()
     val cloudSyncEnabled: StateFlow<Boolean> = mutableCloudSyncEnabled.asStateFlow()
     val lastSyncTimestamp: StateFlow<Long?> = mutableLastSyncTimestamp.asStateFlow()
+    val isSyncRunning: Boolean
+        get() = running.get()
 
     fun setCloudSyncEnabled(enabled: Boolean) {
         val persisted = runCatching { cloudSyncEnabledStore.setEnabled(enabled) }

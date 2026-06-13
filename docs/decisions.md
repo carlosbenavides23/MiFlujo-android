@@ -926,3 +926,21 @@ Esta decisión no agrega triggers automáticos, timer foreground, observer de
 foreground, reacción a conectividad ni WorkManager. El flujo manual de Ajustes
 permanece sin cambios porque todavía no comparte una fuente completa de estado con
 los futuros triggers y no debe usar valores simulados ni duplicar logs.
+
+## 056 - Preparación de estado runtime para scheduler de Cloud Sync
+
+El estado runtime del scheduler se representa por separado del coordinador. Reúne
+los flags requeridos por la política y los convierte de forma pura en
+`CloudSyncSchedulerDecisionInput` para un trigger específico.
+
+El coordinador no consulta ni posee este estado. Cada trigger futuro debe construir
+`CloudSyncSchedulerRuntimeState` desde fuentes reales de la app, convertirlo a
+decision input y llamar al coordinador.
+
+Un adaptador pequeño permite que una ejecución aprobada por el coordinador delegue
+en `ManualCloudSyncStateHolder.syncNow(requestId, reason)` sin mover ni duplicar la
+lógica actual. El holder expone únicamente una lectura segura de su guard de
+ejecución existente.
+
+Esta preparación no agrega triggers automáticos, observers, timers ni WorkManager,
+y no cambia el comportamiento visible de Ajustes.

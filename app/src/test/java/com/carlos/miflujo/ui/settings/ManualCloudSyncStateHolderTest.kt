@@ -14,6 +14,15 @@ import org.junit.Test
 
 class ManualCloudSyncStateHolderTest {
     @Test
+    fun `sync is not running initially`() {
+        val holder = holder(
+            result = CloudSyncResult(status = CloudSyncStatus.SUCCESS),
+        )
+
+        assertEquals(false, holder.isSyncRunning)
+    }
+
+    @Test
     fun `signed out result is rendered safely`() = runBlocking {
         val activationStore = FakeCloudSyncActivationStore()
         val holder = holder(
@@ -136,6 +145,7 @@ class ManualCloudSyncStateHolderTest {
         val firstSync = async { holder.syncNow("test-id", com.carlos.miflujo.data.cloud.sync.CloudSyncTriggerReason.MANUAL_SETTINGS) }
         started.await()
         assertEquals(ManualCloudSyncUiState.Running, holder.state.value)
+        assertEquals(true, holder.isSyncRunning)
 
         holder.syncNow("test-id", com.carlos.miflujo.data.cloud.sync.CloudSyncTriggerReason.MANUAL_SETTINGS)
 
@@ -144,6 +154,7 @@ class ManualCloudSyncStateHolderTest {
         release.complete(Unit)
         firstSync.await()
         assertEquals(1, callCount)
+        assertEquals(false, holder.isSyncRunning)
         assertEquals(
             ManualCloudSyncUiState.Success(
                 ManualCloudSyncCounts(
