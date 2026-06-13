@@ -44,6 +44,7 @@ fun SettingsScreen(
     pendingRestoreMovementCount: Int?,
     cloudAccountStatus: CloudAccountStatus,
     isCloudAccountOperationInProgress: Boolean,
+    isCloudSyncRunning: Boolean,
     manualCloudSyncState: ManualCloudSyncUiState,
     isOffline: Boolean,
     cloudSyncActivated: Boolean,
@@ -65,6 +66,13 @@ fun SettingsScreen(
     var showBackupActions by rememberSaveable { mutableStateOf(false) }
     val isBackupOperationInProgress =
         isExportingBackup || isRestoringBackup || pendingRestoreMovementCount != null
+    val restoreAvailability = mapRestoreBackupAvailability(
+        cloudSyncEnabled = cloudSyncEnabled,
+        cloudSyncActivated = cloudSyncActivated,
+        cloudAccountStatus = cloudAccountStatus,
+        isCloudSyncRunning = isCloudSyncRunning,
+        isCloudAccountOperationRunning = isCloudAccountOperationInProgress,
+    )
 
     Column(
         modifier = modifier
@@ -107,18 +115,31 @@ fun SettingsScreen(
                 ),
                 SettingsOption(
                     title = "Restaurar respaldo",
-                    description = if (cloudSyncActivated) {
-                        "Restaurar respaldo no está disponible después de activar Cloud Sync."
-                    } else {
-                        "Recupera movimientos desde un archivo de respaldo anterior."
+                    description = when {
+                        isBackupOperationInProgress ||
+                            restoreAvailability ==
+                            RestoreBackupAvailability.BLOCKED_OPERATION_RUNNING ->
+                            "Espera a que termine la operación actual."
+
+                        restoreAvailability ==
+                            RestoreBackupAvailability.BLOCKED_CLOUD_SYNC_ACTIVE ->
+                            "Desactiva Cloud Sync o cierra sesión para restaurar un respaldo local."
+
+                        else -> "Recupera movimientos desde un archivo de respaldo anterior."
                     },
-                    enabled = isRestoreBackupEnabled(
-                        isBackupOperationInProgress = isBackupOperationInProgress,
-                        cloudSyncActivated = cloudSyncActivated,
-                    ),
+                    enabled = !isBackupOperationInProgress &&
+                        restoreAvailability == RestoreBackupAvailability.AVAILABLE,
                     status = when {
-                        cloudSyncActivated -> "No disponible"
                         isRestoringBackup -> "Restaurando respaldo..."
+                        isBackupOperationInProgress ||
+                            restoreAvailability ==
+                            RestoreBackupAvailability.BLOCKED_OPERATION_RUNNING ->
+                            "Espera"
+
+                        restoreAvailability ==
+                            RestoreBackupAvailability.BLOCKED_CLOUD_SYNC_ACTIVE ->
+                            "No disponible"
+
                         else -> "Restaurar"
                     },
                     onClick = onRestoreBackup,
@@ -203,7 +224,7 @@ private fun CloudSyncSection(
         ) {
             Column(
                 modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 if (presentation.status == CloudSyncSettingsStatus.LOADING && isOperationInProgress) {
                     Row(
@@ -322,14 +343,6 @@ private fun CloudSyncSection(
     }
 }
 
-
-internal fun isRestoreBackupEnabled(
-    isBackupOperationInProgress: Boolean,
-    cloudSyncActivated: Boolean,
-): Boolean = !isBackupOperationInProgress && !cloudSyncActivated
-
-
-
 @Composable
 private fun CloudSyncEnabledToggle(
     enabled: Boolean,
@@ -370,7 +383,6 @@ private fun LastSyncTimestampText(lastSyncTimestamp: Long?) {
         text = text,
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(bottom = 4.dp),
     )
 }
 

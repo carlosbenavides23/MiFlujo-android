@@ -202,12 +202,14 @@ Reglas de validación del respaldo:
 
 Crear backup local sigue permitido con Cloud Sync activo o apagado.
 
-La restauración local destructiva es aceptable mientras Cloud Sync nunca haya
-completado una ejecución `SUCCESS` o `PARTIAL` en esta instalación.
+La restauración local destructiva se permite cuando la app está efectivamente en
+modo local-only: Cloud Sync está desactivado, no hay sesión o la cuenta no está
+autorizada.
 
-En `v0.4.0`, restaurar backup queda bloqueado permanentemente para la instalación
-después de la primera ejecución manual `SUCCESS` o `PARTIAL`. Cerrar sesión no
-elimina este bloqueo.
+Restore queda bloqueado mientras hay una ejecución de sync, una operación de
+cuenta o Cloud Sync está habilitado, activado y usa una cuenta autorizada. Haber
+completado una ejecución `SUCCESS` o `PARTIAL` en el pasado no bloquea restore por
+sí solo.
 
 Backup schema v1 nunca debe restaurarse con Cloud Sync activo. Un soporte futuro de restore con sync solo podrá considerar schema v2 o superior y requerirá una política explícita de merge/restore.
 

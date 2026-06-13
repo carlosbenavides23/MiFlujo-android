@@ -484,7 +484,8 @@ fun MiFlujoApp() {
                     pendingRestoreMovementCount = settingsUiState.pendingRestoreMovementCount,
                     cloudAccountStatus = settingsUiState.cloudAccountStatus,
                     isCloudAccountOperationInProgress =
-                        settingsUiState.isCloudAccountOperationInProgress,
+                        settingsViewModel.isCloudAccountOperationRunning,
+                    isCloudSyncRunning = settingsViewModel.isCloudSyncRunning,
                     manualCloudSyncState = manualCloudSyncState,
                     isOffline = !isNetworkAvailable,
                     cloudSyncActivated = cloudSyncActivated,

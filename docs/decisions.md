@@ -513,10 +513,10 @@ Con Cloud Sync activo:
 
 La reconciliación usará UUID para identidad y `updatedAt` generado por la app para conflictos. Descargar nunca borrará físicamente filas Room.
 
-Crear backup local siempre estará permitido. Restaurar quedará bloqueado después de
-la primera ejecución completada de Cloud Sync en la instalación. Backup schema v1
-nunca se restaurará después de esa activación; cualquier soporte futuro requerirá
-schema v2 o superior y una política explícita.
+Crear backup local siempre estará permitido. Restore local queda bloqueado cuando
+Cloud Sync está habilitado, activado y usa una cuenta autorizada, o mientras existe
+una operación de sync/cuenta. En modo local-only vuelve a estar disponible. Backup
+schema v1 no se restaura con Cloud Sync activo.
 
 Los triggers serán foreground, red recuperada con la app abierta, aproximadamente cada 90 segundos en foreground con pendientes, `Sincronizar ahora` y WorkManager con restricción de red como respaldo. Salir de la app no será trigger y WorkManager periódico no implementará el timer de 90 segundos.
 
@@ -735,17 +735,16 @@ el ViewModel continúa con el cierre de Firebase Auth y la limpieza del estado d
 Credential Manager mediante el repositorio. Ninguna referencia a Activity se
 guarda en el ViewModel.
 
-## 051 - Bloqueo persistente de restore después de activar Cloud Sync
+## 051 - Activación persistente de Cloud Sync
 
 La primera ejecución manual de Cloud Sync que termine con `SUCCESS` o `PARTIAL`
 guarda un flag local persistente en preferencias. `SIGNED_OUT`, `UNAUTHORIZED` y
 `FAILURE` no activan el flag. El flag sobrevive reinicios y cierre de sesión, no se
 sincroniza con Firestore y no usa Room.
 
-Después de activar el flag, Ajustes mantiene disponible la creación de backups pero
-bloquea la restauración local destructiva. Esto evita que un restore reemplace Room
-sin tombstones y que una sincronización posterior mezcle o resucite registros
-remotos.
+La restricción original que bloqueaba restore solo por este flag fue reemplazada
+por la decisión `061`. El flag sigue siendo irreversible, pero restore depende del
+estado actual de Cloud Sync y la cuenta.
 
 Mientras una sincronización manual está ejecutándose, Ajustes deshabilita y el
 ViewModel rechaza defensivamente inicio de sesión, cierre de sesión y refresh de
@@ -757,7 +756,7 @@ MiFlujo distingue dos flags locales de Cloud Sync:
 
 ```text
 cloudSyncActivated -> flag irreversible de seguridad, se activa con el primer
-                       sync exitoso o parcial, bloquea restore local destructivo.
+                       sync exitoso o parcial.
 cloudSyncEnabled   -> preferencia de usuario, togglable on/off, controla si la
                        UI de sync manual está activa.
 ```
@@ -1055,3 +1054,18 @@ cambios remotos creados en otro dispositivo.
 
 `CONNECTIVITY_RECOVERED` coexiste con el respaldo de WorkManager. No cancela ni
 modifica su trabajo; `CloudSyncRunCoordinator` evita ejecuciones simultáneas.
+
+## 061 - Restore local según estado actual de Cloud Sync
+
+Restaurar un respaldo local ya no queda bloqueado permanentemente por haber
+activado Cloud Sync alguna vez. Restore se bloquea únicamente mientras existe una
+ejecución de sync, una operación de cuenta o Cloud Sync está habilitado, activado
+y usa una cuenta autorizada.
+
+Restore vuelve a estar disponible cuando Cloud Sync está desactivado, la sesión
+está cerrada o la cuenta no está autorizada. Esto conserva el comportamiento
+local-first y evita dejar atrapado al usuario después de probar Cloud Sync.
+
+La restauración continúa siendo local y transaccional. No elimina datos remotos,
+no solicita scheduler, no encola WorkManager y restaura movimientos como
+`LOCAL_ONLY` sin convertirlos automáticamente en trabajo cloud pendiente.

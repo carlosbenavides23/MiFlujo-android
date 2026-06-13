@@ -315,12 +315,13 @@ class SettingsViewModel(
         context: Context,
         sourceUri: Uri,
     ) {
+        val restoreAllowed = isLocalRestoreCurrentlyAllowed()
         if (
-            cloudSyncActivated.value ||
+            !restoreAllowed ||
             !mutableUiState.value.isRestoringBackup ||
             restoreJob?.isActive == true
         ) {
-            if (cloudSyncActivated.value) finishRestore()
+            if (!restoreAllowed) finishRestore()
             return
         }
 
@@ -368,12 +369,13 @@ class SettingsViewModel(
 
     fun confirmPendingRestore() {
         val movements = pendingRestoreMovements ?: return
+        val restoreAllowed = isLocalRestoreCurrentlyAllowed()
         if (
-            cloudSyncActivated.value ||
+            !restoreAllowed ||
             restoreJob?.isActive == true ||
             mutableUiState.value.isRestoringBackup
         ) {
-            if (cloudSyncActivated.value) finishRestore()
+            if (!restoreAllowed) finishRestore()
             return
         }
 
@@ -401,7 +403,16 @@ class SettingsViewModel(
             !mutableUiState.value.isBackupOperationInProgress
 
     private fun canStartRestoreOperation(): Boolean =
-        !cloudSyncActivated.value && canStartBackupOperation()
+        isLocalRestoreCurrentlyAllowed() && canStartBackupOperation()
+
+    private fun isLocalRestoreCurrentlyAllowed(): Boolean =
+        mapRestoreBackupAvailability(
+            cloudSyncEnabled = cloudSyncEnabled.value,
+            cloudSyncActivated = cloudSyncActivated.value,
+            cloudAccountStatus = mutableUiState.value.cloudAccountStatus,
+            isCloudSyncRunning = isCloudSyncRunning,
+            isCloudAccountOperationRunning = isCloudAccountOperationRunning,
+        ) == RestoreBackupAvailability.AVAILABLE
 
     fun refreshCloudAccountStatus() {
         if (
