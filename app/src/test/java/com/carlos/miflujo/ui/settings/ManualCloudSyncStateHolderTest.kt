@@ -4,6 +4,7 @@ import com.carlos.miflujo.data.cloud.sync.CloudSyncActivationStore
 import com.carlos.miflujo.data.cloud.sync.CloudSyncEnabledStore
 import com.carlos.miflujo.data.cloud.sync.CloudSyncMetadataStore
 import com.carlos.miflujo.data.cloud.sync.CloudSyncResult
+import com.carlos.miflujo.data.cloud.sync.CloudSyncRunCoordinator
 import com.carlos.miflujo.data.cloud.sync.CloudSyncRunner
 import com.carlos.miflujo.data.cloud.sync.CloudSyncStatus
 import kotlinx.coroutines.CompletableDeferred
@@ -14,6 +15,15 @@ import org.junit.Test
 
 class ManualCloudSyncStateHolderTest {
     @Test
+    fun `sync is not running initially`() {
+        val holder = holder(
+            result = CloudSyncResult(status = CloudSyncStatus.SUCCESS),
+        )
+
+        assertEquals(false, holder.isSyncRunning)
+    }
+
+    @Test
     fun `signed out result is rendered safely`() = runBlocking {
         val activationStore = FakeCloudSyncActivationStore()
         val holder = holder(
@@ -22,7 +32,7 @@ class ManualCloudSyncStateHolderTest {
             enabledStore = FakeCloudSyncEnabledStore(initialValue = true),
         )
 
-        holder.syncNow()
+        holder.syncNow("test-id", com.carlos.miflujo.data.cloud.sync.CloudSyncTriggerReason.MANUAL_SETTINGS)
 
         assertEquals(ManualCloudSyncUiState.SignedOut, holder.state.value)
         assertEquals(false, activationStore.activated)
@@ -37,7 +47,7 @@ class ManualCloudSyncStateHolderTest {
             enabledStore = FakeCloudSyncEnabledStore(initialValue = true),
         )
 
-        holder.syncNow()
+        holder.syncNow("test-id", com.carlos.miflujo.data.cloud.sync.CloudSyncTriggerReason.MANUAL_SETTINGS)
 
         assertEquals(ManualCloudSyncUiState.Unauthorized, holder.state.value)
         assertEquals(false, activationStore.activated)
@@ -53,7 +63,7 @@ class ManualCloudSyncStateHolderTest {
             enabledStore = FakeCloudSyncEnabledStore(initialValue = true),
         )
 
-        holder.syncNow()
+        holder.syncNow("test-id", com.carlos.miflujo.data.cloud.sync.CloudSyncTriggerReason.MANUAL_SETTINGS)
 
         assertEquals(
             ManualCloudSyncUiState.Success(result.toExpectedCounts()),
@@ -73,7 +83,7 @@ class ManualCloudSyncStateHolderTest {
             enabledStore = FakeCloudSyncEnabledStore(initialValue = true),
         )
 
-        holder.syncNow()
+        holder.syncNow("test-id", com.carlos.miflujo.data.cloud.sync.CloudSyncTriggerReason.MANUAL_SETTINGS)
 
         assertEquals(
             ManualCloudSyncUiState.Partial(result.toExpectedCounts()),
@@ -92,7 +102,7 @@ class ManualCloudSyncStateHolderTest {
             enabledStore = FakeCloudSyncEnabledStore(initialValue = true),
         )
 
-        holder.syncNow()
+        holder.syncNow("test-id", com.carlos.miflujo.data.cloud.sync.CloudSyncTriggerReason.MANUAL_SETTINGS)
 
         assertEquals(ManualCloudSyncUiState.Failure, holder.state.value)
         assertEquals(false, activationStore.activated)
@@ -105,7 +115,7 @@ class ManualCloudSyncStateHolderTest {
             result = CloudSyncResult(status = CloudSyncStatus.SUCCESS),
             activationStore = activationStore,
             enabledStore = FakeCloudSyncEnabledStore(initialValue = true),
-        ).syncNow()
+        ).syncNow("test-id", com.carlos.miflujo.data.cloud.sync.CloudSyncTriggerReason.MANUAL_SETTINGS)
 
         val recreatedHolder = holder(
             result = CloudSyncResult(status = CloudSyncStatus.FAILURE),
@@ -121,29 +131,37 @@ class ManualCloudSyncStateHolderTest {
         val started = CompletableDeferred<Unit>()
         val release = CompletableDeferred<Unit>()
         var callCount = 0
+        val activationStore = FakeCloudSyncActivationStore()
+        val enabledStore = FakeCloudSyncEnabledStore(initialValue = true)
+        val metadataStore = FakeCloudSyncMetadataStore()
         val holder = ManualCloudSyncStateHolder(
-            cloudSyncRunner = CloudSyncRunner {
-                callCount += 1
-                started.complete(Unit)
-                release.await()
-                CloudSyncResult(status = CloudSyncStatus.SUCCESS)
-            },
-            cloudSyncActivationStore = FakeCloudSyncActivationStore(),
-            cloudSyncEnabledStore = FakeCloudSyncEnabledStore(initialValue = true),
-            cloudSyncMetadataStore = FakeCloudSyncMetadataStore(),
+            cloudSyncRunCoordinator = CloudSyncRunCoordinator(
+                cloudSyncRunner = CloudSyncRunner {
+                    callCount += 1
+                    started.complete(Unit)
+                    release.await()
+                    CloudSyncResult(status = CloudSyncStatus.SUCCESS)
+                },
+                cloudSyncActivationStore = activationStore,
+                cloudSyncEnabledStore = enabledStore,
+                cloudSyncMetadataStore = metadataStore,
+            ),
+            cloudSyncEnabledStore = enabledStore,
         )
 
-        val firstSync = async { holder.syncNow() }
+        val firstSync = async { holder.syncNow("test-id", com.carlos.miflujo.data.cloud.sync.CloudSyncTriggerReason.MANUAL_SETTINGS) }
         started.await()
         assertEquals(ManualCloudSyncUiState.Running, holder.state.value)
+        assertEquals(true, holder.isSyncRunning)
 
-        holder.syncNow()
+        holder.syncNow("test-id", com.carlos.miflujo.data.cloud.sync.CloudSyncTriggerReason.MANUAL_SETTINGS)
 
         assertEquals(1, callCount)
         assertEquals(ManualCloudSyncUiState.Running, holder.state.value)
         release.complete(Unit)
         firstSync.await()
         assertEquals(1, callCount)
+        assertEquals(false, holder.isSyncRunning)
         assertEquals(
             ManualCloudSyncUiState.Success(
                 ManualCloudSyncCounts(
@@ -224,7 +242,7 @@ class ManualCloudSyncStateHolderTest {
         )
 
         val before = System.currentTimeMillis()
-        holder.syncNow()
+        holder.syncNow("test-id", com.carlos.miflujo.data.cloud.sync.CloudSyncTriggerReason.MANUAL_SETTINGS)
         val after = System.currentTimeMillis()
 
         val updatedTimestamp = holder.lastSyncTimestamp.value
@@ -242,7 +260,7 @@ class ManualCloudSyncStateHolderTest {
             enabledStore = FakeCloudSyncEnabledStore(initialValue = true),
         )
 
-        holder.syncNow()
+        holder.syncNow("test-id", com.carlos.miflujo.data.cloud.sync.CloudSyncTriggerReason.MANUAL_SETTINGS)
 
         assertEquals(1000L, holder.lastSyncTimestamp.value)
         assertEquals(1000L, metadataStore.getLastSyncTimestamp())
@@ -271,7 +289,7 @@ class ManualCloudSyncStateHolderTest {
             metadataStore = metadataStore,
         )
 
-        holder.syncNow()
+        holder.syncNow("test-id", com.carlos.miflujo.data.cloud.sync.CloudSyncTriggerReason.MANUAL_SETTINGS)
 
         // It should be Idle since it never ran
         assertEquals(ManualCloudSyncUiState.Idle, holder.state.value)
@@ -285,10 +303,13 @@ class ManualCloudSyncStateHolderTest {
         enabledStore: CloudSyncEnabledStore = FakeCloudSyncEnabledStore(),
         metadataStore: CloudSyncMetadataStore = FakeCloudSyncMetadataStore(),
     ): ManualCloudSyncStateHolder = ManualCloudSyncStateHolder(
-        cloudSyncRunner = CloudSyncRunner { result },
-        cloudSyncActivationStore = activationStore,
+        cloudSyncRunCoordinator = CloudSyncRunCoordinator(
+            cloudSyncRunner = CloudSyncRunner { result },
+            cloudSyncActivationStore = activationStore,
+            cloudSyncEnabledStore = enabledStore,
+            cloudSyncMetadataStore = metadataStore,
+        ),
         cloudSyncEnabledStore = enabledStore,
-        cloudSyncMetadataStore = metadataStore,
     )
 
     private fun syncResult(status: CloudSyncStatus): CloudSyncResult = CloudSyncResult(

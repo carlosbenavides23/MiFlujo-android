@@ -66,6 +66,11 @@ class CloudSyncSettingsPresentationTest {
         )
 
         assertEquals(CloudSyncSettingsStatus.ACTIVE, presentation.status)
+        assertEquals(
+            "MiFlujo mantiene tus datos sincronizados cuando hay conexión. " +
+                "También puedes sincronizar manualmente.",
+            presentation.description,
+        )
         assertTrue(presentation.showSyncNowButton)
         assertTrue(presentation.isManualSyncEnabled)
     }

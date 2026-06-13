@@ -71,6 +71,8 @@ import com.carlos.miflujo.MiFlujoAppProvider
 import com.carlos.miflujo.R
 import com.carlos.miflujo.data.cloud.auth.LegacyGoogleSignInFallback
 import com.carlos.miflujo.data.cloud.auth.MiFlujoAuthLogTag
+import com.carlos.miflujo.data.cloud.auth.CloudAccountStatus
+import com.carlos.miflujo.data.cloud.sync.CloudSyncSchedulerRuntimeState
 import com.carlos.miflujo.ui.home.HomeScreen
 import com.carlos.miflujo.ui.home.HomeViewModel
 import com.carlos.miflujo.ui.home.HomeViewModelFactory
@@ -112,17 +114,11 @@ fun MiFlujoApp() {
     val cloudAccountRepository = remember(context) {
         MiFlujoAppProvider.cloudAccountRepository(context)
     }
-    val cloudSyncEngine = remember(context) {
-        MiFlujoAppProvider.cloudSyncEngine(context)
-    }
-    val cloudSyncActivationStore = remember(context) {
-        MiFlujoAppProvider.cloudSyncActivationStore(context)
+    val cloudSyncRunCoordinator = remember(context) {
+        MiFlujoAppProvider.cloudSyncRunCoordinator(context)
     }
     val cloudSyncEnabledStore = remember(context) {
         MiFlujoAppProvider.cloudSyncEnabledStore(context)
-    }
-    val cloudSyncMetadataStore = remember(context) {
-        MiFlujoAppProvider.cloudSyncMetadataStore(context)
     }
     val homeViewModel = remember(activity, movementRepository) {
         ViewModelProvider(
@@ -146,20 +142,16 @@ fun MiFlujoApp() {
         activity,
         movementRepository,
         cloudAccountRepository,
-        cloudSyncEngine,
-        cloudSyncActivationStore,
+        cloudSyncRunCoordinator,
         cloudSyncEnabledStore,
-        cloudSyncMetadataStore,
     ) {
         ViewModelProvider(
             activity,
             SettingsViewModelFactory(
                 movementRepository = movementRepository,
                 cloudAccountRepository = cloudAccountRepository,
-                cloudSyncRunner = cloudSyncEngine,
-                cloudSyncActivationStore = cloudSyncActivationStore,
+                cloudSyncRunCoordinator = cloudSyncRunCoordinator,
                 cloudSyncEnabledStore = cloudSyncEnabledStore,
-                cloudSyncMetadataStore = cloudSyncMetadataStore,
             ),
         )[SettingsViewModel::class.java]
     }
@@ -171,6 +163,31 @@ fun MiFlujoApp() {
     val cloudSyncActivated by settingsViewModel.cloudSyncActivated.collectAsState()
     val cloudSyncEnabled by settingsViewModel.cloudSyncEnabled.collectAsState()
     val feedback by movementViewModel.feedback.collectAsState()
+
+    val cloudSyncSchedulerRuntimeState = CloudSyncSchedulerRuntimeState(
+        cloudSyncEnabled = cloudSyncEnabled,
+        cloudSyncActivated = cloudSyncActivated,
+        networkAvailable = isNetworkAvailable,
+        accountAuthorized = settingsUiState.cloudAccountStatus is CloudAccountStatus.Authorized,
+        alreadyRunning = settingsViewModel.isCloudSyncRunning,
+        accountOperationRunning = settingsViewModel.isCloudAccountOperationRunning,
+        hasPendingLocalChanges = false,
+    )
+    val cloudSyncSchedulerStateReady =
+        settingsUiState.cloudAccountStatus !is CloudAccountStatus.Loading &&
+            !settingsViewModel.isCloudAccountOperationRunning
+    CloudSyncAppForegroundTrigger(
+        lifecycle = activity.lifecycle,
+        runtimeState = cloudSyncSchedulerRuntimeState,
+        stateReady = cloudSyncSchedulerStateReady,
+        onRequestSync = settingsViewModel::requestAppForegroundSync,
+    )
+    CloudSyncConnectivityRecoveredTrigger(
+        lifecycle = activity.lifecycle,
+        runtimeState = cloudSyncSchedulerRuntimeState,
+        stateReady = cloudSyncSchedulerStateReady,
+        onRequestSync = settingsViewModel::requestConnectivityRecoveredSync,
+    )
 
     val cloudSyncHomeIndicatorState = mapToCloudSyncHomeIndicatorState(
         cloudSyncActivated = cloudSyncActivated,
@@ -467,7 +484,8 @@ fun MiFlujoApp() {
                     pendingRestoreMovementCount = settingsUiState.pendingRestoreMovementCount,
                     cloudAccountStatus = settingsUiState.cloudAccountStatus,
                     isCloudAccountOperationInProgress =
-                        settingsUiState.isCloudAccountOperationInProgress,
+                        settingsViewModel.isCloudAccountOperationRunning,
+                    isCloudSyncRunning = settingsViewModel.isCloudSyncRunning,
                     manualCloudSyncState = manualCloudSyncState,
                     isOffline = !isNetworkAvailable,
                     cloudSyncActivated = cloudSyncActivated,

@@ -54,6 +54,25 @@ interface MovementDao {
     )
     suspend fun getAllMovementsIncludingDeleted(): List<MovementEntity>
 
+    @Query(
+        """
+        SELECT EXISTS(
+            SELECT 1 FROM movements
+            WHERE sync_status IN (
+                :pendingUploadStatus,
+                :pendingDeleteStatus,
+                :syncErrorStatus
+            )
+            LIMIT 1
+        )
+        """,
+    )
+    suspend fun hasPendingCloudSyncChanges(
+        pendingUploadStatus: SyncStatus,
+        pendingDeleteStatus: SyncStatus,
+        syncErrorStatus: SyncStatus,
+    ): Boolean
+
     @Update
     suspend fun updateMovementFromSync(movement: MovementEntity): Int
 

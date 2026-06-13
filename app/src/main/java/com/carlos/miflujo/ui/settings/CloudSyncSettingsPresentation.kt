@@ -191,7 +191,7 @@ fun mapToCloudSyncSettingsPresentation(
     return CloudSyncSettingsPresentation(
         status = CloudSyncSettingsStatus.ACTIVE,
         title = "Activo",
-        description = "Puedes sincronizar manualmente. MiFlujo no ejecutará Cloud Sync automáticamente.",
+        description = "MiFlujo mantiene tus datos sincronizados cuando hay conexión. También puedes sincronizar manualmente.",
         isManualSyncEnabled = true,
         isAccountActionsEnabled = accountActionsEnabled,
         showCloudAccountIdentity = true,

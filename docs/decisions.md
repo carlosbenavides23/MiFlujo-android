@@ -513,10 +513,10 @@ Con Cloud Sync activo:
 
 La reconciliación usará UUID para identidad y `updatedAt` generado por la app para conflictos. Descargar nunca borrará físicamente filas Room.
 
-Crear backup local siempre estará permitido. Restaurar quedará bloqueado después de
-la primera ejecución completada de Cloud Sync en la instalación. Backup schema v1
-nunca se restaurará después de esa activación; cualquier soporte futuro requerirá
-schema v2 o superior y una política explícita.
+Crear backup local siempre estará permitido. Restore local queda bloqueado cuando
+Cloud Sync está habilitado, activado y usa una cuenta autorizada, o mientras existe
+una operación de sync/cuenta. En modo local-only vuelve a estar disponible. Backup
+schema v1 no se restaura con Cloud Sync activo.
 
 Los triggers serán foreground, red recuperada con la app abierta, aproximadamente cada 90 segundos en foreground con pendientes, `Sincronizar ahora` y WorkManager con restricción de red como respaldo. Salir de la app no será trigger y WorkManager periódico no implementará el timer de 90 segundos.
 
@@ -735,17 +735,16 @@ el ViewModel continúa con el cierre de Firebase Auth y la limpieza del estado d
 Credential Manager mediante el repositorio. Ninguna referencia a Activity se
 guarda en el ViewModel.
 
-## 051 - Bloqueo persistente de restore después de activar Cloud Sync
+## 051 - Activación persistente de Cloud Sync
 
 La primera ejecución manual de Cloud Sync que termine con `SUCCESS` o `PARTIAL`
 guarda un flag local persistente en preferencias. `SIGNED_OUT`, `UNAUTHORIZED` y
 `FAILURE` no activan el flag. El flag sobrevive reinicios y cierre de sesión, no se
 sincroniza con Firestore y no usa Room.
 
-Después de activar el flag, Ajustes mantiene disponible la creación de backups pero
-bloquea la restauración local destructiva. Esto evita que un restore reemplace Room
-sin tombstones y que una sincronización posterior mezcle o resucite registros
-remotos.
+La restricción original que bloqueaba restore solo por este flag fue reemplazada
+por la decisión `061`. El flag sigue siendo irreversible, pero restore depende del
+estado actual de Cloud Sync y la cuenta.
 
 Mientras una sincronización manual está ejecutándose, Ajustes deshabilita y el
 ViewModel rechaza defensivamente inicio de sesión, cierre de sesión y refresh de
@@ -757,7 +756,7 @@ MiFlujo distingue dos flags locales de Cloud Sync:
 
 ```text
 cloudSyncActivated -> flag irreversible de seguridad, se activa con el primer
-                       sync exitoso o parcial, bloquea restore local destructivo.
+                       sync exitoso o parcial.
 cloudSyncEnabled   -> preferencia de usuario, togglable on/off, controla si la
                        UI de sync manual está activa.
 ```
@@ -879,3 +878,194 @@ Resultado final validado:
 - La autorización de Firestore devolvió `Authorized`.
 - El cierre de sesión completó correctamente.
 - Un nuevo inicio de sesión completó correctamente.
+
+## 054 - Política pura de decisión para scheduler de Cloud Sync
+
+Los disparadores de Cloud Sync comparten una política pura que decide entre
+`RUN` y un motivo explícito de omisión antes de solicitar una ejecución.
+
+Prioridad de omisión:
+
+```text
+disabled
+account operation running
+already running
+offline
+account not authorized
+not activated
+no pending local changes
+```
+
+`MANUAL_SETTINGS` puede ejecutar la primera sincronización y no requiere cambios
+locales pendientes. Los disparadores automáticos requieren que Cloud Sync ya esté
+activado. `APP_FOREGROUND` y `CONNECTIVITY_RECOVERED` pueden ejecutar sin cambios
+locales pendientes para descargar cambios remotos. `FOREGROUND_PENDING_TIMER` y
+`WORK_MANAGER_BACKUP` requieren cambios locales pendientes.
+
+Esta decisión solo agrega la política reutilizable. No agrega disparadores
+automáticos, temporizador, ejecución al volver a foreground, reacción automática
+a conectividad, WorkManager ni cambios al motor de Cloud Sync.
+
+## 055 - Coordinador reutilizable de solicitudes de Cloud Sync
+
+Las futuras fuentes de solicitudes de Cloud Sync usan un coordinador común para:
+
+1. generar un request ID,
+2. registrar la solicitud,
+3. aplicar la política de decisión,
+4. registrar la decisión,
+5. ejecutar Cloud Sync únicamente cuando la decisión sea `RUN`.
+
+El coordinador recibe un `CloudSyncSchedulerDecisionInput` completo y delega la
+ejecución mediante una interfaz suspendida que conserva el mismo request ID y
+trigger reason. No consulta ni posee estado de cuenta, conectividad, preferencias,
+Room o Firestore. Cada caller debe construir el input con su estado real.
+
+Esta decisión no agrega triggers automáticos, timer foreground, observer de
+foreground, reacción a conectividad ni WorkManager. El flujo manual de Ajustes
+permanece sin cambios porque todavía no comparte una fuente completa de estado con
+los futuros triggers y no debe usar valores simulados ni duplicar logs.
+
+## 056 - Preparación de estado runtime para scheduler de Cloud Sync
+
+El estado runtime del scheduler se representa por separado del coordinador. Reúne
+los flags requeridos por la política y los convierte de forma pura en
+`CloudSyncSchedulerDecisionInput` para un trigger específico.
+
+El coordinador no consulta ni posee este estado. Cada trigger futuro debe construir
+`CloudSyncSchedulerRuntimeState` desde fuentes reales de la app, convertirlo a
+decision input y llamar al coordinador.
+
+Un adaptador pequeño permite que una ejecución aprobada por el coordinador delegue
+en `ManualCloudSyncStateHolder.syncNow(requestId, reason)` sin mover ni duplicar la
+lógica actual. El holder expone únicamente una lectura segura de su guard de
+ejecución existente.
+
+Esta preparación no agrega triggers automáticos, observers, timers ni WorkManager,
+y no cambia el comportamiento visible de Ajustes.
+
+## 057 - APP_FOREGROUND como primer trigger automático de Cloud Sync
+
+Al entrar la app en foreground, MiFlujo construye estado runtime desde las fuentes
+reales de conectividad, cuenta, preferencias, activación y ejecución, y solicita
+Cloud Sync mediante el coordinador con reason `APP_FOREGROUND`.
+
+Este trigger nunca realiza la primera activación: la política exige que
+`cloudSyncActivated` ya sea `true`. No requiere cambios locales pendientes porque
+puede descargar cambios remotos creados en otro dispositivo.
+
+La solicitud se emite como máximo una vez por entrada a foreground. Mientras el
+estado de cuenta está cargando o existe una operación de cuenta, espera a que el
+estado se estabilice sin timers, sleeps ni polling. Recomposición o emisiones
+repetidas no crean solicitudes adicionales para la misma entrada.
+
+Esta decisión no agrega WorkManager, timer foreground, reacción automática a
+conectividad ni trabajo periódico en background. La sincronización manual de
+Ajustes conserva su flujo y reason `MANUAL_SETTINGS`.
+
+## 058 - Proveedor de cambios locales pendientes para scheduler
+
+El scheduler dispone de un proveedor suspendido y barato para consultar si Room
+contiene trabajo local pendiente de envío. La consulta usa el campo existente
+`sync_status` y considera pendientes:
+
+```text
+PENDING_UPLOAD
+PENDING_DELETE
+SYNC_ERROR
+```
+
+`SYNCED` y `LOCAL_ONLY` no cuentan como trabajo pendiente. `LOCAL_ONLY` conserva
+su significado de dato local creado con Cloud Sync apagado o todavía no activado.
+
+El proveedor existe para que futuros triggers como `FOREGROUND_PENDING_TIMER` y
+`WORK_MANAGER_BACKUP` puedan omitir ejecuciones cuando no haya trabajo local.
+`APP_FOREGROUND` sigue sin requerir pendientes porque puede descargar cambios
+remotos de otro dispositivo.
+
+Esta decisión no agrega timer, WorkManager, trigger por conectividad ni nuevas
+solicitudes automáticas. Tampoco cambia el esquema Room ni el comportamiento del
+motor de Cloud Sync.
+
+## 059 - WorkManager como respaldo one-time de cambios locales pendientes
+
+Cloud Sync usa WorkManager únicamente como red de seguridad para subir cambios
+locales pendientes. Cada solicitud crea un `OneTimeWorkRequest` con:
+
+```text
+unique work name = cloud_sync_backup
+ExistingWorkPolicy = KEEP
+network constraint = CONNECTED
+backoff = EXPONENTIAL
+```
+
+No se agrega trabajo periódico, no se ejecuta cada 90 segundos en background y no
+se usa salir de la app como trigger.
+
+El worker construye estado runtime real desde las preferencias de Cloud Sync, el
+estado de activación, la cuenta cloud actual, el guard compartido de ejecución y
+`CloudSyncPendingChangesProvider`. La conectividad se considera disponible dentro
+del worker porque WorkManager solo lo inicia cuando se cumple `CONNECTED`; no se
+mantiene un segundo monitor de red en background. `accountOperationRunning` es
+`false` porque las operaciones de cuenta actuales pertenecen al ViewModel de
+Ajustes y no existe un runner de cuenta en background.
+
+La política del scheduler sigue siendo la fuente de verdad. `WORK_MANAGER_BACKUP`
+solo ejecuta cuando Cloud Sync está habilitado, ya fue activado, la cuenta está
+autorizada, no existe otro sync en ejecución y Room contiene `PENDING_UPLOAD`,
+`PENDING_DELETE` o `SYNC_ERROR`. Nunca realiza la primera activación.
+
+`CloudSyncRunCoordinator` vive en el app container y comparte un único
+`AtomicBoolean` entre sync manual, `APP_FOREGROUND` y WorkManager. También conserva
+los logs de inicio/fin y actualiza activación y timestamp únicamente para resultados
+`SUCCESS` o `PARTIAL`. `ManualCloudSyncStateHolder` delega la ejecución a este
+coordinador y mantiene el mismo estado visible de Ajustes.
+
+El enqueue ocurre en un decorador del repositorio de movimientos, después de que
+la escritura local termina correctamente. Crear o editar con Cloud Sync habilitado
+y previamente activado asigna `PENDING_UPLOAD`; después se consulta Room y se
+encola el trabajo único si existe algún estado pendiente. Delete usa el resultado
+persistido de Room mediante el mismo proveedor. Con Cloud Sync apagado o todavía
+no activado, crear/editar usa `LOCAL_ONLY` y no se encola trabajo. Restore por
+reemplazo no encola WorkManager.
+
+WorkManager no reemplaza `Sincronizar ahora` ni `APP_FOREGROUND`. Un resultado
+exitoso o parcial termina en success; offline, otra ejecución activa, una operación
+de cuenta activa o un fallo reintentable usan retry con backoff. Estados disabled,
+not activated, sin pendientes, signed out o unauthorized terminan sin reintento.
+
+## 060 - CONNECTIVITY_RECOVERED mientras la app está abierta
+
+MiFlujo solicita Cloud Sync con reason `CONNECTIVITY_RECOVERED` únicamente cuando
+la conectividad cambia de no disponible a disponible mientras la app está en
+foreground. El estado inicial online solo inicializa el gate y no crea una
+solicitud, porque `APP_FOREGROUND` ya cubre la entrada a la app.
+
+El gate conserva un solo evento de recuperación pendiente si la cuenta todavía
+está cargando o existe una operación de cuenta. Cuando ese estado queda listo,
+emite una sola solicitud sin timers, polling ni sleeps. Emisiones repetidas de
+conectividad disponible, recomposición y transiciones a offline no duplican la
+solicitud. Un evento pendiente se descarta si la app pasa a background.
+
+Este trigger requiere Cloud Sync habilitado, activación previa, cuenta autorizada
+y ausencia de otra ejecución u operación de cuenta. No realiza la primera
+activación y no requiere cambios locales pendientes, porque puede descargar
+cambios remotos creados en otro dispositivo.
+
+`CONNECTIVITY_RECOVERED` coexiste con el respaldo de WorkManager. No cancela ni
+modifica su trabajo; `CloudSyncRunCoordinator` evita ejecuciones simultáneas.
+
+## 061 - Restore local según estado actual de Cloud Sync
+
+Restaurar un respaldo local ya no queda bloqueado permanentemente por haber
+activado Cloud Sync alguna vez. Restore se bloquea únicamente mientras existe una
+ejecución de sync, una operación de cuenta o Cloud Sync está habilitado, activado
+y usa una cuenta autorizada.
+
+Restore vuelve a estar disponible cuando Cloud Sync está desactivado, la sesión
+está cerrada o la cuenta no está autorizada. Esto conserva el comportamiento
+local-first y evita dejar atrapado al usuario después de probar Cloud Sync.
+
+La restauración continúa siendo local y transaccional. No elimina datos remotos,
+no solicita scheduler, no encola WorkManager y restaura movimientos como
+`LOCAL_ONLY` sin convertirlos automáticamente en trabajo cloud pendiente.

@@ -141,17 +141,17 @@ Esto no debe ocurrir accidentalmente.
 En `v0.4.0`:
 
 ```text
-Restore local queda bloqueado después de activar Cloud Sync por primera vez.
+Restore local queda bloqueado mientras Cloud Sync está activo y autorizado.
 ```
 
-El bloqueo persiste después de reiniciar la app o cerrar sesión. Si el usuario
-intenta restaurar un respaldo, la app debe bloquear el flujo y mostrar una
-explicación.
+Restore vuelve a estar disponible si Cloud Sync se desactiva, la sesión se cierra
+o la cuenta deja de estar autorizada. Sigue bloqueado durante una ejecución de
+sync o una operación de cuenta.
 
 Mensaje conceptual:
 
 ```text
-Restaurar respaldo no está disponible después de activar Cloud Sync.
+Desactiva Cloud Sync o cierra sesión para restaurar un respaldo local.
 ```
 
 Acciones posibles:
@@ -357,10 +357,8 @@ MiFlujo conservará backup local JSON para todos los usuarios.
 
 Cloud Sync será una función opcional y privada/controlada, inicialmente para Carlos y el usuario principal.
 
-La restauración local destructiva seguirá siendo válida mientras Cloud Sync nunca
-haya completado una ejecución en esa instalación.
-
-Después de una ejecución `SUCCESS` o `PARTIAL`, `v0.4.0` debe bloquear la
-restauración local aunque la cuenta cierre sesión.
+La restauración local destructiva es válida cuando MiFlujo está efectivamente en
+modo local-only. Una ejecución `SUCCESS` o `PARTIAL` previa no bloquea restore por
+sí sola; Cloud Sync debe estar desactivado, sin sesión o sin autorización.
 
 La prioridad es evitar que un backup viejo provoque pérdida o eliminación accidental de datos remotos.

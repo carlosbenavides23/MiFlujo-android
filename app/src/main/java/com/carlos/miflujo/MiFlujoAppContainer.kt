@@ -9,15 +9,21 @@ import com.carlos.miflujo.data.cloud.firestore.FirestoreCloudMovementRemoteDataS
 import com.carlos.miflujo.data.cloud.firestore.FirestoreCloudAuthorizationChecker
 import com.carlos.miflujo.data.cloud.sync.CloudSyncEngine
 import com.carlos.miflujo.data.cloud.sync.CloudSyncActivationStore
+import com.carlos.miflujo.data.cloud.sync.CloudSyncBackupWorkScheduler
 import com.carlos.miflujo.data.cloud.sync.CloudSyncEnabledStore
+import com.carlos.miflujo.data.cloud.sync.CloudSyncPendingChangesProvider
+import com.carlos.miflujo.data.cloud.sync.CloudSyncRunCoordinator
 import com.carlos.miflujo.data.cloud.sync.RoomCloudSyncLocalDataSource
+import com.carlos.miflujo.data.cloud.sync.RoomCloudSyncPendingChangesProvider
 import com.carlos.miflujo.data.cloud.sync.SharedPreferencesCloudSyncActivationStore
 import com.carlos.miflujo.data.cloud.sync.SharedPreferencesCloudSyncEnabledStore
 import com.carlos.miflujo.data.cloud.sync.CloudSyncMetadataStore
 import com.carlos.miflujo.data.cloud.sync.SharedPreferencesCloudSyncMetadataStore
+import com.carlos.miflujo.data.cloud.sync.WorkManagerCloudSyncBackupScheduler
 import com.carlos.miflujo.data.local.MiFlujoDatabase
 import com.carlos.miflujo.data.local.MIGRATION_1_2
 import com.carlos.miflujo.data.local.MIGRATION_2_3
+import com.carlos.miflujo.data.repository.CloudSyncSchedulingMovementRepository
 import com.carlos.miflujo.data.repository.MovementRepository
 import com.carlos.miflujo.data.repository.RoomMovementRepository
 import com.google.firebase.auth.FirebaseAuth
@@ -31,6 +37,9 @@ interface MiFlujoAppContainer {
     val cloudSyncActivationStore: CloudSyncActivationStore
     val cloudSyncEnabledStore: CloudSyncEnabledStore
     val cloudSyncMetadataStore: CloudSyncMetadataStore
+    val cloudSyncPendingChangesProvider: CloudSyncPendingChangesProvider
+    val cloudSyncRunCoordinator: CloudSyncRunCoordinator
+    val cloudSyncBackupWorkScheduler: CloudSyncBackupWorkScheduler
 }
 
 class DefaultMiFlujoAppContainer(
@@ -49,7 +58,13 @@ class DefaultMiFlujoAppContainer(
     }
 
     override val movementRepository: MovementRepository by lazy {
-        RoomMovementRepository(database.movementDao())
+        CloudSyncSchedulingMovementRepository(
+            delegate = RoomMovementRepository(database.movementDao()),
+            cloudSyncEnabledStore = cloudSyncEnabledStore,
+            cloudSyncActivationStore = cloudSyncActivationStore,
+            pendingChangesProvider = cloudSyncPendingChangesProvider,
+            backupWorkScheduler = cloudSyncBackupWorkScheduler,
+        )
     }
 
     override val cloudAccountRepository: CloudAccountRepository by lazy {
@@ -90,6 +105,23 @@ class DefaultMiFlujoAppContainer(
         SharedPreferencesCloudSyncMetadataStore(applicationContext)
     }
 
+    override val cloudSyncPendingChangesProvider: CloudSyncPendingChangesProvider by lazy {
+        RoomCloudSyncPendingChangesProvider(database.movementDao())
+    }
+
+    override val cloudSyncRunCoordinator: CloudSyncRunCoordinator by lazy {
+        CloudSyncRunCoordinator(
+            cloudSyncRunner = cloudSyncEngine,
+            cloudSyncActivationStore = cloudSyncActivationStore,
+            cloudSyncEnabledStore = cloudSyncEnabledStore,
+            cloudSyncMetadataStore = cloudSyncMetadataStore,
+        )
+    }
+
+    override val cloudSyncBackupWorkScheduler: CloudSyncBackupWorkScheduler by lazy {
+        WorkManagerCloudSyncBackupScheduler(applicationContext)
+    }
+
     private companion object {
         const val DATABASE_NAME = "miflujo.db"
     }
@@ -127,5 +159,13 @@ object MiFlujoAppProvider {
 
     fun cloudSyncMetadataStore(context: Context): CloudSyncMetadataStore {
         return container(context).cloudSyncMetadataStore
+    }
+
+    fun cloudSyncPendingChangesProvider(context: Context): CloudSyncPendingChangesProvider {
+        return container(context).cloudSyncPendingChangesProvider
+    }
+
+    fun cloudSyncRunCoordinator(context: Context): CloudSyncRunCoordinator {
+        return container(context).cloudSyncRunCoordinator
     }
 }
