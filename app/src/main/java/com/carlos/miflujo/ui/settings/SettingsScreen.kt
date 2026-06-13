@@ -224,7 +224,7 @@ private fun CloudSyncSection(
         ) {
             Column(
                 modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 if (presentation.status == CloudSyncSettingsStatus.LOADING && isOperationInProgress) {
                     Row(
@@ -304,40 +304,67 @@ private fun CloudSyncSection(
                     }
                 }
 
-                if (presentation.showSyncNowButton) {
-                    Button(
-                        onClick = onSyncNow,
-                        enabled = presentation.isManualSyncEnabled,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        if (manualSyncState is ManualCloudSyncUiState.Running) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp,
-                            )
-                            Text(
-                                text = "Sincronizando...",
-                                modifier = Modifier.padding(start = 8.dp),
-                            )
-                        } else {
-                            Text(text = "Sincronizar ahora")
-                        }
-                    }
-                }
-
-                if (presentation.showSignOutButton) {
-                    OutlinedButton(
-                        onClick = onSignOut,
-                        enabled = presentation.isAccountActionsEnabled,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(text = "Cerrar sesión")
-                    }
+                if (presentation.showSyncNowButton || presentation.showSignOutButton) {
+                    CloudSyncActionGroup(
+                        showSyncNowButton = presentation.showSyncNowButton,
+                        showSignOutButton = presentation.showSignOutButton,
+                        isManualSyncEnabled = presentation.isManualSyncEnabled,
+                        isAccountActionsEnabled = presentation.isAccountActionsEnabled,
+                        manualSyncState = manualSyncState,
+                        onSyncNow = onSyncNow,
+                        onSignOut = onSignOut,
+                    )
                 }
 
                 ManualCloudSyncResult(
                     state = manualSyncState,
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CloudSyncActionGroup(
+    showSyncNowButton: Boolean,
+    showSignOutButton: Boolean,
+    isManualSyncEnabled: Boolean,
+    isAccountActionsEnabled: Boolean,
+    manualSyncState: ManualCloudSyncUiState,
+    onSyncNow: () -> Unit,
+    onSignOut: () -> Unit,
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        if (showSyncNowButton) {
+            Button(
+                onClick = onSyncNow,
+                enabled = isManualSyncEnabled,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                if (manualSyncState is ManualCloudSyncUiState.Running) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                    )
+                    Text(
+                        text = "Sincronizando...",
+                        modifier = Modifier.padding(start = 8.dp),
+                    )
+                } else {
+                    Text(text = "Sincronizar ahora")
+                }
+            }
+        }
+
+        if (showSignOutButton) {
+            OutlinedButton(
+                onClick = onSignOut,
+                enabled = isAccountActionsEnabled,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(text = "Cerrar sesión")
             }
         }
     }
@@ -386,16 +413,28 @@ private fun LastSyncTimestampText(lastSyncTimestamp: Long?) {
     )
 }
 
-internal fun manualCloudSyncResultMessage(
+internal data class ManualCloudSyncResultPresentation(
+    val title: String,
+    val detail: String,
+)
+
+internal fun mapManualCloudSyncResultPresentation(
     state: ManualCloudSyncUiState,
-): String? {
+): ManualCloudSyncResultPresentation? {
     return when (state) {
         ManualCloudSyncUiState.Idle,
         ManualCloudSyncUiState.Running,
         -> null
-        is ManualCloudSyncUiState.Success -> "Sincronización completada."
-        is ManualCloudSyncUiState.Partial ->
-            "Sincronización parcial. Algunos elementos se reintentarán después."
+        is ManualCloudSyncUiState.Success -> ManualCloudSyncResultPresentation(
+            title = "Sincronización completada.",
+            detail = state.counts.successDetail(),
+        )
+
+        is ManualCloudSyncUiState.Partial -> ManualCloudSyncResultPresentation(
+            title = "Sincronización parcial.",
+            detail = state.counts.partialDetail(),
+        )
+
         else -> null
     }
 }
@@ -404,36 +443,61 @@ internal fun manualCloudSyncResultMessage(
 private fun ManualCloudSyncResult(
     state: ManualCloudSyncUiState,
 ) {
-    val message = manualCloudSyncResultMessage(
+    val presentation = mapManualCloudSyncResultPresentation(
         state = state,
     ) ?: return
 
     Column(
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Text(
-            text = message,
+            text = presentation.title,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        when (state) {
-            is ManualCloudSyncUiState.Success -> SyncCountsText(state.counts)
-            is ManualCloudSyncUiState.Partial -> SyncCountsText(state.counts)
-            else -> Unit
-        }
+        Text(
+            text = presentation.detail,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
-@Composable
-private fun SyncCountsText(counts: ManualCloudSyncCounts) {
-    Text(
-        text = "Subidos: ${counts.uploaded} · Descargados: ${counts.downloaded} · " +
-            "Actualizados: ${counts.updatedLocal} · Confirmados: ${counts.markedSynced} · " +
-            "Omitidos: ${counts.skippedRemote} · Errores locales: ${counts.localErrors} · " +
-            "Errores remotos: ${counts.remoteErrors}",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+private fun ManualCloudSyncCounts.successDetail(): String {
+    val hasDataActivity = uploaded > 0 || downloaded > 0 || updatedLocal > 0
+    if (
+        !hasDataActivity &&
+        skippedRemote == 0 &&
+        localErrors == 0 &&
+        remoteErrors == 0
+    ) {
+        return "Todo está al día."
+    }
+    return meaningfulCounts().ifEmpty {
+        listOf("Todo está al día.")
+    }.joinToString(separator = " · ")
+}
+
+private fun ManualCloudSyncCounts.partialDetail(): String =
+    meaningfulCounts(errorsFirst = true).ifEmpty {
+        listOf("Algunos elementos se reintentarán después.")
+    }.joinToString(separator = " · ")
+
+private fun ManualCloudSyncCounts.meaningfulCounts(
+    errorsFirst: Boolean = false,
+): List<String> {
+    val activity = buildList {
+        if (uploaded > 0) add("Subidos: $uploaded")
+        if (downloaded > 0) add("Descargados: $downloaded")
+        if (updatedLocal > 0) add("Actualizados: $updatedLocal")
+        if (markedSynced > 0) add("Confirmados: $markedSynced")
+        if (skippedRemote > 0) add("Omitidos: $skippedRemote")
+    }
+    val errors = buildList {
+        if (localErrors > 0) add("Errores locales: $localErrors")
+        if (remoteErrors > 0) add("Errores remotos: $remoteErrors")
+    }
+    return if (errorsFirst) errors + activity else activity + errors
 }
 
 @Composable
