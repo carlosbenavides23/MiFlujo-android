@@ -528,13 +528,84 @@ private fun Context.isAirplaneModeEnabled(): Boolean {
     ) == 1
 }
 
-private fun Context.isNetworkAvailable(): Boolean {
-    if (isAirplaneModeEnabled()) return false
-    val connectivityManager = getSystemService(ConnectivityManager::class.java) ?: return false
-    val network = connectivityManager.activeNetwork ?: return false
-    val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
-    return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
-        capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+private data class ConnectivityUiState(
+    val networkAvailable: Boolean,
+    val airplaneMode: Boolean,
+    val activeNetworkPresent: Boolean,
+    val validatedAcceptedNetworkCount: Int,
+    val hasAnyWifi: Boolean,
+    val hasAnyCellular: Boolean,
+    val hasAnyEthernet: Boolean,
+    val hasAnyVpn: Boolean,
+    val hasAnyBluetooth: Boolean,
+)
+
+private fun Context.readConnectivityUiState(): ConnectivityUiState {
+    val airplaneMode = isAirplaneModeEnabled()
+    val connectivityManager = getSystemService(ConnectivityManager::class.java)
+        ?: return ConnectivityUiState(
+            networkAvailable = false,
+            airplaneMode = airplaneMode,
+            activeNetworkPresent = false,
+            validatedAcceptedNetworkCount = 0,
+            hasAnyWifi = false,
+            hasAnyCellular = false,
+            hasAnyEthernet = false,
+            hasAnyVpn = false,
+            hasAnyBluetooth = false,
+        )
+
+    var validatedAcceptedNetworkCount = 0
+    var hasAnyWifi = false
+    var hasAnyCellular = false
+    var hasAnyEthernet = false
+    var hasAnyVpn = false
+    var hasAnyBluetooth = false
+
+    connectivityManager.allNetworks.forEach { network ->
+        val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return@forEach
+        val hasWifi = capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+        val hasCellular = capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+        val hasEthernet = capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+        val hasVpn = capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+        val hasBluetooth = capabilities.hasTransport(NetworkCapabilities.TRANSPORT_BLUETOOTH)
+
+        hasAnyWifi = hasAnyWifi || hasWifi
+        hasAnyCellular = hasAnyCellular || hasCellular
+        hasAnyEthernet = hasAnyEthernet || hasEthernet
+        hasAnyVpn = hasAnyVpn || hasVpn
+        hasAnyBluetooth = hasAnyBluetooth || hasBluetooth
+
+        if (
+            isUsableCloudSyncNetwork(
+                hasInternet = capabilities.hasCapability(
+                    NetworkCapabilities.NET_CAPABILITY_INTERNET,
+                ),
+                isValidated = capabilities.hasCapability(
+                    NetworkCapabilities.NET_CAPABILITY_VALIDATED,
+                ),
+                hasWifi = hasWifi,
+                hasCellular = hasCellular,
+                hasEthernet = hasEthernet,
+                hasVpn = hasVpn,
+                hasBluetooth = hasBluetooth,
+            )
+        ) {
+            validatedAcceptedNetworkCount += 1
+        }
+    }
+
+    return ConnectivityUiState(
+        networkAvailable = !airplaneMode && validatedAcceptedNetworkCount > 0,
+        airplaneMode = airplaneMode,
+        activeNetworkPresent = connectivityManager.activeNetwork != null,
+        validatedAcceptedNetworkCount = validatedAcceptedNetworkCount,
+        hasAnyWifi = hasAnyWifi,
+        hasAnyCellular = hasAnyCellular,
+        hasAnyEthernet = hasAnyEthernet,
+        hasAnyVpn = hasAnyVpn,
+        hasAnyBluetooth = hasAnyBluetooth,
+    )
 }
 
 private tailrec fun Context.findComponentActivity(): ComponentActivity {
@@ -553,20 +624,29 @@ private fun rememberNetworkAvailableState(context: Context): State<Boolean> {
     val lifecycle = remember(context) { context.findComponentActivity().lifecycle }
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
     val isNetworkAvailable = remember(context) {
-        mutableStateOf(context.isNetworkAvailable())
+        mutableStateOf(context.readConnectivityUiState().networkAvailable)
     }
 
     DisposableEffect(connectivityManager, context, lifecycle, mainHandler) {
         if (connectivityManager == null) return@DisposableEffect onDispose {}
 
         val refreshNetworkState = {
-            val available = context.isNetworkAvailable()
-            val airplaneMode = context.isAirplaneModeEnabled()
+            val connectivityState = context.readConnectivityUiState()
             Log.d(
                 "MiFlujoSync",
-                "Connectivity UI state refreshed: networkAvailable=$available, airplaneMode=$airplaneMode.",
+                "Connectivity UI state refreshed: " +
+                    "networkAvailable=${connectivityState.networkAvailable}, " +
+                    "airplaneMode=${connectivityState.airplaneMode}, " +
+                    "activeNetworkPresent=${connectivityState.activeNetworkPresent}, " +
+                    "validatedAcceptedNetworkCount=" +
+                    "${connectivityState.validatedAcceptedNetworkCount}, " +
+                    "hasAnyWifi=${connectivityState.hasAnyWifi}, " +
+                    "hasAnyCellular=${connectivityState.hasAnyCellular}, " +
+                    "hasAnyEthernet=${connectivityState.hasAnyEthernet}, " +
+                    "hasAnyVpn=${connectivityState.hasAnyVpn}, " +
+                    "hasAnyBluetooth=${connectivityState.hasAnyBluetooth}.",
             )
-            isNetworkAvailable.value = available
+            isNetworkAvailable.value = connectivityState.networkAvailable
         }
         val callback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
