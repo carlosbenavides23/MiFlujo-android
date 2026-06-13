@@ -34,14 +34,20 @@ fun logCloudSyncDecision(
     cloudSyncEnabled: Boolean? = null,
     cloudSyncActivated: Boolean? = null,
     networkAvailable: Boolean? = null,
+    accountAuthorized: Boolean? = null,
     alreadyRunning: Boolean? = null,
+    accountOperationRunning: Boolean? = null,
+    hasPendingLocalChanges: Boolean? = null,
 ) {
     val details = buildString {
         append("CloudSync decision: id=$id, reason=$reason, action=$action")
         cloudSyncEnabled?.let { append(", cloudSyncEnabled=$it") }
         cloudSyncActivated?.let { append(", cloudSyncActivated=$it") }
         networkAvailable?.let { append(", networkAvailable=$it") }
+        accountAuthorized?.let { append(", accountAuthorized=$it") }
         alreadyRunning?.let { append(", alreadyRunning=$it") }
+        accountOperationRunning?.let { append(", accountOperationRunning=$it") }
+        hasPendingLocalChanges?.let { append(", hasPendingLocalChanges=$it") }
     }
     logMiFlujoSyncDebug(details.trim())
 }

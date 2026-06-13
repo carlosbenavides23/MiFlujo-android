@@ -906,3 +906,23 @@ locales pendientes para descargar cambios remotos. `FOREGROUND_PENDING_TIMER` y
 Esta decisión solo agrega la política reutilizable. No agrega disparadores
 automáticos, temporizador, ejecución al volver a foreground, reacción automática
 a conectividad, WorkManager ni cambios al motor de Cloud Sync.
+
+## 055 - Coordinador reutilizable de solicitudes de Cloud Sync
+
+Las futuras fuentes de solicitudes de Cloud Sync usan un coordinador común para:
+
+1. generar un request ID,
+2. registrar la solicitud,
+3. aplicar la política de decisión,
+4. registrar la decisión,
+5. ejecutar Cloud Sync únicamente cuando la decisión sea `RUN`.
+
+El coordinador recibe un `CloudSyncSchedulerDecisionInput` completo y delega la
+ejecución mediante una interfaz suspendida que conserva el mismo request ID y
+trigger reason. No consulta ni posee estado de cuenta, conectividad, preferencias,
+Room o Firestore. Cada caller debe construir el input con su estado real.
+
+Esta decisión no agrega triggers automáticos, timer foreground, observer de
+foreground, reacción a conectividad ni WorkManager. El flujo manual de Ajustes
+permanece sin cambios porque todavía no comparte una fuente completa de estado con
+los futuros triggers y no debe usar valores simulados ni duplicar logs.
