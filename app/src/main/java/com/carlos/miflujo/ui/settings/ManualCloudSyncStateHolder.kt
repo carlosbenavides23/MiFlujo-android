@@ -81,8 +81,10 @@ class ManualCloudSyncStateHolder(
         }
     }
 
-    suspend fun syncNow() {
-        logMiFlujoSyncDebug("Manual Cloud Sync requested.")
+    suspend fun syncNow(
+        requestId: String,
+        reason: com.carlos.miflujo.data.cloud.sync.CloudSyncTriggerReason,
+    ) {
         if (!mutableCloudSyncEnabled.value) {
             logMiFlujoSyncDebug("Manual Cloud Sync ignored: disabled.")
             return
@@ -92,20 +94,30 @@ class ManualCloudSyncStateHolder(
             return
         }
 
+        com.carlos.miflujo.data.cloud.sync.logCloudSyncRunStarted(requestId, reason)
         mutableState.value = ManualCloudSyncUiState.Running
-        logMiFlujoSyncDebug("Manual Cloud Sync state updated: Running.")
         try {
             val result = cloudSyncRunner.syncNow()
-            logMiFlujoSyncDebug(
-                result.toSafeSyncLogMessage("Manual Cloud Sync runner returned"),
-            )
+            com.carlos.miflujo.data.cloud.sync.logCloudSyncRunFinished(requestId, reason, result)
+
+            var activatedUpdated = false
+            var lastSyncUpdated = false
+
             if (result.status.activatesCloudSync()) {
-                markCloudSyncActivated()
+                activatedUpdated = markCloudSyncActivated()
             }
             if (result.status.updatesLastSyncTimestamp()) {
                 val timestamp = System.currentTimeMillis()
                 cloudSyncMetadataStore.updateLastSyncTimestamp(timestamp)
                 mutableLastSyncTimestamp.value = timestamp
+                lastSyncUpdated = true
+            }
+            if (activatedUpdated || lastSyncUpdated) {
+                com.carlos.miflujo.data.cloud.sync.logCloudSyncMetadataUpdate(
+                    id = requestId,
+                    activatedUpdated = activatedUpdated,
+                    lastSyncUpdated = lastSyncUpdated,
+                )
             }
             mutableState.value = result.toUiState()
         } catch (exception: Exception) {
@@ -120,14 +132,15 @@ class ManualCloudSyncStateHolder(
         }
     }
 
-    private fun markCloudSyncActivated() {
-        if (mutableCloudSyncActivated.value) return
+    private fun markCloudSyncActivated(): Boolean {
+        if (mutableCloudSyncActivated.value) return false
 
         runCatching { cloudSyncActivationStore.markActivated() }
             .onFailure {
                 logMiFlujoSyncError("Cloud Sync activation flag could not be persisted.")
             }
         mutableCloudSyncActivated.value = true
+        return true
     }
 }
 

@@ -488,23 +488,44 @@ class SettingsViewModel(
     }
 
     fun syncNow() {
-        logMiFlujoSyncDebug("Manual Cloud Sync button action starts.")
+        val requestId = com.carlos.miflujo.data.cloud.sync.generateCloudSyncRequestId()
+        val reason = com.carlos.miflujo.data.cloud.sync.CloudSyncTriggerReason.MANUAL_SETTINGS
+        com.carlos.miflujo.data.cloud.sync.logCloudSyncRequest(requestId, reason)
+
         if (
             !cloudSyncEnabled.value ||
             mutableUiState.value.isCloudAccountOperationInProgress ||
             cloudAccountJob?.isActive == true ||
             manualCloudSyncJob?.isActive == true
         ) {
-            if (!cloudSyncEnabled.value) {
-                logMiFlujoSyncDebug("Manual Cloud Sync ignored: cloudSyncEnabled is false.")
+            val action = if (!cloudSyncEnabled.value) {
+                com.carlos.miflujo.data.cloud.sync.CloudSyncSchedulerAction.SKIP_DISABLED
+            } else if (mutableUiState.value.isCloudAccountOperationInProgress || cloudAccountJob?.isActive == true) {
+                com.carlos.miflujo.data.cloud.sync.CloudSyncSchedulerAction.SKIP_ACCOUNT_OPERATION_RUNNING
             } else {
-                logMiFlujoSyncDebug("Manual Cloud Sync ignored: account operation already running.")
+                com.carlos.miflujo.data.cloud.sync.CloudSyncSchedulerAction.SKIP_ALREADY_RUNNING
             }
+            com.carlos.miflujo.data.cloud.sync.logCloudSyncDecision(
+                id = requestId,
+                reason = reason,
+                action = action,
+                cloudSyncEnabled = cloudSyncEnabled.value,
+                alreadyRunning = manualCloudSyncJob?.isActive == true,
+            )
             return
         }
+
+        com.carlos.miflujo.data.cloud.sync.logCloudSyncDecision(
+            id = requestId,
+            reason = reason,
+            action = com.carlos.miflujo.data.cloud.sync.CloudSyncSchedulerAction.RUN,
+            cloudSyncEnabled = cloudSyncEnabled.value,
+            alreadyRunning = false,
+        )
+
         manualCloudSyncJob = viewModelScope.launch {
             try {
-                manualCloudSyncStateHolder.syncNow()
+                manualCloudSyncStateHolder.syncNow(requestId, reason)
                 if (cloudSyncActivated.value) {
                     finishRestore()
                 }
