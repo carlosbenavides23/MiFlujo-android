@@ -10,7 +10,9 @@ import com.carlos.miflujo.data.cloud.firestore.FirestoreCloudAuthorizationChecke
 import com.carlos.miflujo.data.cloud.sync.CloudSyncEngine
 import com.carlos.miflujo.data.cloud.sync.CloudSyncActivationStore
 import com.carlos.miflujo.data.cloud.sync.CloudSyncEnabledStore
+import com.carlos.miflujo.data.cloud.sync.CloudSyncPendingChangesProvider
 import com.carlos.miflujo.data.cloud.sync.RoomCloudSyncLocalDataSource
+import com.carlos.miflujo.data.cloud.sync.RoomCloudSyncPendingChangesProvider
 import com.carlos.miflujo.data.cloud.sync.SharedPreferencesCloudSyncActivationStore
 import com.carlos.miflujo.data.cloud.sync.SharedPreferencesCloudSyncEnabledStore
 import com.carlos.miflujo.data.cloud.sync.CloudSyncMetadataStore
@@ -31,6 +33,7 @@ interface MiFlujoAppContainer {
     val cloudSyncActivationStore: CloudSyncActivationStore
     val cloudSyncEnabledStore: CloudSyncEnabledStore
     val cloudSyncMetadataStore: CloudSyncMetadataStore
+    val cloudSyncPendingChangesProvider: CloudSyncPendingChangesProvider
 }
 
 class DefaultMiFlujoAppContainer(
@@ -90,6 +93,10 @@ class DefaultMiFlujoAppContainer(
         SharedPreferencesCloudSyncMetadataStore(applicationContext)
     }
 
+    override val cloudSyncPendingChangesProvider: CloudSyncPendingChangesProvider by lazy {
+        RoomCloudSyncPendingChangesProvider(database.movementDao())
+    }
+
     private companion object {
         const val DATABASE_NAME = "miflujo.db"
     }
@@ -127,5 +134,9 @@ object MiFlujoAppProvider {
 
     fun cloudSyncMetadataStore(context: Context): CloudSyncMetadataStore {
         return container(context).cloudSyncMetadataStore
+    }
+
+    fun cloudSyncPendingChangesProvider(context: Context): CloudSyncPendingChangesProvider {
+        return container(context).cloudSyncPendingChangesProvider
     }
 }

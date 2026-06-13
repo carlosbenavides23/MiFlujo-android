@@ -963,3 +963,27 @@ repetidas no crean solicitudes adicionales para la misma entrada.
 Esta decisión no agrega WorkManager, timer foreground, reacción automática a
 conectividad ni trabajo periódico en background. La sincronización manual de
 Ajustes conserva su flujo y reason `MANUAL_SETTINGS`.
+
+## 058 - Proveedor de cambios locales pendientes para scheduler
+
+El scheduler dispone de un proveedor suspendido y barato para consultar si Room
+contiene trabajo local pendiente de envío. La consulta usa el campo existente
+`sync_status` y considera pendientes:
+
+```text
+PENDING_UPLOAD
+PENDING_DELETE
+SYNC_ERROR
+```
+
+`SYNCED` y `LOCAL_ONLY` no cuentan como trabajo pendiente. `LOCAL_ONLY` conserva
+su significado de dato local creado con Cloud Sync apagado o todavía no activado.
+
+El proveedor existe para que futuros triggers como `FOREGROUND_PENDING_TIMER` y
+`WORK_MANAGER_BACKUP` puedan omitir ejecuciones cuando no haya trabajo local.
+`APP_FOREGROUND` sigue sin requerir pendientes porque puede descargar cambios
+remotos de otro dispositivo.
+
+Esta decisión no agrega timer, WorkManager, trigger por conectividad ni nuevas
+solicitudes automáticas. Tampoco cambia el esquema Room ni el comportamiento del
+motor de Cloud Sync.
