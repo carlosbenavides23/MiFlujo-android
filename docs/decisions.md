@@ -879,3 +879,30 @@ Resultado final validado:
 - La autorización de Firestore devolvió `Authorized`.
 - El cierre de sesión completó correctamente.
 - Un nuevo inicio de sesión completó correctamente.
+
+## 054 - Política pura de decisión para scheduler de Cloud Sync
+
+Los disparadores de Cloud Sync comparten una política pura que decide entre
+`RUN` y un motivo explícito de omisión antes de solicitar una ejecución.
+
+Prioridad de omisión:
+
+```text
+disabled
+account operation running
+already running
+offline
+account not authorized
+not activated
+no pending local changes
+```
+
+`MANUAL_SETTINGS` puede ejecutar la primera sincronización y no requiere cambios
+locales pendientes. Los disparadores automáticos requieren que Cloud Sync ya esté
+activado. `APP_FOREGROUND` y `CONNECTIVITY_RECOVERED` pueden ejecutar sin cambios
+locales pendientes para descargar cambios remotos. `FOREGROUND_PENDING_TIMER` y
+`WORK_MANAGER_BACKUP` requieren cambios locales pendientes.
+
+Esta decisión solo agrega la política reutilizable. No agrega disparadores
+automáticos, temporizador, ejecución al volver a foreground, reacción automática
+a conectividad, WorkManager ni cambios al motor de Cloud Sync.
