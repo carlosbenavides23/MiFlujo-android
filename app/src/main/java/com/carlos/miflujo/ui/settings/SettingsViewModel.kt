@@ -14,6 +14,9 @@ import com.carlos.miflujo.data.cloud.sync.CloudSyncRunner
 import com.carlos.miflujo.data.cloud.sync.CloudSyncActivationStore
 import com.carlos.miflujo.data.cloud.sync.CloudSyncEnabledStore
 import com.carlos.miflujo.data.cloud.sync.CloudSyncMetadataStore
+import com.carlos.miflujo.data.cloud.sync.CloudSyncSchedulerCoordinator
+import com.carlos.miflujo.data.cloud.sync.CloudSyncSchedulerRuntimeState
+import com.carlos.miflujo.data.cloud.sync.CloudSyncTriggerReason
 import com.carlos.miflujo.data.cloud.sync.logMiFlujoSyncDebug
 import com.carlos.miflujo.data.repository.MovementRepository
 import com.carlos.miflujo.ui.backup.BackupDocument
@@ -56,6 +59,9 @@ class SettingsViewModel(
         cloudSyncEnabledStore = cloudSyncEnabledStore,
         cloudSyncMetadataStore = cloudSyncMetadataStore,
     )
+    private val cloudSyncSchedulerCoordinator = CloudSyncSchedulerCoordinator(
+        executor = ManualCloudSyncScheduledRunExecutor(manualCloudSyncStateHolder),
+    )
     private val mutableUiState = MutableStateFlow(SettingsUiState())
     private val exportFeedback = MutableSharedFlow<BackupExportFeedback>(extraBufferCapacity = 1)
     private val createDocumentRequests = MutableSharedFlow<CreateBackupDocumentRequest>(
@@ -97,6 +103,12 @@ class SettingsViewModel(
         manualCloudSyncStateHolder.cloudSyncEnabled
     val lastSyncTimestamp: StateFlow<Long?> =
         manualCloudSyncStateHolder.lastSyncTimestamp
+    val isCloudSyncRunning: Boolean
+        get() = manualCloudSyncStateHolder.isSyncRunning ||
+            manualCloudSyncJob?.isActive == true
+    val isCloudAccountOperationRunning: Boolean
+        get() = mutableUiState.value.isCloudAccountOperationInProgress ||
+            cloudAccountJob?.isActive == true
 
     init {
         refreshCloudAccountStatus()
@@ -485,6 +497,14 @@ class SettingsViewModel(
 
     fun setCloudSyncEnabled(enabled: Boolean) {
         manualCloudSyncStateHolder.setCloudSyncEnabled(enabled)
+    }
+
+    fun requestAppForegroundSync(runtimeState: CloudSyncSchedulerRuntimeState) {
+        viewModelScope.launch {
+            cloudSyncSchedulerCoordinator.requestSync(
+                runtimeState.toDecisionInput(CloudSyncTriggerReason.APP_FOREGROUND),
+            )
+        }
     }
 
     fun syncNow() {

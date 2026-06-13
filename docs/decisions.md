@@ -944,3 +944,22 @@ ejecución existente.
 
 Esta preparación no agrega triggers automáticos, observers, timers ni WorkManager,
 y no cambia el comportamiento visible de Ajustes.
+
+## 057 - APP_FOREGROUND como primer trigger automático de Cloud Sync
+
+Al entrar la app en foreground, MiFlujo construye estado runtime desde las fuentes
+reales de conectividad, cuenta, preferencias, activación y ejecución, y solicita
+Cloud Sync mediante el coordinador con reason `APP_FOREGROUND`.
+
+Este trigger nunca realiza la primera activación: la política exige que
+`cloudSyncActivated` ya sea `true`. No requiere cambios locales pendientes porque
+puede descargar cambios remotos creados en otro dispositivo.
+
+La solicitud se emite como máximo una vez por entrada a foreground. Mientras el
+estado de cuenta está cargando o existe una operación de cuenta, espera a que el
+estado se estabilice sin timers, sleeps ni polling. Recomposición o emisiones
+repetidas no crean solicitudes adicionales para la misma entrada.
+
+Esta decisión no agrega WorkManager, timer foreground, reacción automática a
+conectividad ni trabajo periódico en background. La sincronización manual de
+Ajustes conserva su flujo y reason `MANUAL_SETTINGS`.

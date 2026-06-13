@@ -71,6 +71,8 @@ import com.carlos.miflujo.MiFlujoAppProvider
 import com.carlos.miflujo.R
 import com.carlos.miflujo.data.cloud.auth.LegacyGoogleSignInFallback
 import com.carlos.miflujo.data.cloud.auth.MiFlujoAuthLogTag
+import com.carlos.miflujo.data.cloud.auth.CloudAccountStatus
+import com.carlos.miflujo.data.cloud.sync.CloudSyncSchedulerRuntimeState
 import com.carlos.miflujo.ui.home.HomeScreen
 import com.carlos.miflujo.ui.home.HomeViewModel
 import com.carlos.miflujo.ui.home.HomeViewModelFactory
@@ -171,6 +173,23 @@ fun MiFlujoApp() {
     val cloudSyncActivated by settingsViewModel.cloudSyncActivated.collectAsState()
     val cloudSyncEnabled by settingsViewModel.cloudSyncEnabled.collectAsState()
     val feedback by movementViewModel.feedback.collectAsState()
+
+    val appForegroundSyncRuntimeState = CloudSyncSchedulerRuntimeState(
+        cloudSyncEnabled = cloudSyncEnabled,
+        cloudSyncActivated = cloudSyncActivated,
+        networkAvailable = isNetworkAvailable,
+        accountAuthorized = settingsUiState.cloudAccountStatus is CloudAccountStatus.Authorized,
+        alreadyRunning = settingsViewModel.isCloudSyncRunning,
+        accountOperationRunning = settingsViewModel.isCloudAccountOperationRunning,
+        hasPendingLocalChanges = false,
+    )
+    CloudSyncAppForegroundTrigger(
+        lifecycle = activity.lifecycle,
+        runtimeState = appForegroundSyncRuntimeState,
+        stateReady = settingsUiState.cloudAccountStatus !is CloudAccountStatus.Loading &&
+            !settingsViewModel.isCloudAccountOperationRunning,
+        onRequestSync = settingsViewModel::requestAppForegroundSync,
+    )
 
     val cloudSyncHomeIndicatorState = mapToCloudSyncHomeIndicatorState(
         cloudSyncActivated = cloudSyncActivated,
