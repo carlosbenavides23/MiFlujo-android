@@ -13,6 +13,7 @@ import com.carlos.miflujo.data.cloud.auth.MiFlujoAuthLogTag
 import com.carlos.miflujo.data.cloud.sync.CloudSyncRunner
 import com.carlos.miflujo.data.cloud.sync.CloudSyncActivationStore
 import com.carlos.miflujo.data.cloud.sync.CloudSyncEnabledStore
+import com.carlos.miflujo.data.cloud.sync.CloudSyncMetadataStore
 import com.carlos.miflujo.data.cloud.sync.logMiFlujoSyncDebug
 import com.carlos.miflujo.data.repository.MovementRepository
 import com.carlos.miflujo.ui.backup.BackupDocument
@@ -47,11 +48,13 @@ class SettingsViewModel(
     cloudSyncRunner: CloudSyncRunner,
     cloudSyncActivationStore: CloudSyncActivationStore,
     cloudSyncEnabledStore: CloudSyncEnabledStore,
+    cloudSyncMetadataStore: CloudSyncMetadataStore,
 ) : ViewModel() {
     private val manualCloudSyncStateHolder = ManualCloudSyncStateHolder(
         cloudSyncRunner = cloudSyncRunner,
         cloudSyncActivationStore = cloudSyncActivationStore,
         cloudSyncEnabledStore = cloudSyncEnabledStore,
+        cloudSyncMetadataStore = cloudSyncMetadataStore,
     )
     private val mutableUiState = MutableStateFlow(SettingsUiState())
     private val exportFeedback = MutableSharedFlow<BackupExportFeedback>(extraBufferCapacity = 1)
@@ -92,6 +95,8 @@ class SettingsViewModel(
         manualCloudSyncStateHolder.cloudSyncActivated
     val cloudSyncEnabled: StateFlow<Boolean> =
         manualCloudSyncStateHolder.cloudSyncEnabled
+    val lastSyncTimestamp: StateFlow<Long?> =
+        manualCloudSyncStateHolder.lastSyncTimestamp
 
     init {
         refreshCloudAccountStatus()
@@ -610,6 +615,7 @@ class SettingsViewModelFactory(
     private val cloudSyncRunner: CloudSyncRunner,
     private val cloudSyncActivationStore: CloudSyncActivationStore,
     private val cloudSyncEnabledStore: CloudSyncEnabledStore,
+    private val cloudSyncMetadataStore: CloudSyncMetadataStore,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -620,6 +626,7 @@ class SettingsViewModelFactory(
                 cloudSyncRunner = cloudSyncRunner,
                 cloudSyncActivationStore = cloudSyncActivationStore,
                 cloudSyncEnabledStore = cloudSyncEnabledStore,
+                cloudSyncMetadataStore = cloudSyncMetadataStore,
             ) as T
         }
 

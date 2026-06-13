@@ -2,6 +2,7 @@ package com.carlos.miflujo.ui.settings
 
 import com.carlos.miflujo.data.cloud.sync.CloudSyncActivationStore
 import com.carlos.miflujo.data.cloud.sync.CloudSyncEnabledStore
+import com.carlos.miflujo.data.cloud.sync.CloudSyncMetadataStore
 import com.carlos.miflujo.data.cloud.sync.CloudSyncResult
 import com.carlos.miflujo.data.cloud.sync.CloudSyncRunner
 import com.carlos.miflujo.data.cloud.sync.CloudSyncStatus
@@ -18,6 +19,7 @@ class ManualCloudSyncStateHolderTest {
         val holder = holder(
             result = CloudSyncResult(status = CloudSyncStatus.SIGNED_OUT),
             activationStore = activationStore,
+            enabledStore = FakeCloudSyncEnabledStore(initialValue = true),
         )
 
         holder.syncNow()
@@ -32,6 +34,7 @@ class ManualCloudSyncStateHolderTest {
         val holder = holder(
             result = CloudSyncResult(status = CloudSyncStatus.UNAUTHORIZED),
             activationStore = activationStore,
+            enabledStore = FakeCloudSyncEnabledStore(initialValue = true),
         )
 
         holder.syncNow()
@@ -44,7 +47,11 @@ class ManualCloudSyncStateHolderTest {
     fun `successful sync shows success state and counts`() = runBlocking {
         val result = syncResult(status = CloudSyncStatus.SUCCESS)
         val activationStore = FakeCloudSyncActivationStore()
-        val holder = holder(result, activationStore)
+        val holder = holder(
+            result = result,
+            activationStore = activationStore,
+            enabledStore = FakeCloudSyncEnabledStore(initialValue = true),
+        )
 
         holder.syncNow()
 
@@ -60,7 +67,11 @@ class ManualCloudSyncStateHolderTest {
     fun `partial sync shows partial state and relevant counts`() = runBlocking {
         val result = syncResult(status = CloudSyncStatus.PARTIAL)
         val activationStore = FakeCloudSyncActivationStore()
-        val holder = holder(result, activationStore)
+        val holder = holder(
+            result = result,
+            activationStore = activationStore,
+            enabledStore = FakeCloudSyncEnabledStore(initialValue = true),
+        )
 
         holder.syncNow()
 
@@ -78,6 +89,7 @@ class ManualCloudSyncStateHolderTest {
         val holder = holder(
             result = CloudSyncResult(status = CloudSyncStatus.FAILURE),
             activationStore = activationStore,
+            enabledStore = FakeCloudSyncEnabledStore(initialValue = true),
         )
 
         holder.syncNow()
@@ -92,11 +104,13 @@ class ManualCloudSyncStateHolderTest {
         holder(
             result = CloudSyncResult(status = CloudSyncStatus.SUCCESS),
             activationStore = activationStore,
+            enabledStore = FakeCloudSyncEnabledStore(initialValue = true),
         ).syncNow()
 
         val recreatedHolder = holder(
             result = CloudSyncResult(status = CloudSyncStatus.FAILURE),
             activationStore = activationStore,
+            enabledStore = FakeCloudSyncEnabledStore(initialValue = true),
         )
 
         assertEquals(true, recreatedHolder.cloudSyncActivated.value)
@@ -115,7 +129,8 @@ class ManualCloudSyncStateHolderTest {
                 CloudSyncResult(status = CloudSyncStatus.SUCCESS)
             },
             cloudSyncActivationStore = FakeCloudSyncActivationStore(),
-            cloudSyncEnabledStore = FakeCloudSyncEnabledStore(),
+            cloudSyncEnabledStore = FakeCloudSyncEnabledStore(initialValue = true),
+            cloudSyncMetadataStore = FakeCloudSyncMetadataStore(),
         )
 
         val firstSync = async { holder.syncNow() }
@@ -189,6 +204,51 @@ class ManualCloudSyncStateHolderTest {
     }
 
     @Test
+    fun `initial lastSyncTimestamp is read from metadata store`() = runBlocking {
+        val metadataStore = FakeCloudSyncMetadataStore(timestamp = 12345L)
+        val holder = holder(
+            result = CloudSyncResult(status = CloudSyncStatus.FAILURE),
+            metadataStore = metadataStore,
+        )
+
+        assertEquals(12345L, holder.lastSyncTimestamp.value)
+    }
+
+    @Test
+    fun `successful sync updates the metadata store and exposed lastSyncTimestamp`() = runBlocking {
+        val metadataStore = FakeCloudSyncMetadataStore(timestamp = 1000L)
+        val holder = holder(
+            result = syncResult(status = CloudSyncStatus.SUCCESS),
+            metadataStore = metadataStore,
+            enabledStore = FakeCloudSyncEnabledStore(initialValue = true),
+        )
+
+        val before = System.currentTimeMillis()
+        holder.syncNow()
+        val after = System.currentTimeMillis()
+
+        val updatedTimestamp = holder.lastSyncTimestamp.value
+        org.junit.Assert.assertNotNull(updatedTimestamp)
+        org.junit.Assert.assertTrue(updatedTimestamp!! in before..after)
+        assertEquals(updatedTimestamp, metadataStore.getLastSyncTimestamp())
+    }
+
+    @Test
+    fun `failed manual sync does not update the timestamp`() = runBlocking {
+        val metadataStore = FakeCloudSyncMetadataStore(timestamp = 1000L)
+        val holder = holder(
+            result = syncResult(status = CloudSyncStatus.FAILURE),
+            metadataStore = metadataStore,
+            enabledStore = FakeCloudSyncEnabledStore(initialValue = true),
+        )
+
+        holder.syncNow()
+
+        assertEquals(1000L, holder.lastSyncTimestamp.value)
+        assertEquals(1000L, metadataStore.getLastSyncTimestamp())
+    }
+
+    @Test
     fun `cloudSyncEnabled state does not change if persistence fails`() = runBlocking {
         val enabledStore = FakeCloudSyncEnabledStore(initialValue = false, shouldFailPersistence = true)
         val holder = holder(
@@ -201,14 +261,34 @@ class ManualCloudSyncStateHolderTest {
         assertEquals(false, enabledStore.enabled)
     }
 
+    @Test
+    fun `when cloudSyncEnabled is false syncNow is blocked and timestamp is not updated`() = runBlocking {
+        val metadataStore = FakeCloudSyncMetadataStore(timestamp = 1000L)
+        val enabledStore = FakeCloudSyncEnabledStore(initialValue = false)
+        val holder = holder(
+            result = syncResult(status = CloudSyncStatus.SUCCESS),
+            enabledStore = enabledStore,
+            metadataStore = metadataStore,
+        )
+
+        holder.syncNow()
+
+        // It should be Idle since it never ran
+        assertEquals(ManualCloudSyncUiState.Idle, holder.state.value)
+        assertEquals(1000L, holder.lastSyncTimestamp.value)
+        assertEquals(1000L, metadataStore.getLastSyncTimestamp())
+    }
+
     private fun holder(
         result: CloudSyncResult,
         activationStore: CloudSyncActivationStore = FakeCloudSyncActivationStore(),
         enabledStore: CloudSyncEnabledStore = FakeCloudSyncEnabledStore(),
+        metadataStore: CloudSyncMetadataStore = FakeCloudSyncMetadataStore(),
     ): ManualCloudSyncStateHolder = ManualCloudSyncStateHolder(
         cloudSyncRunner = CloudSyncRunner { result },
         cloudSyncActivationStore = activationStore,
         cloudSyncEnabledStore = enabledStore,
+        cloudSyncMetadataStore = metadataStore,
     )
 
     private fun syncResult(status: CloudSyncStatus): CloudSyncResult = CloudSyncResult(
@@ -254,9 +334,19 @@ private class FakeCloudSyncEnabledStore(
 
     override fun isEnabled(): Boolean = enabled
 
-    override fun setEnabled(value: Boolean): Boolean {
+    override fun setEnabled(enabled: Boolean): Boolean {
         if (shouldFailPersistence) return false
-        enabled = value
+        this.enabled = enabled
         return true
+    }
+}
+
+private class FakeCloudSyncMetadataStore(
+    private var timestamp: Long? = null,
+) : CloudSyncMetadataStore {
+    override fun getLastSyncTimestamp(): Long? = timestamp
+
+    override fun updateLastSyncTimestamp(timestamp: Long) {
+        this.timestamp = timestamp
     }
 }

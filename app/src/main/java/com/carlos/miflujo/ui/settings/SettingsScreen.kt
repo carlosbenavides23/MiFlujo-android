@@ -33,6 +33,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.carlos.miflujo.data.cloud.auth.CloudAccount
 import com.carlos.miflujo.data.cloud.auth.CloudAccountStatus
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 @Composable
 fun SettingsScreen(
@@ -44,6 +47,7 @@ fun SettingsScreen(
     manualCloudSyncState: ManualCloudSyncUiState,
     cloudSyncActivated: Boolean,
     cloudSyncEnabled: Boolean,
+    lastSyncTimestamp: Long?,
     onSaveBackup: () -> Unit,
     onShareBackup: () -> Unit,
     onRestoreBackup: () -> Unit,
@@ -78,6 +82,7 @@ fun SettingsScreen(
             isOperationInProgress = isCloudAccountOperationInProgress,
             manualSyncState = manualCloudSyncState,
             cloudSyncEnabled = cloudSyncEnabled,
+            lastSyncTimestamp = lastSyncTimestamp,
             onSignInWithGoogle = onSignInWithGoogle,
             onRefreshCloudAuthorization = onRefreshCloudAuthorization,
             onSyncNow = onSyncNow,
@@ -163,6 +168,7 @@ private fun CloudSyncSection(
     isOperationInProgress: Boolean,
     manualSyncState: ManualCloudSyncUiState,
     cloudSyncEnabled: Boolean,
+    lastSyncTimestamp: Long?,
     onSignInWithGoogle: () -> Unit,
     onRefreshCloudAuthorization: () -> Unit,
     onSyncNow: () -> Unit,
@@ -239,6 +245,7 @@ private fun CloudSyncSection(
                             isOperationInProgress = isOperationInProgress ||
                                 manualSyncState is ManualCloudSyncUiState.Running,
                         )
+                        LastSyncTimestampText(lastSyncTimestamp = lastSyncTimestamp)
                         Button(
                             onClick = onSyncNow,
                             enabled = isManualSyncEnabled(
@@ -361,6 +368,26 @@ private fun CloudSyncEnabledToggle(
             enabled = !isOperationInProgress,
         )
     }
+}
+
+@Composable
+private fun LastSyncTimestampText(lastSyncTimestamp: Long?) {
+    val text = if (lastSyncTimestamp == null) {
+        "Aún no se ha sincronizado este dispositivo."
+    } else {
+        val formatter = DateTimeFormatter.ofPattern("dd/MM/yy HH:mm")
+        val formatted = Instant.ofEpochMilli(lastSyncTimestamp)
+            .atZone(ZoneId.systemDefault())
+            .format(formatter)
+        "Última sincronización: $formatted"
+    }
+
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(bottom = 4.dp),
+    )
 }
 
 @Composable

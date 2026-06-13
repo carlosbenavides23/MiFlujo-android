@@ -2,6 +2,7 @@ package com.carlos.miflujo.ui.settings
 
 import com.carlos.miflujo.data.cloud.sync.CloudSyncActivationStore
 import com.carlos.miflujo.data.cloud.sync.CloudSyncEnabledStore
+import com.carlos.miflujo.data.cloud.sync.CloudSyncMetadataStore
 import com.carlos.miflujo.data.cloud.sync.CloudSyncResult
 import com.carlos.miflujo.data.cloud.sync.CloudSyncRunner
 import com.carlos.miflujo.data.cloud.sync.CloudSyncStatus
@@ -45,6 +46,7 @@ class ManualCloudSyncStateHolder(
     private val cloudSyncRunner: CloudSyncRunner,
     private val cloudSyncActivationStore: CloudSyncActivationStore,
     private val cloudSyncEnabledStore: CloudSyncEnabledStore,
+    private val cloudSyncMetadataStore: CloudSyncMetadataStore,
 ) {
     private val running = AtomicBoolean(false)
     private val mutableState = MutableStateFlow<ManualCloudSyncUiState>(
@@ -56,10 +58,14 @@ class ManualCloudSyncStateHolder(
     private val mutableCloudSyncEnabled = MutableStateFlow(
         cloudSyncEnabledStore.isEnabled(),
     )
+    private val mutableLastSyncTimestamp = MutableStateFlow(
+        cloudSyncMetadataStore.getLastSyncTimestamp(),
+    )
 
     val state: StateFlow<ManualCloudSyncUiState> = mutableState.asStateFlow()
     val cloudSyncActivated: StateFlow<Boolean> = mutableCloudSyncActivated.asStateFlow()
     val cloudSyncEnabled: StateFlow<Boolean> = mutableCloudSyncEnabled.asStateFlow()
+    val lastSyncTimestamp: StateFlow<Long?> = mutableLastSyncTimestamp.asStateFlow()
 
     fun setCloudSyncEnabled(enabled: Boolean) {
         val persisted = runCatching { cloudSyncEnabledStore.setEnabled(enabled) }
@@ -77,6 +83,10 @@ class ManualCloudSyncStateHolder(
 
     suspend fun syncNow() {
         logMiFlujoSyncDebug("Manual Cloud Sync requested.")
+        if (!mutableCloudSyncEnabled.value) {
+            logMiFlujoSyncDebug("Manual Cloud Sync ignored: disabled.")
+            return
+        }
         if (!running.compareAndSet(false, true)) {
             logMiFlujoSyncDebug("Manual Cloud Sync ignored: already running.")
             return
@@ -91,6 +101,11 @@ class ManualCloudSyncStateHolder(
             )
             if (result.status.activatesCloudSync()) {
                 markCloudSyncActivated()
+            }
+            if (result.status.updatesLastSyncTimestamp()) {
+                val timestamp = System.currentTimeMillis()
+                cloudSyncMetadataStore.updateLastSyncTimestamp(timestamp)
+                mutableLastSyncTimestamp.value = timestamp
             }
             mutableState.value = result.toUiState()
         } catch (exception: Exception) {
@@ -117,6 +132,9 @@ class ManualCloudSyncStateHolder(
 }
 
 private fun CloudSyncStatus.activatesCloudSync(): Boolean =
+    this == CloudSyncStatus.SUCCESS || this == CloudSyncStatus.PARTIAL
+
+private fun CloudSyncStatus.updatesLastSyncTimestamp(): Boolean =
     this == CloudSyncStatus.SUCCESS || this == CloudSyncStatus.PARTIAL
 
 private fun CloudSyncResult.toUiState(): ManualCloudSyncUiState {
