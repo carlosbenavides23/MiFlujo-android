@@ -501,6 +501,14 @@ class SettingsViewModel(
         }
     }
 
+    fun requestConnectivityRecoveredSync(runtimeState: CloudSyncSchedulerRuntimeState) {
+        viewModelScope.launch {
+            cloudSyncSchedulerCoordinator.requestSync(
+                runtimeState.toDecisionInput(CloudSyncTriggerReason.CONNECTIVITY_RECOVERED),
+            )
+        }
+    }
+
     fun syncNow() {
         val requestId = com.carlos.miflujo.data.cloud.sync.generateCloudSyncRequestId()
         val reason = com.carlos.miflujo.data.cloud.sync.CloudSyncTriggerReason.MANUAL_SETTINGS

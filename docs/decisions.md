@@ -1034,3 +1034,24 @@ WorkManager no reemplaza `Sincronizar ahora` ni `APP_FOREGROUND`. Un resultado
 exitoso o parcial termina en success; offline, otra ejecución activa, una operación
 de cuenta activa o un fallo reintentable usan retry con backoff. Estados disabled,
 not activated, sin pendientes, signed out o unauthorized terminan sin reintento.
+
+## 060 - CONNECTIVITY_RECOVERED mientras la app está abierta
+
+MiFlujo solicita Cloud Sync con reason `CONNECTIVITY_RECOVERED` únicamente cuando
+la conectividad cambia de no disponible a disponible mientras la app está en
+foreground. El estado inicial online solo inicializa el gate y no crea una
+solicitud, porque `APP_FOREGROUND` ya cubre la entrada a la app.
+
+El gate conserva un solo evento de recuperación pendiente si la cuenta todavía
+está cargando o existe una operación de cuenta. Cuando ese estado queda listo,
+emite una sola solicitud sin timers, polling ni sleeps. Emisiones repetidas de
+conectividad disponible, recomposición y transiciones a offline no duplican la
+solicitud. Un evento pendiente se descarta si la app pasa a background.
+
+Este trigger requiere Cloud Sync habilitado, activación previa, cuenta autorizada
+y ausencia de otra ejecución u operación de cuenta. No realiza la primera
+activación y no requiere cambios locales pendientes, porque puede descargar
+cambios remotos creados en otro dispositivo.
+
+`CONNECTIVITY_RECOVERED` coexiste con el respaldo de WorkManager. No cancela ni
+modifica su trabajo; `CloudSyncRunCoordinator` evita ejecuciones simultáneas.

@@ -164,7 +164,7 @@ fun MiFlujoApp() {
     val cloudSyncEnabled by settingsViewModel.cloudSyncEnabled.collectAsState()
     val feedback by movementViewModel.feedback.collectAsState()
 
-    val appForegroundSyncRuntimeState = CloudSyncSchedulerRuntimeState(
+    val cloudSyncSchedulerRuntimeState = CloudSyncSchedulerRuntimeState(
         cloudSyncEnabled = cloudSyncEnabled,
         cloudSyncActivated = cloudSyncActivated,
         networkAvailable = isNetworkAvailable,
@@ -173,12 +173,20 @@ fun MiFlujoApp() {
         accountOperationRunning = settingsViewModel.isCloudAccountOperationRunning,
         hasPendingLocalChanges = false,
     )
+    val cloudSyncSchedulerStateReady =
+        settingsUiState.cloudAccountStatus !is CloudAccountStatus.Loading &&
+            !settingsViewModel.isCloudAccountOperationRunning
     CloudSyncAppForegroundTrigger(
         lifecycle = activity.lifecycle,
-        runtimeState = appForegroundSyncRuntimeState,
-        stateReady = settingsUiState.cloudAccountStatus !is CloudAccountStatus.Loading &&
-            !settingsViewModel.isCloudAccountOperationRunning,
+        runtimeState = cloudSyncSchedulerRuntimeState,
+        stateReady = cloudSyncSchedulerStateReady,
         onRequestSync = settingsViewModel::requestAppForegroundSync,
+    )
+    CloudSyncConnectivityRecoveredTrigger(
+        lifecycle = activity.lifecycle,
+        runtimeState = cloudSyncSchedulerRuntimeState,
+        stateReady = cloudSyncSchedulerStateReady,
+        onRequestSync = settingsViewModel::requestConnectivityRecoveredSync,
     )
 
     val cloudSyncHomeIndicatorState = mapToCloudSyncHomeIndicatorState(
