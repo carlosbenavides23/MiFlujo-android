@@ -45,6 +45,7 @@ fun SettingsScreen(
     cloudAccountStatus: CloudAccountStatus,
     isCloudAccountOperationInProgress: Boolean,
     manualCloudSyncState: ManualCloudSyncUiState,
+    isOffline: Boolean,
     cloudSyncActivated: Boolean,
     cloudSyncEnabled: Boolean,
     lastSyncTimestamp: Long?,
@@ -81,6 +82,7 @@ fun SettingsScreen(
             status = cloudAccountStatus,
             isOperationInProgress = isCloudAccountOperationInProgress,
             manualSyncState = manualCloudSyncState,
+            isOffline = isOffline,
             cloudSyncEnabled = cloudSyncEnabled,
             lastSyncTimestamp = lastSyncTimestamp,
             onSignInWithGoogle = onSignInWithGoogle,
@@ -167,6 +169,7 @@ private fun CloudSyncSection(
     status: CloudAccountStatus,
     isOperationInProgress: Boolean,
     manualSyncState: ManualCloudSyncUiState,
+    isOffline: Boolean,
     cloudSyncEnabled: Boolean,
     lastSyncTimestamp: Long?,
     onSignInWithGoogle: () -> Unit,
@@ -320,7 +323,11 @@ private fun CloudSyncSection(
                         }
                     }
                 }
-                ManualCloudSyncResult(state = manualSyncState)
+                ManualCloudSyncResult(
+                    state = manualSyncState,
+                    cloudAccountStatus = status,
+                    isOffline = isOffline,
+                )
             }
         }
     }
@@ -390,21 +397,53 @@ private fun LastSyncTimestampText(lastSyncTimestamp: Long?) {
     )
 }
 
-@Composable
-private fun ManualCloudSyncResult(state: ManualCloudSyncUiState) {
-    val message = when (state) {
+internal fun manualCloudSyncResultMessage(
+    state: ManualCloudSyncUiState,
+    cloudAccountStatus: CloudAccountStatus,
+    isOffline: Boolean,
+): String? {
+    if (
+        isOffline &&
+        (
+            state is ManualCloudSyncUiState.Unauthorized ||
+                state is ManualCloudSyncUiState.SignedOut ||
+                state is ManualCloudSyncUiState.Failure
+            )
+    ) {
+        return "Sin internet. MiFlujo sigue funcionando localmente."
+    }
+
+    return when (state) {
         ManualCloudSyncUiState.Idle,
         ManualCloudSyncUiState.Running,
-        -> return
+        -> null
         is ManualCloudSyncUiState.Success -> "Sincronización completada."
         is ManualCloudSyncUiState.Partial ->
             "Sincronización parcial. Algunos elementos se reintentarán después."
         ManualCloudSyncUiState.SignedOut -> "Inicia sesión para sincronizar."
-        ManualCloudSyncUiState.Unauthorized ->
-            "Tu cuenta no está autorizada para Cloud Sync."
+        ManualCloudSyncUiState.Unauthorized -> {
+            if (cloudAccountStatus is CloudAccountStatus.Unauthorized) {
+                "Tu cuenta no está autorizada para Cloud Sync."
+            } else {
+                "No se pudo sincronizar. Intenta de nuevo."
+            }
+        }
         ManualCloudSyncUiState.Failure ->
             "No se pudo sincronizar. Intenta de nuevo."
     }
+}
+
+@Composable
+private fun ManualCloudSyncResult(
+    state: ManualCloudSyncUiState,
+    cloudAccountStatus: CloudAccountStatus,
+    isOffline: Boolean,
+) {
+    val message = manualCloudSyncResultMessage(
+        state = state,
+        cloudAccountStatus = cloudAccountStatus,
+        isOffline = isOffline,
+    ) ?: return
 
     Column(
         verticalArrangement = Arrangement.spacedBy(4.dp),
