@@ -11,11 +11,15 @@ class CloudSyncSchedulerCoordinatorTest {
         val executor = RecordingExecutor()
         val coordinator = coordinator(executor)
 
-        val action = coordinator.requestSync(
+        val result = coordinator.requestSync(
             runnableInput(reason = CloudSyncTriggerReason.APP_FOREGROUND),
         )
 
-        assertEquals(CloudSyncSchedulerAction.RUN, action)
+        assertEquals(CloudSyncSchedulerAction.RUN, result.action)
+        assertEquals(
+            CloudSyncRunOutcome.Completed(CloudSyncResult(CloudSyncStatus.SUCCESS)),
+            result.runOutcome,
+        )
         assertEquals(1, executor.calls.size)
         assertEquals("test-request-id", executor.calls.single().requestId)
         assertEquals(CloudSyncTriggerReason.APP_FOREGROUND, executor.calls.single().reason)
@@ -83,9 +87,10 @@ class CloudSyncSchedulerCoordinatorTest {
     ) {
         val executor = RecordingExecutor()
 
-        val action = coordinator(executor).requestSync(input)
+        val result = coordinator(executor).requestSync(input)
 
-        assertEquals(expected, action)
+        assertEquals(expected, result.action)
+        assertEquals(null, result.runOutcome)
         assertTrue(executor.calls.isEmpty())
     }
 
@@ -115,8 +120,11 @@ class CloudSyncSchedulerCoordinatorTest {
         override suspend fun runCloudSync(
             requestId: String,
             reason: CloudSyncTriggerReason,
-        ) {
+        ): CloudSyncRunOutcome {
             calls += RunCall(requestId, reason)
+            return CloudSyncRunOutcome.Completed(
+                CloudSyncResult(CloudSyncStatus.SUCCESS),
+            )
         }
     }
 

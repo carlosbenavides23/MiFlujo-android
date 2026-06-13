@@ -114,17 +114,11 @@ fun MiFlujoApp() {
     val cloudAccountRepository = remember(context) {
         MiFlujoAppProvider.cloudAccountRepository(context)
     }
-    val cloudSyncEngine = remember(context) {
-        MiFlujoAppProvider.cloudSyncEngine(context)
-    }
-    val cloudSyncActivationStore = remember(context) {
-        MiFlujoAppProvider.cloudSyncActivationStore(context)
+    val cloudSyncRunCoordinator = remember(context) {
+        MiFlujoAppProvider.cloudSyncRunCoordinator(context)
     }
     val cloudSyncEnabledStore = remember(context) {
         MiFlujoAppProvider.cloudSyncEnabledStore(context)
-    }
-    val cloudSyncMetadataStore = remember(context) {
-        MiFlujoAppProvider.cloudSyncMetadataStore(context)
     }
     val homeViewModel = remember(activity, movementRepository) {
         ViewModelProvider(
@@ -148,20 +142,16 @@ fun MiFlujoApp() {
         activity,
         movementRepository,
         cloudAccountRepository,
-        cloudSyncEngine,
-        cloudSyncActivationStore,
+        cloudSyncRunCoordinator,
         cloudSyncEnabledStore,
-        cloudSyncMetadataStore,
     ) {
         ViewModelProvider(
             activity,
             SettingsViewModelFactory(
                 movementRepository = movementRepository,
                 cloudAccountRepository = cloudAccountRepository,
-                cloudSyncRunner = cloudSyncEngine,
-                cloudSyncActivationStore = cloudSyncActivationStore,
+                cloudSyncRunCoordinator = cloudSyncRunCoordinator,
                 cloudSyncEnabledStore = cloudSyncEnabledStore,
-                cloudSyncMetadataStore = cloudSyncMetadataStore,
             ),
         )[SettingsViewModel::class.java]
     }

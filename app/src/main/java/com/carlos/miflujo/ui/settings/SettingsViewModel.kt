@@ -10,10 +10,8 @@ import com.carlos.miflujo.data.cloud.auth.CloudAccountRepository
 import com.carlos.miflujo.data.cloud.auth.CloudAccountStatus
 import com.carlos.miflujo.data.cloud.auth.LegacyGoogleSignInResult
 import com.carlos.miflujo.data.cloud.auth.MiFlujoAuthLogTag
-import com.carlos.miflujo.data.cloud.sync.CloudSyncRunner
-import com.carlos.miflujo.data.cloud.sync.CloudSyncActivationStore
 import com.carlos.miflujo.data.cloud.sync.CloudSyncEnabledStore
-import com.carlos.miflujo.data.cloud.sync.CloudSyncMetadataStore
+import com.carlos.miflujo.data.cloud.sync.CloudSyncRunCoordinator
 import com.carlos.miflujo.data.cloud.sync.CloudSyncSchedulerCoordinator
 import com.carlos.miflujo.data.cloud.sync.CloudSyncSchedulerRuntimeState
 import com.carlos.miflujo.data.cloud.sync.CloudSyncTriggerReason
@@ -48,16 +46,12 @@ data class SettingsUiState(
 class SettingsViewModel(
     private val movementRepository: MovementRepository,
     private val cloudAccountRepository: CloudAccountRepository,
-    cloudSyncRunner: CloudSyncRunner,
-    cloudSyncActivationStore: CloudSyncActivationStore,
+    cloudSyncRunCoordinator: CloudSyncRunCoordinator,
     cloudSyncEnabledStore: CloudSyncEnabledStore,
-    cloudSyncMetadataStore: CloudSyncMetadataStore,
 ) : ViewModel() {
     private val manualCloudSyncStateHolder = ManualCloudSyncStateHolder(
-        cloudSyncRunner = cloudSyncRunner,
-        cloudSyncActivationStore = cloudSyncActivationStore,
+        cloudSyncRunCoordinator = cloudSyncRunCoordinator,
         cloudSyncEnabledStore = cloudSyncEnabledStore,
-        cloudSyncMetadataStore = cloudSyncMetadataStore,
     )
     private val cloudSyncSchedulerCoordinator = CloudSyncSchedulerCoordinator(
         executor = ManualCloudSyncScheduledRunExecutor(manualCloudSyncStateHolder),
@@ -653,10 +647,8 @@ internal fun canStartCloudAccountAction(
 class SettingsViewModelFactory(
     private val movementRepository: MovementRepository,
     private val cloudAccountRepository: CloudAccountRepository,
-    private val cloudSyncRunner: CloudSyncRunner,
-    private val cloudSyncActivationStore: CloudSyncActivationStore,
+    private val cloudSyncRunCoordinator: CloudSyncRunCoordinator,
     private val cloudSyncEnabledStore: CloudSyncEnabledStore,
-    private val cloudSyncMetadataStore: CloudSyncMetadataStore,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -664,10 +656,8 @@ class SettingsViewModelFactory(
             return SettingsViewModel(
                 movementRepository = movementRepository,
                 cloudAccountRepository = cloudAccountRepository,
-                cloudSyncRunner = cloudSyncRunner,
-                cloudSyncActivationStore = cloudSyncActivationStore,
+                cloudSyncRunCoordinator = cloudSyncRunCoordinator,
                 cloudSyncEnabledStore = cloudSyncEnabledStore,
-                cloudSyncMetadataStore = cloudSyncMetadataStore,
             ) as T
         }
 

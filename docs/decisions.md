@@ -987,3 +987,50 @@ remotos de otro dispositivo.
 Esta decisión no agrega timer, WorkManager, trigger por conectividad ni nuevas
 solicitudes automáticas. Tampoco cambia el esquema Room ni el comportamiento del
 motor de Cloud Sync.
+
+## 059 - WorkManager como respaldo one-time de cambios locales pendientes
+
+Cloud Sync usa WorkManager únicamente como red de seguridad para subir cambios
+locales pendientes. Cada solicitud crea un `OneTimeWorkRequest` con:
+
+```text
+unique work name = cloud_sync_backup
+ExistingWorkPolicy = KEEP
+network constraint = CONNECTED
+backoff = EXPONENTIAL
+```
+
+No se agrega trabajo periódico, no se ejecuta cada 90 segundos en background y no
+se usa salir de la app como trigger.
+
+El worker construye estado runtime real desde las preferencias de Cloud Sync, el
+estado de activación, la cuenta cloud actual, el guard compartido de ejecución y
+`CloudSyncPendingChangesProvider`. La conectividad se considera disponible dentro
+del worker porque WorkManager solo lo inicia cuando se cumple `CONNECTED`; no se
+mantiene un segundo monitor de red en background. `accountOperationRunning` es
+`false` porque las operaciones de cuenta actuales pertenecen al ViewModel de
+Ajustes y no existe un runner de cuenta en background.
+
+La política del scheduler sigue siendo la fuente de verdad. `WORK_MANAGER_BACKUP`
+solo ejecuta cuando Cloud Sync está habilitado, ya fue activado, la cuenta está
+autorizada, no existe otro sync en ejecución y Room contiene `PENDING_UPLOAD`,
+`PENDING_DELETE` o `SYNC_ERROR`. Nunca realiza la primera activación.
+
+`CloudSyncRunCoordinator` vive en el app container y comparte un único
+`AtomicBoolean` entre sync manual, `APP_FOREGROUND` y WorkManager. También conserva
+los logs de inicio/fin y actualiza activación y timestamp únicamente para resultados
+`SUCCESS` o `PARTIAL`. `ManualCloudSyncStateHolder` delega la ejecución a este
+coordinador y mantiene el mismo estado visible de Ajustes.
+
+El enqueue ocurre en un decorador del repositorio de movimientos, después de que
+la escritura local termina correctamente. Crear o editar con Cloud Sync habilitado
+y previamente activado asigna `PENDING_UPLOAD`; después se consulta Room y se
+encola el trabajo único si existe algún estado pendiente. Delete usa el resultado
+persistido de Room mediante el mismo proveedor. Con Cloud Sync apagado o todavía
+no activado, crear/editar usa `LOCAL_ONLY` y no se encola trabajo. Restore por
+reemplazo no encola WorkManager.
+
+WorkManager no reemplaza `Sincronizar ahora` ni `APP_FOREGROUND`. Un resultado
+exitoso o parcial termina en success; offline, otra ejecución activa, una operación
+de cuenta activa o un fallo reintentable usan retry con backoff. Estados disabled,
+not activated, sin pendientes, signed out o unauthorized terminan sin reintento.

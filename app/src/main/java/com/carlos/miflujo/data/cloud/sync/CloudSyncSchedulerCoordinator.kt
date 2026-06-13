@@ -4,8 +4,14 @@ fun interface CloudSyncScheduledRunExecutor {
     suspend fun runCloudSync(
         requestId: String,
         reason: CloudSyncTriggerReason,
-    )
+    ): CloudSyncRunOutcome
 }
+
+data class CloudSyncSchedulerRequestResult(
+    val requestId: String,
+    val action: CloudSyncSchedulerAction,
+    val runOutcome: CloudSyncRunOutcome? = null,
+)
 
 class CloudSyncSchedulerCoordinator(
     private val executor: CloudSyncScheduledRunExecutor,
@@ -13,7 +19,7 @@ class CloudSyncSchedulerCoordinator(
 ) {
     suspend fun requestSync(
         input: CloudSyncSchedulerDecisionInput,
-    ): CloudSyncSchedulerAction {
+    ): CloudSyncSchedulerRequestResult {
         val requestId = requestIdProvider()
         logCloudSyncRequest(requestId, input.reason)
 
@@ -31,9 +37,15 @@ class CloudSyncSchedulerCoordinator(
             hasPendingLocalChanges = input.hasPendingLocalChanges,
         )
 
-        if (action == CloudSyncSchedulerAction.RUN) {
+        val runOutcome = if (action == CloudSyncSchedulerAction.RUN) {
             executor.runCloudSync(requestId, input.reason)
+        } else {
+            null
         }
-        return action
+        return CloudSyncSchedulerRequestResult(
+            requestId = requestId,
+            action = action,
+            runOutcome = runOutcome,
+        )
     }
 }

@@ -4,6 +4,7 @@ import com.carlos.miflujo.data.cloud.sync.CloudSyncActivationStore
 import com.carlos.miflujo.data.cloud.sync.CloudSyncEnabledStore
 import com.carlos.miflujo.data.cloud.sync.CloudSyncMetadataStore
 import com.carlos.miflujo.data.cloud.sync.CloudSyncResult
+import com.carlos.miflujo.data.cloud.sync.CloudSyncRunCoordinator
 import com.carlos.miflujo.data.cloud.sync.CloudSyncRunner
 import com.carlos.miflujo.data.cloud.sync.CloudSyncStatus
 import kotlinx.coroutines.CompletableDeferred
@@ -130,16 +131,22 @@ class ManualCloudSyncStateHolderTest {
         val started = CompletableDeferred<Unit>()
         val release = CompletableDeferred<Unit>()
         var callCount = 0
+        val activationStore = FakeCloudSyncActivationStore()
+        val enabledStore = FakeCloudSyncEnabledStore(initialValue = true)
+        val metadataStore = FakeCloudSyncMetadataStore()
         val holder = ManualCloudSyncStateHolder(
-            cloudSyncRunner = CloudSyncRunner {
-                callCount += 1
-                started.complete(Unit)
-                release.await()
-                CloudSyncResult(status = CloudSyncStatus.SUCCESS)
-            },
-            cloudSyncActivationStore = FakeCloudSyncActivationStore(),
-            cloudSyncEnabledStore = FakeCloudSyncEnabledStore(initialValue = true),
-            cloudSyncMetadataStore = FakeCloudSyncMetadataStore(),
+            cloudSyncRunCoordinator = CloudSyncRunCoordinator(
+                cloudSyncRunner = CloudSyncRunner {
+                    callCount += 1
+                    started.complete(Unit)
+                    release.await()
+                    CloudSyncResult(status = CloudSyncStatus.SUCCESS)
+                },
+                cloudSyncActivationStore = activationStore,
+                cloudSyncEnabledStore = enabledStore,
+                cloudSyncMetadataStore = metadataStore,
+            ),
+            cloudSyncEnabledStore = enabledStore,
         )
 
         val firstSync = async { holder.syncNow("test-id", com.carlos.miflujo.data.cloud.sync.CloudSyncTriggerReason.MANUAL_SETTINGS) }
@@ -296,10 +303,13 @@ class ManualCloudSyncStateHolderTest {
         enabledStore: CloudSyncEnabledStore = FakeCloudSyncEnabledStore(),
         metadataStore: CloudSyncMetadataStore = FakeCloudSyncMetadataStore(),
     ): ManualCloudSyncStateHolder = ManualCloudSyncStateHolder(
-        cloudSyncRunner = CloudSyncRunner { result },
-        cloudSyncActivationStore = activationStore,
+        cloudSyncRunCoordinator = CloudSyncRunCoordinator(
+            cloudSyncRunner = CloudSyncRunner { result },
+            cloudSyncActivationStore = activationStore,
+            cloudSyncEnabledStore = enabledStore,
+            cloudSyncMetadataStore = metadataStore,
+        ),
         cloudSyncEnabledStore = enabledStore,
-        cloudSyncMetadataStore = metadataStore,
     )
 
     private fun syncResult(status: CloudSyncStatus): CloudSyncResult = CloudSyncResult(

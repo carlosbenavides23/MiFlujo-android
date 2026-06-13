@@ -1,10 +1,11 @@
 package com.carlos.miflujo.ui.settings
 
 import com.carlos.miflujo.data.cloud.sync.CloudSyncScheduledRunExecutor
+import com.carlos.miflujo.data.cloud.sync.CloudSyncRunOutcome
 import com.carlos.miflujo.data.cloud.sync.CloudSyncTriggerReason
 
 class ManualCloudSyncScheduledRunExecutor internal constructor(
-    private val syncNow: suspend (String, CloudSyncTriggerReason) -> Unit,
+    private val syncNow: suspend (String, CloudSyncTriggerReason) -> CloudSyncRunOutcome,
 ) : CloudSyncScheduledRunExecutor {
     constructor(
         stateHolder: ManualCloudSyncStateHolder,
@@ -13,7 +14,5 @@ class ManualCloudSyncScheduledRunExecutor internal constructor(
     override suspend fun runCloudSync(
         requestId: String,
         reason: CloudSyncTriggerReason,
-    ) {
-        syncNow(requestId, reason)
-    }
+    ): CloudSyncRunOutcome = syncNow(requestId, reason)
 }
