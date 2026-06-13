@@ -1,9 +1,18 @@
 package com.carlos.miflujo.ui
 
+import android.content.BroadcastReceiver
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.Intent
+import android.content.IntentFilter
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -41,7 +50,9 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -53,6 +64,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModelProvider
 import com.carlos.miflujo.MiFlujoAppProvider
 import com.carlos.miflujo.R
@@ -61,6 +74,7 @@ import com.carlos.miflujo.data.cloud.auth.MiFlujoAuthLogTag
 import com.carlos.miflujo.ui.home.HomeScreen
 import com.carlos.miflujo.ui.home.HomeViewModel
 import com.carlos.miflujo.ui.home.HomeViewModelFactory
+import com.carlos.miflujo.ui.home.mapToCloudSyncHomeIndicatorState
 import com.carlos.miflujo.ui.backup.BackupJsonMimeType
 import com.carlos.miflujo.ui.movement.AddMovementDialog
 import com.carlos.miflujo.ui.movement.MovementFeedbackType
@@ -90,6 +104,7 @@ fun MiFlujoApp() {
     var showAddMovementDialog by rememberSaveable { mutableStateOf(false) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
+    val isNetworkAvailable by rememberNetworkAvailableState(context)
     val activity = remember(context) { context.findComponentActivity() }
     val movementRepository = remember(context) {
         MiFlujoAppProvider.movementRepository(context)
@@ -156,6 +171,15 @@ fun MiFlujoApp() {
     val cloudSyncActivated by settingsViewModel.cloudSyncActivated.collectAsState()
     val cloudSyncEnabled by settingsViewModel.cloudSyncEnabled.collectAsState()
     val feedback by movementViewModel.feedback.collectAsState()
+
+    val cloudSyncHomeIndicatorState = mapToCloudSyncHomeIndicatorState(
+        cloudSyncActivated = cloudSyncActivated,
+        cloudSyncEnabled = cloudSyncEnabled,
+        cloudAccountStatus = settingsUiState.cloudAccountStatus,
+        manualCloudSyncState = manualCloudSyncState,
+        isOffline = !isNetworkAvailable,
+    )
+
     val snackbarHostState = remember { SnackbarHostState() }
     val legacyGoogleSignInFallback = remember(activity) {
         LegacyGoogleSignInFallback(
@@ -370,7 +394,10 @@ fun MiFlujoApp() {
                     .padding(innerPadding),
             ) {
                 when (selectedDestination) {
-                    MainDestination.Home -> HomeScreen(uiState = homeUiState)
+                    MainDestination.Home -> HomeScreen(
+                        uiState = homeUiState,
+                        indicatorState = cloudSyncHomeIndicatorState,
+                    )
                     MainDestination.Movements -> MovementsScreen(
                         uiState = movementUiState,
                         onPreviousMonth = movementViewModel::goToPreviousMonth,
@@ -442,6 +469,7 @@ fun MiFlujoApp() {
                     isCloudAccountOperationInProgress =
                         settingsUiState.isCloudAccountOperationInProgress,
                     manualCloudSyncState = manualCloudSyncState,
+                    isOffline = !isNetworkAvailable,
                     cloudSyncActivated = cloudSyncActivated,
                     cloudSyncEnabled = cloudSyncEnabled,
                     lastSyncTimestamp = settingsViewModel.lastSyncTimestamp.collectAsState().value,
@@ -492,10 +520,97 @@ private fun Context.copyCloudUid(uid: String) {
     clipboardManager.setPrimaryClip(ClipData.newPlainText("MiFlujo UID", uid))
 }
 
+private fun Context.isAirplaneModeEnabled(): Boolean {
+    return Settings.Global.getInt(
+        contentResolver,
+        Settings.Global.AIRPLANE_MODE_ON,
+        0,
+    ) == 1
+}
+
+private fun Context.isNetworkAvailable(): Boolean {
+    if (isAirplaneModeEnabled()) return false
+    val connectivityManager = getSystemService(ConnectivityManager::class.java) ?: return false
+    val network = connectivityManager.activeNetwork ?: return false
+    val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+    return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+        capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+}
+
 private tailrec fun Context.findComponentActivity(): ComponentActivity {
     return when (this) {
         is ComponentActivity -> this
         is ContextWrapper -> baseContext.findComponentActivity()
         else -> error("MiFlujoApp must run inside a ComponentActivity.")
     }
+}
+
+@Composable
+private fun rememberNetworkAvailableState(context: Context): State<Boolean> {
+    val connectivityManager = remember(context) {
+        context.getSystemService(ConnectivityManager::class.java)
+    }
+    val lifecycle = remember(context) { context.findComponentActivity().lifecycle }
+    val mainHandler = remember { Handler(Looper.getMainLooper()) }
+    val isNetworkAvailable = remember(context) {
+        mutableStateOf(context.isNetworkAvailable())
+    }
+
+    DisposableEffect(connectivityManager, context, lifecycle, mainHandler) {
+        if (connectivityManager == null) return@DisposableEffect onDispose {}
+
+        val refreshNetworkState = {
+            val available = context.isNetworkAvailable()
+            val airplaneMode = context.isAirplaneModeEnabled()
+            Log.d(
+                "MiFlujoSync",
+                "Connectivity UI state refreshed: networkAvailable=$available, airplaneMode=$airplaneMode.",
+            )
+            isNetworkAvailable.value = available
+        }
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                refreshNetworkState()
+            }
+
+            override fun onLost(network: Network) {
+                refreshNetworkState()
+            }
+
+            override fun onCapabilitiesChanged(
+                network: Network,
+                networkCapabilities: NetworkCapabilities,
+            ) {
+                refreshNetworkState()
+            }
+        }
+        val lifecycleObserver = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                refreshNetworkState()
+            }
+        }
+        val airplaneModeReceiver = object : BroadcastReceiver() {
+            override fun onReceive(broadcastContext: Context?, intent: Intent?) {
+                if (intent?.action == Intent.ACTION_AIRPLANE_MODE_CHANGED) {
+                    refreshNetworkState()
+                }
+            }
+        }
+
+        refreshNetworkState()
+        connectivityManager.registerDefaultNetworkCallback(callback, mainHandler)
+        context.registerReceiver(
+            airplaneModeReceiver,
+            IntentFilter(Intent.ACTION_AIRPLANE_MODE_CHANGED),
+        )
+        lifecycle.addObserver(lifecycleObserver)
+
+        onDispose {
+            lifecycle.removeObserver(lifecycleObserver)
+            context.unregisterReceiver(airplaneModeReceiver)
+            connectivityManager.unregisterNetworkCallback(callback)
+        }
+    }
+
+    return isNetworkAvailable
 }
