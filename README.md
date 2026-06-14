@@ -23,35 +23,28 @@ MiFlujo ya cuenta con un MVP funcional entregado, probado en dispositivo físico
 Versión estable publicada:
 
 ```text
-v0.3.0
+v0.3.5
 ```
 
-La versión `v0.3.0` representa una etapa post-MVP importante llamada conceptualmente:
+La versión `v0.3.5` es la baseline técnica pre-Firebase publicada:
 
 ```text
-Reportes, Ajustes y Respaldo Local
+Pre-Firebase Technical Baseline
 ```
 
 Incluye:
 
-- Exportación del reporte mensual a PDF tipo tabla.
-- Home simplificado para vistazo rápido del mes.
-- Pantalla de Ajustes.
-- Exportación de respaldo local JSON.
-- Guardado de respaldo mediante el creador de documentos del sistema.
-- Compartir respaldo mediante Android Share Sheet.
-- Restauración de respaldo local JSON.
-- Validación fuerte antes de restaurar.
-- Restauración transaccional en Room.
-- Tests unitarios para cálculo mensual y respaldo JSON.
+- Auditoría técnica y decisiones documentadas antes de Cloud Sync.
+- Estrategia de identidad global y restauración cloud-safe documentadas.
+- Política de Android Auto Backup para datos financieros.
+- Exportación y versionado de schemas de Room.
+- Validación centralizada de reglas de negocio de movimientos.
+- UUID estable por movimiento con migración Room.
+- Backup schema v2 con UUID y compatibilidad de importación con schema v1.
 
-Trabajo actual planificado:
+La configuración base de Firebase, las reglas de Firestore y el inicio de sesión con estado de autorización están en desarrollo para `v0.4.0`.
 
-```text
-v0.3.5 - Pre-Firebase Technical Baseline
-```
-
-`v0.3.5` es una fase técnica de auditoría, documentación y saneamiento antes de Firebase Cloud Sync. No debe implementar Firebase, login, Firestore ni sincronización todavía.
+La sincronización de movimientos todavía no está implementada. Iniciar sesión no sube ni descarga movimientos y MiFlujo continúa funcionando local-only.
 
 ## Funcionalidades
 
@@ -84,6 +77,8 @@ v0.3.5 - Pre-Firebase Technical Baseline
 - Respaldo local JSON.
 - Restauración local JSON validada.
 - Persistencia local con Room.
+- Inicio de sesión con Google para identificar la cuenta de Cloud Sync.
+- Consulta del estado de autorización por UID sin activar sincronización.
 
 ## Alcance del producto
 
@@ -103,7 +98,6 @@ Incluye actualmente:
 
 No incluye actualmente:
 
-- Login.
 - Sincronización en la nube.
 - Backend.
 - Integración bancaria.
@@ -116,6 +110,8 @@ No incluye actualmente:
 - Reportes contables avanzados.
 - Merge avanzado de respaldos.
 - Sincronización multi-dispositivo.
+
+El inicio de sesión actual solo identifica la cuenta y consulta si su UID está autorizado. No activa Cloud Sync ni modifica movimientos locales o remotos.
 
 ## Stack técnico
 
@@ -166,7 +162,7 @@ US$ 100.00 -> 10000
 
 ## Pre-Firebase Technical Baseline
 
-Antes de implementar Firebase Cloud Sync, el proyecto debe pasar por una fase `v0.3.5`.
+La versión `v0.3.5` publicó la baseline técnica previa a Firebase Cloud Sync.
 
 Objetivo:
 
@@ -174,28 +170,16 @@ Objetivo:
 Auditar, limpiar y preparar la base técnica antes de sincronización cloud.
 ```
 
-Reglas de esta fase:
+La baseline se completó sin implementar Firebase, login, Firestore ni Cloud Sync. El trabajo quedó dividido en issues pequeñas:
 
-- No implementar Firebase todavía.
-- No agregar login todavía.
-- No agregar Firestore todavía.
-- No implementar sync parcial.
-- No hacer cambios grandes de UI.
-- No hacer PRs gigantes.
-- Documentar decisiones antes de cambiar datos.
-- Cualquier cambio de Room debe tener migración clara.
-- Cualquier cambio de backup/restore debe comprobar compatibilidad con `v0.3.0`.
-
-Issues principales de la fase:
-
-- `#96` docs: guardar auditoría técnica pre-Firebase.
-- `#97` docs: definir estrategia de identidad y sincronización cloud.
-- `#98` chore: habilitar Room schema export antes de migraciones sync.
-- `#99` feature: agregar UUID estable a movimientos.
-- `#100` feature: crear backup schema v2 con UUID.
-- `#101` refactor: centralizar validación de reglas de negocio de movimientos.
-- `#102` docs: definir comportamiento cloud-safe para restauración de backups.
-- `#103` chore: definir política de Android Auto Backup para datos financieros.
+- `#96`: auditoría técnica pre-Firebase.
+- `#97`: estrategia de identidad y sincronización cloud.
+- `#98`: exportación de schemas de Room.
+- `#99`: UUID estable para movimientos.
+- `#100`: backup schema v2 con UUID.
+- `#101`: validación centralizada de movimientos.
+- `#102`: comportamiento cloud-safe para restauración.
+- `#103`: política de Android Auto Backup para datos financieros.
 
 ## Releases
 
@@ -254,6 +238,8 @@ La documentación base se encuentra en `docs/`:
 - `docs/audit-pre-firebase.md`
 - `docs/cloud-sync-strategy.md`
 - `docs/cloud-safe-restore.md`
+- `docs/android-auto-backup-policy.md`
+- `docs/firebase-cloud-sync-plan.md`
 
 El archivo `AGENTS.md` contiene reglas importantes para agentes de IA o colaboradores que trabajen en el proyecto.
 
@@ -261,9 +247,7 @@ El archivo `AGENTS.md` contiene reglas importantes para agentes de IA o colabora
 
 Ideas futuras, sujetas a feedback real del usuario y planificación técnica:
 
-- Firebase Cloud Sync opcional.
-- Estrategia de identidad global con UUID.
-- Backup schema v2.
+- Firebase Cloud Sync opcional, planificado en `docs/firebase-cloud-sync-plan.md`.
 - Changelog visible dentro de Ajustes.
 - Acerca de MiFlujo.
 - Comparación entre meses.

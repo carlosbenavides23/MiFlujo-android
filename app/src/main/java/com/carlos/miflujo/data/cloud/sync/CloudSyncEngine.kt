@@ -1,0 +1,338 @@
+package com.carlos.miflujo.data.cloud.sync
+
+import com.carlos.miflujo.data.cloud.auth.CloudAccountRepository
+import com.carlos.miflujo.data.cloud.auth.CloudAccountStatus
+import com.carlos.miflujo.data.cloud.firestore.CloudMovementRemoteDataSource
+import com.carlos.miflujo.domain.model.Movement
+import com.carlos.miflujo.domain.sync.MovementSyncReconciler
+import com.carlos.miflujo.domain.sync.SyncReconciliationAction
+import java.time.LocalDateTime
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+
+enum class CloudSyncStatus {
+    SUCCESS,
+    PARTIAL,
+    SIGNED_OUT,
+    UNAUTHORIZED,
+    FAILURE,
+}
+
+data class CloudSyncResult(
+    val status: CloudSyncStatus,
+    val uploaded: Int = 0,
+    val downloaded: Int = 0,
+    val updatedLocal: Int = 0,
+    val markedSynced: Int = 0,
+    val skippedRemote: Int = 0,
+    val localErrors: Int = 0,
+    val remoteErrors: Int = 0,
+)
+
+fun interface CloudSyncRunner {
+    suspend fun syncNow(): CloudSyncResult
+}
+
+class CloudSyncEngine(
+    private val cloudAccountRepository: CloudAccountRepository,
+    private val localDataSource: CloudSyncLocalDataSource,
+    private val remoteDataSource: CloudMovementRemoteDataSource,
+    private val syncTimeProvider: () -> LocalDateTime = LocalDateTime::now,
+) : CloudSyncRunner {
+    private val syncMutex = Mutex()
+
+    override suspend fun syncNow(): CloudSyncResult = syncMutex.withLock {
+        logMiFlujoSyncDebug("CloudSyncEngine syncNow starts.")
+        val accountStatus = currentAccountStatus()
+        logMiFlujoSyncDebug(
+            "CloudSyncEngine account status before remote work: " +
+                "${accountStatus.toSafeSyncAccountStatus()}.",
+        )
+        val result = when (accountStatus) {
+            CloudAccountStatus.SignedOut -> CloudSyncResult(CloudSyncStatus.SIGNED_OUT)
+            is CloudAccountStatus.Unauthorized -> CloudSyncResult(CloudSyncStatus.UNAUTHORIZED)
+            CloudAccountStatus.Loading -> CloudSyncResult(CloudSyncStatus.FAILURE)
+            is CloudAccountStatus.Authorized -> syncAuthorized(accountStatus.account.uid)
+            null -> CloudSyncResult(CloudSyncStatus.FAILURE)
+        }
+        logMiFlujoSyncDebug(result.toSafeSyncLogMessage("CloudSyncEngine final result"))
+        result
+    }
+
+    private suspend fun currentAccountStatus(): CloudAccountStatus? = try {
+        cloudAccountRepository.getCurrentStatus()
+    } catch (exception: Exception) {
+        if (exception is CancellationException) throw exception
+        null
+    }
+
+    private suspend fun syncAuthorized(uid: String): CloudSyncResult {
+        val syncTime = syncTimeProvider()
+        val localMovements = try {
+            localDataSource.fetchAllIncludingTombstones()
+        } catch (exception: Exception) {
+            if (exception is CancellationException) throw exception
+            return CloudSyncResult(
+                status = CloudSyncStatus.FAILURE,
+                localErrors = 1,
+            )
+        }
+        logMiFlujoSyncDebug(
+            "CloudSyncEngine local snapshot count=${localMovements.size}.",
+        )
+        val remoteInputs = try {
+            remoteDataSource.fetchAll(uid)
+        } catch (exception: Exception) {
+            if (exception is CancellationException) throw exception
+            return CloudSyncResult(
+                status = CloudSyncStatus.FAILURE,
+                remoteErrors = 1,
+            )
+        }
+        logMiFlujoSyncDebug(
+            "CloudSyncEngine remote snapshot count=${remoteInputs.size}.",
+        )
+        val plan = try {
+            MovementSyncReconciler.reconcile(
+                localMovements = localMovements,
+                remoteInputs = remoteInputs,
+                syncTime = syncTime,
+            )
+        } catch (exception: Exception) {
+            if (exception is CancellationException) throw exception
+            return CloudSyncResult(
+                status = CloudSyncStatus.FAILURE,
+                localErrors = 1,
+            )
+        }
+
+        val counts = MutableCloudSyncCounts()
+        val localByUuid = localMovements.associateBy(Movement::uuid)
+        val localByIdentity = localMovements.associateBy {
+            LocalMovementIdentity(it.id, it.uuid)
+        }
+        plan.actions.forEach { action ->
+            applyAction(
+                uid = uid,
+                action = action,
+                localByUuid = localByUuid,
+                localByIdentity = localByIdentity,
+                syncTime = syncTime,
+                counts = counts,
+            )
+        }
+        return counts.toResult()
+    }
+
+    private suspend fun applyAction(
+        uid: String,
+        action: SyncReconciliationAction,
+        localByUuid: Map<String, Movement>,
+        localByIdentity: Map<LocalMovementIdentity, Movement>,
+        syncTime: LocalDateTime,
+        counts: MutableCloudSyncCounts,
+    ) {
+        when (action) {
+            is SyncReconciliationAction.UploadLocalMovement -> upload(
+                uid = uid,
+                local = localByUuid[action.payload.uuid],
+                syncTime = syncTime,
+                tombstone = false,
+                counts = counts,
+            ) {
+                remoteDataSource.upsertVisible(uid, action.payload)
+            }
+
+            is SyncReconciliationAction.UploadLocalTombstone -> upload(
+                uid = uid,
+                local = localByUuid[action.payload.uuid],
+                syncTime = syncTime,
+                tombstone = true,
+                counts = counts,
+            ) {
+                remoteDataSource.upsertTombstone(uid, action.payload)
+            }
+
+            is SyncReconciliationAction.InsertRemoteLocally -> {
+                try {
+                    localDataSource.insertRemoteMovement(action.movement)
+                    counts.downloaded += 1
+                } catch (exception: Exception) {
+                    if (exception is CancellationException) throw exception
+                    counts.localErrors += 1
+                }
+            }
+
+            is SyncReconciliationAction.UpdateLocalFromRemote -> {
+                val expectedLocal = localByIdentity[
+                    LocalMovementIdentity(action.movement.id, action.movement.uuid)
+                ]
+                if (expectedLocal == null) {
+                    counts.localErrors += 1
+                    return
+                }
+                try {
+                    if (
+                        localDataSource.updateRemoteMovement(
+                            expectedLocal = expectedLocal,
+                            movement = action.movement,
+                        )
+                    ) {
+                        counts.updatedLocal += 1
+                    } else {
+                        counts.localErrors += 1
+                    }
+                } catch (exception: Exception) {
+                    if (exception is CancellationException) throw exception
+                    counts.localErrors += 1
+                    markSyncErrorBestEffort(expectedLocal)
+                }
+            }
+
+            is SyncReconciliationAction.MarkLocalSynced -> {
+                val expectedLocal = localByIdentity[
+                    LocalMovementIdentity(action.localId, action.uuid)
+                ]
+                if (expectedLocal == null) {
+                    counts.localErrors += 1
+                    return
+                }
+                try {
+                    if (
+                        localDataSource.markSynced(
+                            expectedLocal = expectedLocal,
+                            lastSyncedAt = action.lastSyncedAt,
+                        )
+                    ) {
+                        counts.markedSynced += 1
+                    } else {
+                        counts.localErrors += 1
+                    }
+                } catch (exception: Exception) {
+                    if (exception is CancellationException) throw exception
+                    counts.localErrors += 1
+                    markSyncErrorBestEffort(expectedLocal)
+                }
+            }
+
+            is SyncReconciliationAction.MarkLocalSyncError -> {
+                counts.localErrors += 1
+                localByIdentity[
+                    LocalMovementIdentity(action.localId, action.uuid)
+                ]?.let { expectedLocal ->
+                    markSyncErrorBestEffort(expectedLocal)
+                }
+            }
+
+            is SyncReconciliationAction.SkipInvalidRemote -> {
+                counts.skippedRemote += 1
+                counts.remoteErrors += 1
+            }
+        }
+    }
+
+    private suspend fun upload(
+        uid: String,
+        local: Movement?,
+        syncTime: LocalDateTime,
+        tombstone: Boolean,
+        counts: MutableCloudSyncCounts,
+        remoteWrite: suspend () -> Unit,
+    ) {
+        if (local == null) {
+            counts.localErrors += 1
+            return
+        }
+
+        val preparedLocal = try {
+            localDataSource.prepareForUpload(
+                expectedLocal = local,
+                tombstone = tombstone,
+            )
+        } catch (exception: Exception) {
+            if (exception is CancellationException) throw exception
+            counts.localErrors += 1
+            return
+        }
+        if (preparedLocal == null) {
+            counts.localErrors += 1
+            return
+        }
+
+        try {
+            remoteWrite()
+            counts.uploaded += 1
+        } catch (exception: Exception) {
+            if (exception is CancellationException) throw exception
+            counts.remoteErrors += 1
+            counts.localErrors += 1
+            markSyncErrorBestEffort(preparedLocal)
+            return
+        }
+
+        try {
+            if (
+                localDataSource.markSynced(
+                    expectedLocal = preparedLocal,
+                    lastSyncedAt = syncTime,
+                )
+            ) {
+                counts.markedSynced += 1
+            } else {
+                counts.localErrors += 1
+            }
+        } catch (exception: Exception) {
+            if (exception is CancellationException) throw exception
+            counts.localErrors += 1
+            markSyncErrorBestEffort(preparedLocal)
+        }
+    }
+
+    private suspend fun markSyncErrorBestEffort(expectedLocal: Movement) {
+        try {
+            localDataSource.markSyncError(expectedLocal)
+        } catch (exception: Exception) {
+            if (exception is CancellationException) throw exception
+        }
+    }
+}
+
+private fun CloudAccountStatus?.toSafeSyncAccountStatus(): String = when (this) {
+    is CloudAccountStatus.Authorized -> "Authorized"
+    CloudAccountStatus.SignedOut -> "SignedOut"
+    is CloudAccountStatus.Unauthorized -> "Unauthorized"
+    CloudAccountStatus.Loading,
+    null,
+    -> "Failure"
+}
+
+private data class LocalMovementIdentity(
+    val localId: Long,
+    val uuid: String,
+)
+
+private data class MutableCloudSyncCounts(
+    var uploaded: Int = 0,
+    var downloaded: Int = 0,
+    var updatedLocal: Int = 0,
+    var markedSynced: Int = 0,
+    var skippedRemote: Int = 0,
+    var localErrors: Int = 0,
+    var remoteErrors: Int = 0,
+) {
+    fun toResult(): CloudSyncResult = CloudSyncResult(
+        status = if (localErrors == 0 && remoteErrors == 0) {
+            CloudSyncStatus.SUCCESS
+        } else {
+            CloudSyncStatus.PARTIAL
+        },
+        uploaded = uploaded,
+        downloaded = downloaded,
+        updatedLocal = updatedLocal,
+        markedSynced = markedSynced,
+        skippedRemote = skippedRemote,
+        localErrors = localErrors,
+        remoteErrors = remoteErrors,
+    )
+}

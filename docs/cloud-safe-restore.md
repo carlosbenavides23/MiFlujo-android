@@ -18,6 +18,12 @@ v0.3.5 - Pre-Firebase Technical Baseline
 
 No implementa Firebase, login, Firestore ni sincronización. Solo define la política para evitar pérdida, duplicación o eliminación remota accidental de datos.
 
+La decisión final para `v0.4.0` también está consolidada en:
+
+```text
+docs/firebase-cloud-sync-plan.md
+```
+
 ## Contexto
 
 MiFlujo ya tiene restauración local JSON.
@@ -79,7 +85,6 @@ Para definir restore seguro, la app debe distinguir al menos estos estados conce
 ```text
 SYNC_OFF
 SYNC_ON
-SYNC_PAUSED_FOR_RESTORE
 SYNC_ERROR
 ```
 
@@ -109,9 +114,10 @@ Este modo aplica para:
 - usuarios sin login,
 - usuarios autorizados que no activaron Cloud Sync.
 
-## Caso 2: Cloud Sync activo
+## Caso 2: Cloud Sync activado al menos una vez
 
-Cuando Cloud Sync está activo, no se debe ejecutar restore destructivo directo.
+Después de que Cloud Sync complete una ejecución `SUCCESS` o `PARTIAL`, no se debe
+ejecutar restore destructivo directo en esa instalación.
 
 Riesgo:
 
@@ -130,61 +136,40 @@ Sync automático: puede intentar borrar o sobrescribir los 40 movimientos faltan
 
 Esto no debe ocurrir accidentalmente.
 
-## Política recomendada para primera versión de Cloud Sync
+## Política final para v0.4.0
 
-En la primera etapa de Cloud Sync:
+En `v0.4.0`:
 
 ```text
-Restore destructivo solo se permite con Cloud Sync apagado o pausado explícitamente.
+Restore local queda bloqueado mientras Cloud Sync está activo y autorizado.
 ```
 
-Si Cloud Sync está activo y el usuario intenta restaurar un respaldo, la app debe bloquear el restore directo y mostrar una explicación.
+Restore vuelve a estar disponible si Cloud Sync se desactiva, la sesión se cierra
+o la cuenta deja de estar autorizada. Sigue bloqueado durante una ejecución de
+sync o una operación de cuenta.
 
 Mensaje conceptual:
 
 ```text
-Cloud Sync está activado.
-Para evitar pérdida de datos en la nube, pausa o desactiva la sincronización antes de restaurar un respaldo local.
+Desactiva Cloud Sync o cierra sesión para restaurar un respaldo local.
 ```
 
 Acciones posibles:
 
 ```text
-Cancelar
-Pausar sync y restaurar
+Cerrar
 ```
 
-Para `v0.4.0`, si se busca máxima simplicidad, se puede usar una política todavía más estricta:
+## Caso 3: Restore con sync pausado en una versión futura
 
-```text
-Para restaurar un respaldo, primero desactiva Cloud Sync.
-```
+`v0.4.0` no implementa un modo de pausa temporal para restaurar.
 
-## Caso 3: Sync pausado por restauración
+Un modo futuro de restore con Cloud Sync requerirá una política explícita que defina:
 
-Si se permite pausar sync para restaurar, la app debe entrar en un estado claro:
-
-```text
-SYNC_PAUSED_FOR_RESTORE
-```
-
-En este estado:
-
-- no se suben cambios automáticamente,
-- no se descargan cambios automáticamente,
-- el usuario restaura localmente,
-- la app informa que la nube no se modificó automáticamente,
-- el usuario debe decidir qué hacer después.
-
-Opciones futuras después de restaurar:
-
-```text
-Mantener sync pausado
-Descargar datos de la nube y reemplazar local
-Subir datos locales restaurados como nueva copia principal
-```
-
-Para la primera implementación, no es obligatorio ofrecer todas estas opciones. Puede bastar con exigir que Cloud Sync esté apagado antes de restaurar.
+- cómo combinar por UUID,
+- qué lado tiene prioridad,
+- cómo evitar eliminaciones remotas masivas,
+- qué schemas de backup son aceptados.
 
 ## Caso 4: Cuenta no autorizada
 
@@ -216,9 +201,7 @@ Regla:
 Cerrar sesión no equivale a borrar datos locales.
 ```
 
-La app debe definir si queda en modo local con los datos existentes o si solicita una acción explícita.
-
-No borrar Room sin confirmación fuerte.
+La app queda en modo local con los datos existentes, detiene sync automático y no borra Firestore. Si hay cambios pendientes, debe advertirlo antes de cerrar sesión o desactivar Cloud Sync.
 
 ## Backup local con Cloud Sync
 
@@ -254,6 +237,7 @@ Por eso, en un contexto con Cloud Sync, restaurar un backup v1 tiene riesgo adic
 Política:
 
 - v1 puede restaurarse localmente con sync apagado.
+- v1 nunca debe restaurarse mientras Cloud Sync esté activo.
 - v1 no debe subirse automáticamente a la nube como reemplazo remoto.
 - al importar v1, la app genera UUID nuevos.
 
@@ -268,9 +252,11 @@ Reglas actuales:
 - importar v1 debe generar UUID nuevos,
 - sync debe usar UUID para deduplicar.
 
-Aun con v2, restore destructivo con Cloud Sync activo seguirá necesitando confirmación y política clara.
+Aun con v2, `v0.4.0` bloquea restore mientras Cloud Sync está activo.
 
 UUID reduce duplicados, pero no elimina el riesgo de borrado masivo.
+
+Si restore con Cloud Sync se soporta en el futuro, solo schema v2 o superior podrá considerarse y deberá existir una política explícita de merge/restore.
 
 ## Relación con Firebase Auth
 
@@ -331,7 +317,7 @@ Primera versión cloud recomendada:
 - Usuarios normales siguen local-only.
 - Backup local JSON disponible para todos.
 - Restore local disponible si Cloud Sync está apagado.
-- Restore bloqueado o exige desactivar/pausar sync si Cloud Sync está activo.
+- Restore bloqueado si Cloud Sync está activo.
 - No hay merge avanzado todavía.
 - No hay reemplazo remoto completo desde backup todavía.
 
@@ -371,8 +357,8 @@ MiFlujo conservará backup local JSON para todos los usuarios.
 
 Cloud Sync será una función opcional y privada/controlada, inicialmente para Carlos y el usuario principal.
 
-La restauración local destructiva seguirá siendo válida cuando Cloud Sync esté apagado.
-
-Cuando Cloud Sync esté activo, la app no debe restaurar destructivamente sin pausar o desactivar sync primero.
+La restauración local destructiva es válida cuando MiFlujo está efectivamente en
+modo local-only. Una ejecución `SUCCESS` o `PARTIAL` previa no bloquea restore por
+sí sola; Cloud Sync debe estar desactivado, sin sesión o sin autorización.
 
 La prioridad es evitar que un backup viejo provoque pérdida o eliminación accidental de datos remotos.

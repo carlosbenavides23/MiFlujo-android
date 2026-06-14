@@ -1,0 +1,128 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwnUser(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isAuthorizedUser(uid) {
+      return isOwnUser(uid)
+        && get(/databases/$(database)/documents/authorizedUsers/$(uid)).data.enabled == true;
+    }
+
+    function hasValidMovementFields(data) {
+      let fields = [
+        'uuid',
+        'type',
+        'amountMinor',
+        'currency',
+        'date',
+        'category',
+        'subcategory',
+        'detail',
+        'createdAt',
+        'updatedAt',
+        'deletedAt',
+        'schemaVersion'
+      ];
+
+      return data.keys().hasAll(fields)
+        && data.keys().hasOnly(fields);
+    }
+
+    function hasValidMovementTypes(data) {
+      return data.uuid is string
+        && data.uuid.matches('^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')
+        && data.type is string
+        && data.type in ['INCOME', 'EXPENSE']
+        && data.amountMinor is int
+        && data.amountMinor > 0
+        && data.currency is string
+        && data.currency in ['CORDOBA', 'DOLLAR']
+        && data.date is string
+        && data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && data.category is string
+        && data.category in ['GENERAL_INCOME', 'FIXED_COST', 'MAINTENANCE', 'OTHER']
+        && (data.subcategory == null || data.subcategory is string)
+        && (data.detail == null || data.detail is string)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && (data.deletedAt == null || data.deletedAt is timestamp)
+        && data.schemaVersion is int
+        && data.schemaVersion > 0;
+    }
+
+    function hasValidMovementClassification(data) {
+      return (
+          data.type == 'INCOME'
+          && data.category == 'GENERAL_INCOME'
+          && data.subcategory == null
+        )
+        || (
+          data.type == 'EXPENSE'
+          && data.category == 'FIXED_COST'
+          && data.subcategory in ['WATER', 'ELECTRICITY', 'INTERNET']
+        )
+        || (
+          data.type == 'EXPENSE'
+          && data.category in ['MAINTENANCE', 'OTHER']
+          && data.subcategory == null
+        );
+    }
+
+    function isValidMovement(data, movementUuid) {
+      return hasValidMovementFields(data)
+        && hasValidMovementTypes(data)
+        && hasValidMovementClassification(data)
+        && data.uuid == movementUuid;
+    }
+
+    function hasValidSyncMetadataFields(data) {
+      let fields = ['schemaVersion', 'updatedAt'];
+
+      return data.keys().hasAll(fields)
+        && data.keys().hasOnly(fields)
+        && data.schemaVersion is int
+        && data.schemaVersion > 0
+        && data.updatedAt is timestamp;
+    }
+
+    match /authorizedUsers/{uid} {
+      allow get: if isOwnUser(uid);
+      allow list: if false;
+      allow create, update, delete: if false;
+    }
+
+    match /users/{uid}/movements/{movementUuid} {
+      allow get, list: if isAuthorizedUser(uid);
+
+      allow create: if isAuthorizedUser(uid)
+        && isValidMovement(request.resource.data, movementUuid);
+
+      allow update: if isAuthorizedUser(uid)
+        && isValidMovement(request.resource.data, movementUuid)
+        && request.resource.data.uuid == resource.data.uuid
+        && request.resource.data.createdAt == resource.data.createdAt;
+
+      allow delete: if false;
+    }
+
+    match /users/{uid}/metadata/sync {
+      allow get: if isAuthorizedUser(uid);
+
+      allow create, update: if isAuthorizedUser(uid)
+        && hasValidSyncMetadataFields(request.resource.data);
+
+      allow delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

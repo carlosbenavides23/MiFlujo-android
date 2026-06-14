@@ -14,6 +14,13 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.SyncProblem
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,6 +44,7 @@ import java.time.YearMonth
 @Composable
 fun HomeScreen(
     uiState: HomeUiState,
+    indicatorState: CloudSyncHomeIndicatorState,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -51,7 +59,10 @@ fun HomeScreen(
             ),
         verticalArrangement = Arrangement.spacedBy(22.dp),
     ) {
-        HomeHeader(currentMonth = uiState.currentMonth)
+        HomeHeader(
+            currentMonth = uiState.currentMonth,
+            indicatorState = indicatorState,
+        )
         CurrentMonthDashboardCard(
             cordoba = uiState.report.cordoba,
             dollar = uiState.report.dollar,
@@ -61,20 +72,83 @@ fun HomeScreen(
 }
 
 @Composable
-private fun HomeHeader(currentMonth: YearMonth) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+private fun HomeHeader(
+    currentMonth: YearMonth,
+    indicatorState: CloudSyncHomeIndicatorState,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Top,
     ) {
-        Text(
-            text = "Flujo de efectivo mensual",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = currentMonth.toSpanishMonthLabel(),
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Medium,
-        )
+        Column(
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                text = "Flujo de efectivo mensual",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = currentMonth.toSpanishMonthLabel(),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Medium,
+            )
+        }
+
+        if (indicatorState is CloudSyncHomeIndicatorState.Visible) {
+            CloudSyncHomeIndicator(status = indicatorState.status)
+        }
+    }
+}
+
+@Composable
+private fun CloudSyncHomeIndicator(status: CloudSyncHomeIndicatorStatus) {
+    val (icon, color, label) = when (status) {
+        CloudSyncHomeIndicatorStatus.ACTIVE ->
+            Triple(Icons.Filled.CloudDone, financePositiveColor(), "Activo")
+        CloudSyncHomeIndicatorStatus.DISABLED ->
+            Triple(
+                Icons.Filled.CloudOff,
+                MaterialTheme.colorScheme.onSurfaceVariant,
+                "Desactivado",
+            )
+        CloudSyncHomeIndicatorStatus.SYNCING ->
+            Triple(Icons.Filled.CloudSync, MaterialTheme.colorScheme.primary, "Sincronizando")
+        CloudSyncHomeIndicatorStatus.NO_INTERNET ->
+            Triple(
+                Icons.Filled.CloudOff,
+                MaterialTheme.colorScheme.onSurfaceVariant,
+                "Sin internet",
+            )
+        CloudSyncHomeIndicatorStatus.SYNC_WARNING ->
+            Triple(Icons.Filled.SyncProblem, MaterialTheme.colorScheme.error, "Revisar sync")
+        CloudSyncHomeIndicatorStatus.ACCOUNT_ISSUE ->
+            Triple(Icons.Filled.Warning, MaterialTheme.colorScheme.error, "Revisar cuenta")
+    }
+
+    Surface(
+        color = color.copy(alpha = 0.1f),
+        shape = MaterialTheme.shapes.small,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = color,
+                modifier = Modifier.size(16.dp),
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = color,
+                fontWeight = FontWeight.Medium,
+            )
+        }
     }
 }
 

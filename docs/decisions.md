@@ -474,3 +474,598 @@ La importación mantiene compatibilidad con schema v1:
 - versiones distintas de 1 y 2 se rechazan.
 
 La restauración continúa reemplazando todos los movimientos locales dentro de una transacción después de validación y confirmación explícita.
+
+## 041 - Plan final de Firebase Cloud Sync v0.4.0
+
+`v0.4.0` será una release estable, no una alpha, con QA fuerte antes de publicación.
+
+Cloud Sync será opcional y local-first:
+
+- Room sigue siendo la fuente local de verdad y la fuente observable para UI.
+- Firestore es una capa remota de sincronización.
+- La caché offline de Firestore no es fuente de verdad.
+- Con Cloud Sync apagado, MiFlujo se comporta como `v0.3.5`, usa `LOCAL_ONLY` y no encola trabajo de sync.
+
+Cloud Sync será individual por cuenta. No habrá cuentas compartidas, espacios familiares, lectura cruzada ni rol administrador con acceso a movimientos ajenos. Carlos no tendrá privilegio de app sobre los datos financieros de otro usuario.
+
+Estructura Firestore:
+
+```text
+users/{uid}/movements/{movementUuid}
+users/{uid}/metadata/sync
+authorizedUsers/{uid}
+```
+
+`authorizedUsers/{uid}` habilita Cloud Sync para ese UID, pero no concede acceso a datos de otros usuarios. La app no mostrará datos de contacto del owner. Una cuenta no autorizada podrá copiar su UID y continuar local-only.
+
+Firestore usará UUID como document ID y como campo coincidente. No guardará el `id` local de Room.
+
+Room necesitará `syncStatus`, `lastSyncedAt` y `deletedAt`. Los dos primeros serán local-only y no se guardarán en Firestore; `deletedAt` se sincronizará como tombstone.
+
+`LOCAL_ONLY` será el estado local para movimientos cuando Cloud Sync esté apagado o todavía no fue activado. No se subirá a Firestore. Los estados pendientes solo se usarán con Cloud Sync activo.
+
+Con Cloud Sync activo:
+
+- crear/editar -> `PENDING_UPLOAD`,
+- eliminar -> `deletedAt` + `PENDING_DELETE`,
+- los tombstones no se limpiarán físicamente en `v0.4.0`,
+- los tombstones no aparecerán en UI normal, reportes ni PDF.
+
+La reconciliación usará UUID para identidad y `updatedAt` generado por la app para conflictos. Descargar nunca borrará físicamente filas Room.
+
+Crear backup local siempre estará permitido. Restore local queda bloqueado cuando
+Cloud Sync está habilitado, activado y usa una cuenta autorizada, o mientras existe
+una operación de sync/cuenta. En modo local-only vuelve a estar disponible. Backup
+schema v1 no se restaura con Cloud Sync activo.
+
+Los triggers serán foreground, red recuperada con la app abierta, aproximadamente cada 90 segundos en foreground con pendientes, `Sincronizar ahora` y WorkManager con restricción de red como respaldo. Salir de la app no será trigger y WorkManager periódico no implementará el timer de 90 segundos.
+
+Desactivar Cloud Sync o cerrar sesión no borrará Room ni Firestore, detendrá sync automático y advertirá si existen cambios pendientes.
+
+El plan completo está en:
+
+```text
+docs/firebase-cloud-sync-plan.md
+```
+
+## 042 - Reglas de seguridad Firestore aisladas por UID
+
+Las reglas versionadas de Firestore viven en:
+
+```text
+firestore.rules
+```
+
+`firebase.json` configura Firebase CLI para usar ese archivo.
+
+Las reglas niegan acceso por defecto. Cloud Sync requiere autenticación, coincidencia entre `request.auth.uid` y el UID de la ruta, y un documento `authorizedUsers/{uid}` con `enabled = true`.
+
+Cada usuario solo puede acceder a sus propios movimientos y a su documento `users/{uid}/metadata/sync`. Los clientes solo pueden consultar su propio documento `authorizedUsers/{uid}` y no pueden listar ni modificar la allowlist.
+
+Los movimientos remotos aceptan únicamente los campos documentados, excluyen el ID local de Room y la metadata local `syncStatus` y `lastSyncedAt`, exigen que el campo `uuid` coincida con el document ID y preservan `uuid` y `createdAt` durante actualizaciones.
+
+Las reglas representan `date` como texto ISO `YYYY-MM-DD`; `createdAt`, `updatedAt` y `deletedAt` usan timestamps de Firestore. El documento reservado `users/{uid}/metadata/sync` solo acepta `schemaVersion` y `updatedAt`.
+
+La eliminación física de movimientos y metadata está bloqueada. En `v0.4.0`, las eliminaciones sincronizadas deben representarse mediante `deletedAt`.
+
+## 043 - Inicio de sesión y estado de autorización sin activar sync
+
+MiFlujo usa Credential Manager con Google ID tokens y Firebase Auth para identificar la cuenta. Firebase Auth conserva la sesión y expone el usuario actual; no se agrega DataStore porque el proyecto no tenía ese patrón y no existe metadata adicional que deba persistirse para esta issue.
+
+Después de iniciar sesión, la app consulta únicamente:
+
+```text
+authorizedUsers/{uid}
+```
+
+Si `enabled == true`, Ajustes muestra la cuenta como autorizada. Si el documento falta, no se puede leer o no está habilitado, Ajustes muestra la cuenta como no autorizada, permite copiar el UID y mantiene la app en modo local-only.
+
+Iniciar sesión o resultar autorizado no activa Cloud Sync, no sube movimientos y no descarga movimientos. Cerrar sesión no modifica Room, Firestore, movimientos ni respaldos.
+
+La UI no muestra datos de contacto del owner y el cliente no crea ni modifica documentos `authorizedUsers`.
+
+## 044 - Metadata local de sync en Room sin activar Cloud Sync
+
+Room schema version 3 agrega a cada movimiento:
+
+```text
+syncStatus
+lastSyncedAt
+deletedAt
+```
+
+La migración `2 -> 3` conserva todos los movimientos y asigna `LOCAL_ONLY`, `null`
+y `null` respectivamente. Los movimientos nuevos y restaurados usan los mismos
+valores mientras Cloud Sync no esté activo.
+
+Las consultas normales excluyen filas con `deletedAt`, incluyendo UI, historial,
+reportes, PDF y exportación de backup visible. El borrado sigue siendo físico
+mientras sync está inactivo; esta issue no crea ni sube tombstones.
+
+Backup schema v2 permanece sin cambios. No exporta `syncStatus`, `lastSyncedAt` ni
+`deletedAt` porque son metadata operativa local. Restaurar backups schema v1 o v2
+continúa siendo compatible y reinicia esa metadata a sus valores locales por defecto.
+
+Esta preparación no implementa lecturas, escrituras, colas ni reconciliación de
+movimientos con Firebase.
+
+## 045 - DTO y mapper remoto de movimientos
+
+El documento futuro `users/{uid}/movements/{movementUuid}` se representa mediante
+`RemoteMovementDto` con únicamente los campos permitidos por las reglas Firestore.
+No contiene el ID local de Room, `syncStatus` ni `lastSyncedAt`.
+
+La versión inicial del documento remoto es `schemaVersion = 1`. `date` usa texto ISO
+`YYYY-MM-DD`; `createdAt`, `updatedAt` y `deletedAt` usan `Firebase Timestamp`.
+La conversión entre `LocalDateTime` y `Timestamp` usa UTC y conserva nanosegundos.
+
+El mapper remoto valida UUID canónico, igualdad entre UUID y document ID, versión,
+campos requeridos, enums y reglas de negocio. Un DTO remoto válido produce un
+`Movement` sin ID Room, con estado local `SYNCED` y sin asignar `lastSyncedAt`.
+
+Esta decisión agrega únicamente el contrato y mapeo puros. No activa lecturas,
+escrituras ni sincronización de movimientos con Firestore.
+
+## 046 - Núcleo puro de reconciliación Cloud Sync
+
+`MovementSyncReconciler` recibe movimientos locales, snapshots remotos puros y un
+tiempo de sync explícito. Devuelve `SyncReconciliationPlan` con acciones declarativas;
+no ejecuta escrituras Room o Firestore.
+
+Las acciones distinguen uploads visibles, uploads de tombstones, inserciones y
+actualizaciones locales, marcado synced, errores locales y remotos inválidos.
+Los payloads remotos no contienen ID Room, `syncStatus` ni `lastSyncedAt`.
+
+UUID decide identidad y `updatedAt` decide conflictos. Los tombstones ganan empates
+contra registros visibles. Si dos registros visibles tienen el mismo `updatedAt`
+pero contenido distinto, un local pendiente, local-only o en error gana y solicita
+upload; si el local ya estaba `SYNCED`, gana remoto. Esta regla protege cambios
+locales todavía no confirmados sin volver a subir registros ya sincronizados.
+
+Aceptar un remoto para una fila local preserva el ID Room y el `createdAt` local,
+mantiene tombstones en vez de borrar físicamente y asigna `SYNCED` con el tiempo de
+sync recibido. Un remoto nuevo usa ID local `0` hasta que la futura capa de
+persistencia lo inserte.
+
+Esta fase no agrega llamadas Firestore, ejecución de planes, scheduler, background
+sync, cambios Room, DAO, backup, reglas ni UI.
+
+## 047 - Boundary Firestore remoto de movimientos
+
+`CloudMovementRemoteDataSource` separa el futuro motor de sync del SDK Firestore.
+Su implementación concreta recibe UID explícito y opera únicamente sobre:
+
+```text
+users/{uid}/movements/{movementUuid}
+```
+
+Fetch usa fuente servidor y devuelve cada documento como input válido o inválido
+para reconciliación. Un documento mal formado no invalida toda la colección.
+
+Los writes son upserts mediante `set` con `RemoteMovementDto`; el document ID es el
+UUID canónico del payload. Movimiento visible exige `deletedAt = null` y tombstone
+exige `deletedAt` presente. No se escriben ID Room, `syncStatus` ni `lastSyncedAt`.
+
+El boundary no ofrece delete físico, no modifica `authorizedUsers`, no está
+registrado en el app container y no activa sync, UI, startup, WorkManager ni tareas
+en background.
+
+## 048 - Motor manual de Cloud Sync
+
+`CloudSyncEngine.syncNow()` coordina una ejecución manual y explícita de Cloud Sync.
+Primero exige una sesión autorizada y usa únicamente el UID de esa cuenta para leer
+y escribir `users/{uid}/movements`.
+
+El motor captura un tiempo de sync, lee Room incluyendo tombstones, obtiene los
+documentos remotos y delega todas las decisiones de conflicto a
+`MovementSyncReconciler`. Luego aplica cada acción de forma independiente:
+
+- los uploads usan `CloudMovementRemoteDataSource` y después actualizan solo
+  `syncStatus` y `lastSyncedAt` en Room;
+- los remotos aceptados se insertan o actualizan como `SYNCED`;
+- los tombstones se conservan local y remotamente sin borrado físico;
+- los errores por item marcan `SYNC_ERROR` cuando existe una fila local;
+- los documentos remotos inválidos se omiten y producen resultado parcial.
+
+Las escrituras remotas usan una transacción Firestore y comparan `updatedAt` contra
+el documento actual. Una versión remota más nueva rechaza el write; un tombstone
+remoto también gana un empate contra un payload visible. El rechazo produce error
+remoto por item y no descarta datos locales.
+
+Las actualizaciones descargadas y los cambios de metadata local usan compare-and-set
+transaccional sobre `id`, `uuid`, `updatedAt`, `deletedAt` y `syncStatus`. Si la fila
+cambió después de reconciliar o durante un upload, el motor no la sobrescribe ni la
+marca `SYNCED`; devuelve resultado parcial para reintentar con un snapshot nuevo.
+
+El delete local conserva borrado físico únicamente para filas `LOCAL_ONLY` sin
+historial de sync. Una fila que ya pudo existir remotamente se convierte en
+`PENDING_DELETE` con `deletedAt` y permanece en Room, evitando que un documento
+remoto anterior la resucite en la siguiente ejecución manual. Antes de iniciar un
+write remoto, el motor mueve la fila a estado pendiente mediante compare-and-set;
+así, un delete concurrente durante el primer upload también crea tombstone.
+
+`CloudSyncResult` distingue éxito, resultado parcial, sesión cerrada, cuenta no
+autorizada y fallo general, con conteos sin datos financieros.
+
+El motor queda registrado en el app container, pero ninguna UI ni lifecycle lo
+invoca automáticamente. Esta decisión no agrega scheduler, WorkManager, sync al
+inicio, indicador Home, cambios de backup ni cambios de reglas Firestore.
+
+## 049 - Control manual de Cloud Sync en Ajustes
+
+Ajustes muestra la acción explícita `Sincronizar ahora` únicamente para una cuenta
+autorizada. `SettingsViewModel` invoca `CloudSyncEngine` mediante `CloudSyncRunner`;
+los composables solo reciben estado y callbacks.
+
+Un state holder pequeño representa `idle`, ejecución, éxito, resultado parcial,
+sesión cerrada, cuenta no autorizada y fallo. Durante la ejecución bloquea llamadas
+repetidas y la UI deshabilita el botón. Los resultados muestran conteos operativos
+sin detalles financieros.
+
+La sincronización solo inicia al tocar el botón. Esta decisión no agrega ejecución
+en startup, cierre, foreground, login, scheduler, WorkManager, background,
+notificaciones ni indicador Home.
+
+## 050 - Inicio de sesión legacy compatible con canary
+
+La acción explícita de inicio de sesión en Ajustes usa temporalmente
+`GoogleSignInClient` directamente. Credential Manager queda fuera de este botón
+porque cancelaba antes de devolver credenciales y un canary aislado confirmó que
+el flujo legacy funciona con la misma app Firebase, package, firma y web client ID.
+
+El cliente legacy se crea con la Activity que posee la UI, usa el web client ID
+generado como `default_web_client_id`, solicita ID token y email, y procesa una
+sola vez el Intent devuelto por Google. El launcher solo devuelve el ID token a la
+capa de datos; la conversión a credencial Firebase,
+`FirebaseAuth.signInWithCredential`, la verificación de autorización y el refresh
+del estado de Ajustes permanecen compartidos.
+
+Cancelar el fallback mantiene la sesión sin completar y muestra feedback visible
+de cancelación. Recibir un resultado sin ID token muestra un fallo seguro distinto.
+El código legacy `10` (`DEVELOPER_ERROR`) muestra feedback de configuración sin
+exponer client IDs, tokens ni datos de cuenta en logs.
+El flujo legacy nunca se inicia por lifecycle ni se relanza automáticamente.
+Credential Manager puede reevaluarse después, pero no debe bloquear el camino
+compatibilidad confirmado. Esta decisión no cambia sync, scheduler, Room, reglas
+Firestore, backup, restore ni comportamiento de movimientos.
+
+Cerrar sesión limpia primero la cuenta seleccionada por `GoogleSignInClient` desde
+la capa UI propietaria de la Activity. Después, aunque esa limpieza legacy falle,
+el ViewModel continúa con el cierre de Firebase Auth y la limpieza del estado de
+Credential Manager mediante el repositorio. Ninguna referencia a Activity se
+guarda en el ViewModel.
+
+## 051 - Activación persistente de Cloud Sync
+
+La primera ejecución manual de Cloud Sync que termine con `SUCCESS` o `PARTIAL`
+guarda un flag local persistente en preferencias. `SIGNED_OUT`, `UNAUTHORIZED` y
+`FAILURE` no activan el flag. El flag sobrevive reinicios y cierre de sesión, no se
+sincroniza con Firestore y no usa Room.
+
+La restricción original que bloqueaba restore solo por este flag fue reemplazada
+por la decisión `061`. El flag sigue siendo irreversible, pero restore depende del
+estado actual de Cloud Sync y la cuenta.
+
+Mientras una sincronización manual está ejecutándose, Ajustes deshabilita y el
+ViewModel rechaza defensivamente inicio de sesión, cierre de sesión y refresh de
+autorización. No se cancela la sincronización en curso.
+
+## 052 - Preferencia local cloudSyncEnabled independiente de cloudSyncActivated
+
+MiFlujo distingue dos flags locales de Cloud Sync:
+
+```text
+cloudSyncActivated -> flag irreversible de seguridad, se activa con el primer
+                       sync exitoso o parcial.
+cloudSyncEnabled   -> preferencia de usuario, togglable on/off, controla si la
+                       UI de sync manual está activa.
+```
+
+`cloudSyncEnabled` se almacena en SharedPreferences en el mismo archivo que
+`cloudSyncActivated` (`miflujo_cloud_sync_preferences`), con una clave
+independiente (`cloud_sync_enabled`).
+
+Valor por defecto:
+
+```text
+Si Cloud Sync nunca fue activado  -> false
+Si Cloud Sync ya fue activado     -> true
+```
+
+Cuando `cloudSyncActivated` ya es `true`, el default de `cloudSyncEnabled` es
+`true` porque es el valor más seguro y amigable: el usuario ya sincronizó y
+espera que la sincronización siga activa. Una vez que el usuario establece un
+valor explícito, el default basado en activación ya no se consulta.
+
+El botón `Sincronizar ahora` solo se habilita cuando:
+
+```text
+Cuenta autorizada AND cloudSyncEnabled = true AND no hay operación en curso
+```
+
+Si la cuenta está autorizada pero `cloudSyncEnabled = false`, Ajustes muestra:
+
+```text
+Cloud Sync está desactivado. Puedes activarlo para sincronizar manualmente.
+```
+
+Activar `cloudSyncEnabled` no inicia sync automáticamente.
+
+Toggling `cloudSyncEnabled` no modifica `cloudSyncActivated`. Toggling
+`cloudSyncActivated` no modifica `cloudSyncEnabled`. Las dos preferencias son
+independientes en lectura, escritura y persistencia.
+
+Esta decisión no agrega scheduler, background sync, indicador Home, cambios
+Room, cambios Firestore, cambios de backup ni cambios de restore.
+
+## 053. Verificar certificado del APK real ante OAuth statusCode=10
+
+Durante la integración de Google Sign-In y Firebase Auth para Cloud Sync, MiFlujo
+falló repetidamente antes de completar la autenticación con Firebase:
+
+```text
+GoogleSignInClient fallback result received: resultCode=0
+ApiException statusCode=10
+```
+
+Una app canary separada funcionó correctamente usando el mismo package name, el
+mismo SHA debug esperado en Firebase, el mismo `google-services.json`, el mismo
+`default_web_client_id`, `firebase-auth:24.0.1` y
+`play-services-auth:21.1.1`.
+
+Durante el diagnóstico se probaron y descartaron estas hipótesis:
+
+- Launcher de Activity Result en Compose.
+- Dependencias directas de Credential Manager y Google ID.
+- Versión de `play-services-auth`.
+- Versión de Firebase Auth.
+- Desajuste de `google-services.json`.
+- Activity puente frente al flujo normal.
+- Limpieza mediante `signOut` y `revokeAccess`.
+
+La causa raíz fue que el APK de MiFlujo que fallaba era un artefacto anterior,
+experimental o desactualizado, firmado con un certificado distinto al registrado
+en Firebase y Google Cloud. El APK recompilado desde un árbol limpio usó el
+debug keystore esperado y Google Sign-In funcionó.
+
+El incidente reapareció después de desinstalar e instalar nuevamente porque se
+volvió a instalar el mismo artefacto incorrecto. El APK instalado era idéntico a:
+
+```text
+app/build/intermediates/apk/debug/app-debug.apk
+```
+
+Ese archivo usaba un certificado distinto al mostrado por `signingReport`. En
+cambio, el APK correcto era:
+
+```text
+app/build/outputs/apk/debug/app-debug.apk
+```
+
+Un `clean` seguido de `assembleDebug` eliminó el intermediario desactualizado y
+regeneró el APK con el certificado esperado. Desinstalar por sí solo no corrige
+OAuth si después se instala nuevamente el mismo APK firmado incorrectamente.
+
+```bash
+./gradlew clean :app:assembleDebug
+```
+
+Ante OAuth `statusCode=10`, se debe verificar primero el certificado del APK real
+que se está probando antes de cambiar código. No basta con revisar únicamente el
+resultado de Gradle `signingReport`.
+
+Para verificar el APK generado:
+
+```bash
+~/Android/Sdk/build-tools/36.1.0/apksigner verify --print-certs \
+  app/build/outputs/apk/debug/app-debug.apk
+```
+
+Para verificar exactamente el APK instalado en el dispositivo:
+
+```bash
+installed_apk=$(adb shell pm path com.carlos.miflujo | sed 's/^package://' | tr -d '\r')
+adb pull "$installed_apk" /tmp/miflujo-installed.apk
+
+~/Android/Sdk/build-tools/36.1.0/apksigner verify --print-certs \
+  /tmp/miflujo-installed.apk
+```
+
+Resultado final validado:
+
+- Google Sign-In completó correctamente.
+- Firebase Auth completó correctamente.
+- La autorización de Firestore devolvió `Authorized`.
+- El cierre de sesión completó correctamente.
+- Un nuevo inicio de sesión completó correctamente.
+
+## 054 - Política pura de decisión para scheduler de Cloud Sync
+
+Los disparadores de Cloud Sync comparten una política pura que decide entre
+`RUN` y un motivo explícito de omisión antes de solicitar una ejecución.
+
+Prioridad de omisión:
+
+```text
+disabled
+account operation running
+already running
+offline
+account not authorized
+not activated
+no pending local changes
+```
+
+`MANUAL_SETTINGS` puede ejecutar la primera sincronización y no requiere cambios
+locales pendientes. Los disparadores automáticos requieren que Cloud Sync ya esté
+activado. `APP_FOREGROUND` y `CONNECTIVITY_RECOVERED` pueden ejecutar sin cambios
+locales pendientes para descargar cambios remotos. `FOREGROUND_PENDING_TIMER` y
+`WORK_MANAGER_BACKUP` requieren cambios locales pendientes.
+
+Esta decisión solo agrega la política reutilizable. No agrega disparadores
+automáticos, temporizador, ejecución al volver a foreground, reacción automática
+a conectividad, WorkManager ni cambios al motor de Cloud Sync.
+
+## 055 - Coordinador reutilizable de solicitudes de Cloud Sync
+
+Las futuras fuentes de solicitudes de Cloud Sync usan un coordinador común para:
+
+1. generar un request ID,
+2. registrar la solicitud,
+3. aplicar la política de decisión,
+4. registrar la decisión,
+5. ejecutar Cloud Sync únicamente cuando la decisión sea `RUN`.
+
+El coordinador recibe un `CloudSyncSchedulerDecisionInput` completo y delega la
+ejecución mediante una interfaz suspendida que conserva el mismo request ID y
+trigger reason. No consulta ni posee estado de cuenta, conectividad, preferencias,
+Room o Firestore. Cada caller debe construir el input con su estado real.
+
+Esta decisión no agrega triggers automáticos, timer foreground, observer de
+foreground, reacción a conectividad ni WorkManager. El flujo manual de Ajustes
+permanece sin cambios porque todavía no comparte una fuente completa de estado con
+los futuros triggers y no debe usar valores simulados ni duplicar logs.
+
+## 056 - Preparación de estado runtime para scheduler de Cloud Sync
+
+El estado runtime del scheduler se representa por separado del coordinador. Reúne
+los flags requeridos por la política y los convierte de forma pura en
+`CloudSyncSchedulerDecisionInput` para un trigger específico.
+
+El coordinador no consulta ni posee este estado. Cada trigger futuro debe construir
+`CloudSyncSchedulerRuntimeState` desde fuentes reales de la app, convertirlo a
+decision input y llamar al coordinador.
+
+Un adaptador pequeño permite que una ejecución aprobada por el coordinador delegue
+en `ManualCloudSyncStateHolder.syncNow(requestId, reason)` sin mover ni duplicar la
+lógica actual. El holder expone únicamente una lectura segura de su guard de
+ejecución existente.
+
+Esta preparación no agrega triggers automáticos, observers, timers ni WorkManager,
+y no cambia el comportamiento visible de Ajustes.
+
+## 057 - APP_FOREGROUND como primer trigger automático de Cloud Sync
+
+Al entrar la app en foreground, MiFlujo construye estado runtime desde las fuentes
+reales de conectividad, cuenta, preferencias, activación y ejecución, y solicita
+Cloud Sync mediante el coordinador con reason `APP_FOREGROUND`.
+
+Este trigger nunca realiza la primera activación: la política exige que
+`cloudSyncActivated` ya sea `true`. No requiere cambios locales pendientes porque
+puede descargar cambios remotos creados en otro dispositivo.
+
+La solicitud se emite como máximo una vez por entrada a foreground. Mientras el
+estado de cuenta está cargando o existe una operación de cuenta, espera a que el
+estado se estabilice sin timers, sleeps ni polling. Recomposición o emisiones
+repetidas no crean solicitudes adicionales para la misma entrada.
+
+Esta decisión no agrega WorkManager, timer foreground, reacción automática a
+conectividad ni trabajo periódico en background. La sincronización manual de
+Ajustes conserva su flujo y reason `MANUAL_SETTINGS`.
+
+## 058 - Proveedor de cambios locales pendientes para scheduler
+
+El scheduler dispone de un proveedor suspendido y barato para consultar si Room
+contiene trabajo local pendiente de envío. La consulta usa el campo existente
+`sync_status` y considera pendientes:
+
+```text
+PENDING_UPLOAD
+PENDING_DELETE
+SYNC_ERROR
+```
+
+`SYNCED` y `LOCAL_ONLY` no cuentan como trabajo pendiente. `LOCAL_ONLY` conserva
+su significado de dato local creado con Cloud Sync apagado o todavía no activado.
+
+El proveedor existe para que futuros triggers como `FOREGROUND_PENDING_TIMER` y
+`WORK_MANAGER_BACKUP` puedan omitir ejecuciones cuando no haya trabajo local.
+`APP_FOREGROUND` sigue sin requerir pendientes porque puede descargar cambios
+remotos de otro dispositivo.
+
+Esta decisión no agrega timer, WorkManager, trigger por conectividad ni nuevas
+solicitudes automáticas. Tampoco cambia el esquema Room ni el comportamiento del
+motor de Cloud Sync.
+
+## 059 - WorkManager como respaldo one-time de cambios locales pendientes
+
+Cloud Sync usa WorkManager únicamente como red de seguridad para subir cambios
+locales pendientes. Cada solicitud crea un `OneTimeWorkRequest` con:
+
+```text
+unique work name = cloud_sync_backup
+ExistingWorkPolicy = KEEP
+network constraint = CONNECTED
+backoff = EXPONENTIAL
+```
+
+No se agrega trabajo periódico, no se ejecuta cada 90 segundos en background y no
+se usa salir de la app como trigger.
+
+El worker construye estado runtime real desde las preferencias de Cloud Sync, el
+estado de activación, la cuenta cloud actual, el guard compartido de ejecución y
+`CloudSyncPendingChangesProvider`. La conectividad se considera disponible dentro
+del worker porque WorkManager solo lo inicia cuando se cumple `CONNECTED`; no se
+mantiene un segundo monitor de red en background. `accountOperationRunning` es
+`false` porque las operaciones de cuenta actuales pertenecen al ViewModel de
+Ajustes y no existe un runner de cuenta en background.
+
+La política del scheduler sigue siendo la fuente de verdad. `WORK_MANAGER_BACKUP`
+solo ejecuta cuando Cloud Sync está habilitado, ya fue activado, la cuenta está
+autorizada, no existe otro sync en ejecución y Room contiene `PENDING_UPLOAD`,
+`PENDING_DELETE` o `SYNC_ERROR`. Nunca realiza la primera activación.
+
+`CloudSyncRunCoordinator` vive en el app container y comparte un único
+`AtomicBoolean` entre sync manual, `APP_FOREGROUND` y WorkManager. También conserva
+los logs de inicio/fin y actualiza activación y timestamp únicamente para resultados
+`SUCCESS` o `PARTIAL`. `ManualCloudSyncStateHolder` delega la ejecución a este
+coordinador y mantiene el mismo estado visible de Ajustes.
+
+El enqueue ocurre en un decorador del repositorio de movimientos, después de que
+la escritura local termina correctamente. Crear o editar con Cloud Sync habilitado
+y previamente activado asigna `PENDING_UPLOAD`; después se consulta Room y se
+encola el trabajo único si existe algún estado pendiente. Delete usa el resultado
+persistido de Room mediante el mismo proveedor. Con Cloud Sync apagado o todavía
+no activado, crear/editar usa `LOCAL_ONLY` y no se encola trabajo. Restore por
+reemplazo no encola WorkManager.
+
+WorkManager no reemplaza `Sincronizar ahora` ni `APP_FOREGROUND`. Un resultado
+exitoso o parcial termina en success; offline, otra ejecución activa, una operación
+de cuenta activa o un fallo reintentable usan retry con backoff. Estados disabled,
+not activated, sin pendientes, signed out o unauthorized terminan sin reintento.
+
+## 060 - CONNECTIVITY_RECOVERED mientras la app está abierta
+
+MiFlujo solicita Cloud Sync con reason `CONNECTIVITY_RECOVERED` únicamente cuando
+la conectividad cambia de no disponible a disponible mientras la app está en
+foreground. El estado inicial online solo inicializa el gate y no crea una
+solicitud, porque `APP_FOREGROUND` ya cubre la entrada a la app.
+
+El gate conserva un solo evento de recuperación pendiente si la cuenta todavía
+está cargando o existe una operación de cuenta. Cuando ese estado queda listo,
+emite una sola solicitud sin timers, polling ni sleeps. Emisiones repetidas de
+conectividad disponible, recomposición y transiciones a offline no duplican la
+solicitud. Un evento pendiente se descarta si la app pasa a background.
+
+Este trigger requiere Cloud Sync habilitado, activación previa, cuenta autorizada
+y ausencia de otra ejecución u operación de cuenta. No realiza la primera
+activación y no requiere cambios locales pendientes, porque puede descargar
+cambios remotos creados en otro dispositivo.
+
+`CONNECTIVITY_RECOVERED` coexiste con el respaldo de WorkManager. No cancela ni
+modifica su trabajo; `CloudSyncRunCoordinator` evita ejecuciones simultáneas.
+
+## 061 - Restore local según estado actual de Cloud Sync
+
+Restaurar un respaldo local ya no queda bloqueado permanentemente por haber
+activado Cloud Sync alguna vez. Restore se bloquea únicamente mientras existe una
+ejecución de sync, una operación de cuenta o Cloud Sync está habilitado, activado
+y usa una cuenta autorizada.
+
+Restore vuelve a estar disponible cuando Cloud Sync está desactivado, la sesión
+está cerrada o la cuenta no está autorizada. Esto conserva el comportamiento
+local-first y evita dejar atrapado al usuario después de probar Cloud Sync.
+
+La restauración continúa siendo local y transaccional. No elimina datos remotos,
+no solicita scheduler, no encola WorkManager y restaura movimientos como
+`LOCAL_ONLY` sin convertirlos automáticamente en trabajo cloud pendiente.

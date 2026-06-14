@@ -4,6 +4,7 @@ import com.carlos.miflujo.domain.model.Currency
 import com.carlos.miflujo.domain.model.MovementCategory
 import com.carlos.miflujo.domain.model.MovementSubcategory
 import com.carlos.miflujo.domain.model.MovementType
+import com.carlos.miflujo.domain.model.SyncStatus
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
@@ -67,6 +68,9 @@ class BackupJsonParserTest {
         assertNull(income.detail)
         assertEquals(LocalDateTime.of(2026, 6, 3, 9, 15, 30), income.createdAt)
         assertEquals(LocalDateTime.of(2026, 6, 3, 10, 20, 45, 123_000_000), income.updatedAt)
+        assertEquals(SyncStatus.LOCAL_ONLY, income.syncStatus)
+        assertNull(income.lastSyncedAt)
+        assertNull(income.deletedAt)
 
         assertEquals("", parsed.movements[1].detail)
         assertEquals(
