@@ -10,7 +10,7 @@ Corresponde a:
 #115 docs: define v0.4.0 Firebase Cloud Sync plan
 ```
 
-La planificación inicial no implementaba Firebase, login, Firestore, reglas de seguridad, motor de sync, cambios Room ni cambios de backup schema. Esas piezas ya están integradas en `main` como trabajo de `v0.4.0`, que aún no es una release estable.
+La planificación inicial no implementaba Firebase, login, Firestore, reglas de seguridad, motor de sync, cambios Room ni cambios de backup schema. Esas piezas se publicaron en `v0.4.0`.
 
 Estado actual en `main`:
 

@@ -20,13 +20,17 @@ Abro, registro dinero, veo cómo va el mes, cierro.
 
 MiFlujo ya cuenta con un MVP funcional entregado, probado en dispositivo físico y publicado como APK firmado.
 
-Versión estable publicada:
+Última versión estable publicada:
 
 ```text
-v0.3.5
+v0.4.0
 ```
 
-La versión `v0.3.5` es la baseline técnica pre-Firebase publicada:
+La versión `v0.4.0` incorpora Cloud Sync opcional con Firebase y Firestore. La
+app mantiene Room como fuente de verdad local y sigue siendo utilizable sin
+conexión ni inicio de sesión.
+
+La versión `v0.3.5` fue la baseline técnica pre-Firebase:
 
 ```text
 Pre-Firebase Technical Baseline
@@ -42,9 +46,10 @@ Incluye:
 - UUID estable por movimiento con migración Room.
 - Backup schema v2 con UUID y compatibilidad de importación con schema v1.
 
-La rama `main` también contiene el trabajo en desarrollo de `v0.4.0`: inicio de sesión con Google, autorización por UID, Cloud Sync opcional con Firestore, controles manuales y disparadores seguros de sincronización. Aún no corresponde a una nueva release estable.
-
-Cloud Sync es opcional. La app sigue funcionando localmente sin conexión, sin iniciar sesión y con Room como fuente de verdad para la UI.
+`v0.4.0` incluye inicio de sesión con Google, autorización por UID, Cloud Sync
+opcional con Firestore, controles manuales y disparadores seguros de
+sincronización. Cloud Sync es opcional: la app sigue funcionando localmente sin
+conexión, sin iniciar sesión y con Room como fuente de verdad para la UI.
 
 ## Funcionalidades
 
@@ -164,7 +169,8 @@ US$ 100.00 -> 10000
 
 ## Pre-Firebase Technical Baseline
 
-La versión `v0.3.5` publicó la baseline técnica previa a Firebase Cloud Sync.
+La versión `v0.3.5` publicó la baseline técnica previa a Firebase Cloud Sync;
+`v0.4.0` publicó la capacidad opcional de Cloud Sync construida sobre ella.
 
 Objetivo:
 

@@ -50,9 +50,9 @@ Abro, registro dinero, veo cómo va el mes, cierro.
 
 MiFlujo ya superó el MVP inicial.
 
-`v0.3.0` agregó reportes PDF, Ajustes, respaldo local JSON y restauración local JSON validada. `v0.3.5` publicó la baseline técnica pre-Firebase.
+`v0.3.0` agregó reportes PDF, Ajustes, respaldo local JSON y restauración local JSON validada. `v0.3.5` publicó la baseline técnica pre-Firebase y `v0.4.0` publicó Cloud Sync opcional.
 
-La rama `main` contiene trabajo en desarrollo para `v0.4.0`: inicio de sesión con Google, autorización por UID y Cloud Sync opcional con Firestore. No es todavía una release estable. Room continúa siendo la fuente de verdad local y la app funciona sin conexión ni cuenta obligatoria.
+`v0.4.0` incorpora inicio de sesión con Google, autorización por UID y Cloud Sync opcional con Firestore. Room continúa siendo la fuente de verdad local y la app funciona sin conexión ni cuenta obligatoria.
 
 ## Objetivos actuales del producto
 

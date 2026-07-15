@@ -1081,6 +1081,6 @@ una sincronización; requiere habilitación local y una primera ejecución expl�
 Room continúa siendo la fuente observable de la UI. La app permanece utilizable
 sin conexión, sin sesión y con Cloud Sync desactivado.
 
-`v0.4.0` todavía no está publicada como release estable. Los documentos de plan
-y estrategia deben leerse como diseño vigente y referencia de implementación, no
-como indicación de que la funcionalidad sigue ausente del código de `main`.
+`v0.4.0` se publicó como release estable. Los documentos de plan y estrategia
+deben leerse como diseño vigente y referencia de implementación, no como
+indicación de que la funcionalidad sigue ausente del código de `main`.

@@ -18,9 +18,8 @@ v0.3.5 - Pre-Firebase Technical Baseline
 
 En su issue original, este documento no implementaba Firebase, login, Firestore ni sincronización. Define las decisiones base para evitar pérdida, duplicación o corrupción de datos.
 
-La implementación de esas decisiones está integrada en `main` como trabajo de
-`v0.4.0`, aún sin publicar como release estable. Cloud Sync sigue siendo opcional,
-local-first y no obligatorio para usar MiFlujo.
+La implementación de esas decisiones se publicó en `v0.4.0`. Cloud Sync sigue
+siendo opcional, local-first y no obligatorio para usar MiFlujo.
 
 El plan final de implementación para `v0.4.0` está en:
 
