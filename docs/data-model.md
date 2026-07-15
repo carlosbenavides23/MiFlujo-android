@@ -30,9 +30,9 @@ El modelo actual está diseñado para una app local-first basada en Room.
 
 `id` sigue siendo el identificador local de Room.
 
-`uuid` es la identidad global estable preparada para una futura sincronización cloud.
+`uuid` es la identidad global estable usada por Cloud Sync.
 
-Room ya incluye metadata local preparada para Cloud Sync, pero esta metadata no activa sincronización. El plan de `v0.4.0` está documentado en `docs/firebase-cloud-sync-plan.md`.
+Room incluye la metadata local de Cloud Sync. La sincronización permanece opcional: solo opera tras habilitarla y completar una primera ejecución explícita con una cuenta autorizada. Su comportamiento está documentado en `docs/firebase-cloud-sync-plan.md`.
 
 ## Campos
 
@@ -253,7 +253,7 @@ Las consultas visibles excluyen cualquier fila con `deletedAt`, preparando UI,
 reportes, PDF, historial y respaldo visible para futuros tombstones sin cambiar el
 resultado actual.
 
-## Modelo remoto planificado para v0.4.0
+## Modelo remoto de Cloud Sync
 
 Ruta:
 
@@ -292,10 +292,11 @@ Reglas del mapper:
 - `RemoteMovementDto -> Movement` exige que el UUID coincida con el document ID.
 - La entrada remota valida enums, monto positivo y reglas de clasificación.
 - Un movimiento remoto válido vuelve al dominio con `id = 0`, `SYNCED` y
-  `lastSyncedAt = null`; la futura capa de persistencia decidirá el ID Room y el
-  momento efectivo de última sincronización.
+  `lastSyncedAt = null`; la capa de persistencia asigna el ID Room y el momento
+  efectivo de última sincronización.
 
-Esta capa no realiza lecturas ni escrituras Firestore.
+El mapper no realiza lecturas ni escrituras Firestore; esas operaciones pertenecen
+al data source remoto y al motor de sincronización.
 
 ## Identidad local y global
 

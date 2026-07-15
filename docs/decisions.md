@@ -1069,3 +1069,18 @@ local-first y evita dejar atrapado al usuario después de probar Cloud Sync.
 La restauración continúa siendo local y transaccional. No elimina datos remotos,
 no solicita scheduler, no encola WorkManager y restaura movimientos como
 `LOCAL_ONLY` sin convertirlos automáticamente en trabajo cloud pendiente.
+
+## 062 - Estado de implementación de Cloud Sync en `main`
+
+Después de publicar `v0.3.5`, `main` integra el trabajo de `v0.4.0`: Firebase
+Auth con Google, autorización por UID, reglas de Firestore, sincronización de
+movimientos, controles manuales y disparadores seguros de scheduler.
+
+Cloud Sync sigue siendo opcional. Iniciar sesión o resultar autorizado no inicia
+una sincronización; requiere habilitación local y una primera ejecución explícita.
+Room continúa siendo la fuente observable de la UI. La app permanece utilizable
+sin conexión, sin sesión y con Cloud Sync desactivado.
+
+`v0.4.0` todavía no está publicada como release estable. Los documentos de plan
+y estrategia deben leerse como diseño vigente y referencia de implementación, no
+como indicación de que la funcionalidad sigue ausente del código de `main`.

@@ -8,7 +8,7 @@ Subtítulo de la app:
 Flujo de efectivo mensual
 ```
 
-La app está pensada para un uso simple y directo: registrar movimientos de dinero, revisar cómo va el mes, generar un reporte mensual y conservar los datos sin depender de nube, cuentas, login ni conversión de moneda.
+La app está pensada para un uso simple y directo: registrar movimientos de dinero, revisar cómo va el mes, generar un reporte mensual y conservar los datos sin depender de conexión, cuenta obligatoria ni conversión de moneda.
 
 Principio central del producto:
 
@@ -42,9 +42,9 @@ Incluye:
 - UUID estable por movimiento con migración Room.
 - Backup schema v2 con UUID y compatibilidad de importación con schema v1.
 
-La configuración base de Firebase, las reglas de Firestore y el inicio de sesión con estado de autorización están en desarrollo para `v0.4.0`.
+La rama `main` también contiene el trabajo en desarrollo de `v0.4.0`: inicio de sesión con Google, autorización por UID, Cloud Sync opcional con Firestore, controles manuales y disparadores seguros de sincronización. Aún no corresponde a una nueva release estable.
 
-La sincronización de movimientos todavía no está implementada. Iniciar sesión no sube ni descarga movimientos y MiFlujo continúa funcionando local-only.
+Cloud Sync es opcional. La app sigue funcionando localmente sin conexión, sin iniciar sesión y con Room como fuente de verdad para la UI.
 
 ## Funcionalidades
 
@@ -78,7 +78,10 @@ La sincronización de movimientos todavía no está implementada. Iniciar sesió
 - Restauración local JSON validada.
 - Persistencia local con Room.
 - Inicio de sesión con Google para identificar la cuenta de Cloud Sync.
-- Consulta del estado de autorización por UID sin activar sincronización.
+- Consulta del estado de autorización por UID.
+- Cloud Sync opcional de movimientos con Firestore para cuentas autorizadas.
+- Sincronización manual, al volver la app a primer plano y al recuperar conectividad mientras está abierta.
+- Respaldo con WorkManager para cambios locales pendientes cuando hay red.
 
 ## Alcance del producto
 
@@ -98,7 +101,6 @@ Incluye actualmente:
 
 No incluye actualmente:
 
-- Sincronización en la nube.
 - Backend.
 - Integración bancaria.
 - OCR.
@@ -111,7 +113,7 @@ No incluye actualmente:
 - Merge avanzado de respaldos.
 - Sincronización multi-dispositivo.
 
-El inicio de sesión actual solo identifica la cuenta y consulta si su UID está autorizado. No activa Cloud Sync ni modifica movimientos locales o remotos.
+Iniciar sesión o quedar autorizado no activa Cloud Sync por sí solo. La persona usuaria debe habilitarlo y ejecutar una primera sincronización explícita. Puede desactivarlo o cerrar sesión sin borrar sus movimientos locales ni los datos remotos existentes.
 
 ## Stack técnico
 
@@ -139,7 +141,7 @@ La UI no accede directamente a Room. Los datos pasan por ViewModels y Repository
 
 Los reportes se calculan a partir de los movimientos almacenados, no como registros independientes.
 
-Room/local es la fuente principal de datos. Cualquier sincronización futura debe ser opcional y no debe romper el uso offline-first.
+Room/local es la fuente principal de datos. Firestore es una capa remota opcional de sincronización y no reemplaza el uso offline-first.
 
 ## Reglas importantes del producto
 
@@ -170,7 +172,7 @@ Objetivo:
 Auditar, limpiar y preparar la base técnica antes de sincronización cloud.
 ```
 
-La baseline se completó sin implementar Firebase, login, Firestore ni Cloud Sync. El trabajo quedó dividido en issues pequeñas:
+La baseline se completó antes de implementar Firebase, login, Firestore y Cloud Sync. El trabajo quedó dividido en issues pequeñas:
 
 - `#96`: auditoría técnica pre-Firebase.
 - `#97`: estrategia de identidad y sincronización cloud.
@@ -247,7 +249,7 @@ El archivo `AGENTS.md` contiene reglas importantes para agentes de IA o colabora
 
 Ideas futuras, sujetas a feedback real del usuario y planificación técnica:
 
-- Firebase Cloud Sync opcional, planificado en `docs/firebase-cloud-sync-plan.md`.
+- Mejoras posteriores de Cloud Sync, documentadas en `docs/firebase-cloud-sync-plan.md`.
 - Changelog visible dentro de Ajustes.
 - Acerca de MiFlujo.
 - Comparación entre meses.

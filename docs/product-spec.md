@@ -50,9 +50,9 @@ Abro, registro dinero, veo cómo va el mes, cierro.
 
 MiFlujo ya superó el MVP inicial.
 
-`v0.3.0` agregó reportes PDF, Ajustes, respaldo local JSON y restauración local JSON validada.
+`v0.3.0` agregó reportes PDF, Ajustes, respaldo local JSON y restauración local JSON validada. `v0.3.5` publicó la baseline técnica pre-Firebase.
 
-La etapa `v0.3.5` no agrega Firebase todavía. Su objetivo es preparar técnicamente la app para una futura sincronización cloud opcional sin romper la base local-first.
+La rama `main` contiene trabajo en desarrollo para `v0.4.0`: inicio de sesión con Google, autorización por UID y Cloud Sync opcional con Firestore. No es todavía una release estable. Room continúa siendo la fuente de verdad local y la app funciona sin conexión ni cuenta obligatoria.
 
 ## Objetivos actuales del producto
 
@@ -71,6 +71,7 @@ La etapa `v0.3.5` no agrega Firebase todavía. Su objetivo es preparar técnicam
 - Guardar o compartir respaldo local.
 - Restaurar respaldo local validado.
 - Mantener Room como fuente principal de datos.
+- Permitir Cloud Sync opcional solo para cuentas autorizadas y tras activación explícita.
 
 ## Pantallas principales
 
@@ -98,7 +99,7 @@ El usuario debe poder registrar un movimiento en pocos pasos, entender el estado
 
 ## Dirección futura
 
-Firebase Cloud Sync podrá evaluarse después de `v0.3.5` como una capa opcional encima de Room.
+Cloud Sync se desarrolla como una capa opcional encima de Room; su comportamiento y límites actuales están documentados en `firebase-cloud-sync-plan.md`.
 
 La app debe seguir funcionando:
 

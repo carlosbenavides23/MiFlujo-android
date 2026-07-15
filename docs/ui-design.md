@@ -6,7 +6,7 @@ MiFlujo debe tener una interfaz simple, sobria, moderna y clara.
 
 La app no debe sentirse como una herramienta contable compleja.
 
-Debe sentirse como una herramienta rápida para registrar movimientos, consultar cómo va el mes, generar reportes y proteger datos locales.
+Debe sentirse como una herramienta rápida para registrar movimientos, consultar cómo va el mes, generar reportes y proteger datos locales. Cloud Sync es secundario y no debe competir con el flujo diario.
 
 Principio de diseño:
 
@@ -244,6 +244,10 @@ Ajustes organiza funciones que no son parte del flujo diario.
 
 Debe incluir:
 
+- Sección Cloud Sync.
+- Inicio de sesión con Google y estado de autorización.
+- Activación o desactivación explícita de Cloud Sync.
+- Acción `Sincronizar ahora`, estado de la última sincronización y feedback claro de errores.
 - Sección Datos.
 - Crear respaldo local.
 - Restaurar respaldo.
@@ -257,6 +261,8 @@ Reglas:
 - Debe manejar correctamente el botón Atrás del sistema.
 - Debe evitar animaciones bruscas.
 - Las acciones destructivas deben pedir confirmación clara.
+- Iniciar sesión o quedar autorizado no debe activar sincronización automáticamente.
+- Mientras Cloud Sync esté activo, la restauración local debe indicar por qué no está disponible y cómo volver a modo local-only.
 
 ## Backup y restore en UI
 

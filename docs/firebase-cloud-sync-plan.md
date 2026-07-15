@@ -1,8 +1,8 @@
-# Plan Firebase Cloud Sync v0.4.0
+# Firebase Cloud Sync v0.4.0
 
 ## Proposito
 
-Este documento define el plan final de Firebase Cloud Sync para `v0.4.0`.
+Este documento define el diseño y el estado de implementación de Firebase Cloud Sync para `v0.4.0`.
 
 Corresponde a:
 
@@ -10,7 +10,16 @@ Corresponde a:
 #115 docs: define v0.4.0 Firebase Cloud Sync plan
 ```
 
-Es una decision de planificacion. No implementa Firebase, login, Firestore, reglas de seguridad, sync engine, cambios Room ni cambios de backup schema.
+La planificación inicial no implementaba Firebase, login, Firestore, reglas de seguridad, motor de sync, cambios Room ni cambios de backup schema. Esas piezas ya están integradas en `main` como trabajo de `v0.4.0`, que aún no es una release estable.
+
+Estado actual en `main`:
+
+- Firebase Auth con inicio de sesión Google y autorización por UID.
+- Reglas de Firestore y data source remoto de movimientos.
+- Motor de reconciliación y sincronización opcional.
+- Control manual, activación persistente y preferencia local para Cloud Sync.
+- Disparadores al volver a primer plano y recuperar conectividad, más WorkManager como respaldo de cambios pendientes.
+- Room sigue siendo la fuente observable para la UI; Cloud Sync no es obligatorio.
 
 ## Tipo de release
 

@@ -213,6 +213,7 @@ Antes de publicar o compartir el APK:
 - [ ] Restaurar respaldo válido si hubo cambios en restore.
 - [ ] Intentar restaurar archivo inválido si hubo cambios en restore.
 - [ ] Cancelar confirmación de restore y confirmar que no modifica datos si hubo cambios en restore.
+- [ ] Si hubo cambios en Cloud Sync: probar inicio y cierre de sesión, cuenta no autorizada, sincronización manual, modo sin conexión y restauración bloqueada mientras sync esté activo.
 - [ ] Probar modo claro y modo oscuro si hubo cambios visuales.
 
 ## 9. Tipos de release

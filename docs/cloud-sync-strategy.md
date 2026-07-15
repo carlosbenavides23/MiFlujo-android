@@ -2,7 +2,7 @@
 
 ## Propósito
 
-Este documento define la estrategia conceptual para una futura sincronización cloud en MiFlujo.
+Este documento registra la estrategia conceptual adoptada para Cloud Sync en MiFlujo.
 
 Corresponde a:
 
@@ -16,7 +16,11 @@ Esta estrategia forma parte de:
 v0.3.5 - Pre-Firebase Technical Baseline
 ```
 
-Este documento no implementa Firebase, login, Firestore ni sincronización. Solo define las decisiones base para evitar pérdida, duplicación o corrupción de datos cuando se implemente cloud sync en una versión futura.
+En su issue original, este documento no implementaba Firebase, login, Firestore ni sincronización. Define las decisiones base para evitar pérdida, duplicación o corrupción de datos.
+
+La implementación de esas decisiones está integrada en `main` como trabajo de
+`v0.4.0`, aún sin publicar como release estable. Cloud Sync sigue siendo opcional,
+local-first y no obligatorio para usar MiFlujo.
 
 El plan final de implementación para `v0.4.0` está en:
 
@@ -34,7 +38,7 @@ Room primero. Firebase después.
 
 MiFlujo debe seguir funcionando como app local-first.
 
-La sincronización cloud futura debe ser una capa opcional encima de Room, no el corazón de la app.
+La sincronización cloud debe ser una capa opcional encima de Room, no el corazón de la app.
 
 La app debe seguir funcionando:
 
@@ -44,7 +48,7 @@ La app debe seguir funcionando:
 - sin Firebase como fuente única de verdad,
 - sin mezclar monedas.
 
-## Objetivo de Firebase Cloud Sync futura
+## Objetivo de Firebase Cloud Sync
 
 Firebase Cloud Sync debe servir para:
 
@@ -404,7 +408,7 @@ La issue `#97` se considera lista cuando:
 
 ## Decisión final
 
-Firebase Cloud Sync será una capacidad opcional futura.
+Firebase Cloud Sync es una capacidad opcional.
 
 La identidad cloud de movimientos no será `id: Long`.
 

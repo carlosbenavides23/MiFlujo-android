@@ -2,7 +2,7 @@
 
 ## Propósito
 
-Este documento registra la auditoría técnica previa a Firebase Cloud Sync.
+Este documento registra la auditoría técnica histórica previa a Firebase Cloud Sync.
 
 Forma parte de la fase:
 
@@ -12,7 +12,9 @@ v0.3.5 - Pre-Firebase Technical Baseline
 
 El objetivo de esta fase es reducir riesgo antes de introducir sincronización cloud en una app que ya maneja datos reales.
 
-Esta auditoría no implementa Firebase.
+Esta auditoría no implementaba Firebase. Sus hallazgos se resolvieron en la
+baseline `v0.3.5`; el trabajo de Cloud Sync posterior está integrado en `main`
+para `v0.4.0`, aún sin publicar como release estable.
 
 ## Contexto actual
 

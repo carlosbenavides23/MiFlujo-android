@@ -49,6 +49,9 @@ Estas funciones no formaron parte del MVP inicial, pero fueron implementadas des
 - Validación estricta de respaldo antes de restaurar.
 - Confirmación explícita antes de reemplazar datos.
 - Restauración transaccional en Room.
+- Inicio de sesión con Google y autorización por UID para Cloud Sync.
+- Cloud Sync opcional con Firestore para cuentas autorizadas.
+- Activación explícita, sincronización manual y disparadores seguros para cambios pendientes.
 
 Estas funciones siguen respetando la filosofía local-first.
 
@@ -56,10 +59,6 @@ Estas funciones siguen respetando la filosofía local-first.
 
 No implementar sin issue, decisión documentada y planificación previa:
 
-- Login.
-- Cuentas de usuario.
-- Firebase Cloud Sync.
-- Firestore.
 - Backend obligatorio.
 - Sincronización entre dispositivos.
 - Integración bancaria.
