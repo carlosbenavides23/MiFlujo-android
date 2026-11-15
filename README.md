@@ -221,16 +221,18 @@ Compila la app en modo debug para validar que el proyecto construye correctament
 ## Flujo de ramas
 
 ```text
-main      -> releases estables
-dev       -> integración de cambios post-MVP
-feature/* -> nuevas funcionalidades
-fix/*     -> correcciones de bugs
-style/*   -> cambios visuales o de UI
-chore/*   -> tareas de mantenimiento
-docs/*    -> documentación
+main              -> base estable y documentación
+ux/*              -> rediseños o experimentos de experiencia por módulo
+feature/*         -> funcionalidades por módulo
+fix/*             -> correcciones agrupadas por área
+refactor/*        -> refactorizaciones de alcance definido
 ```
 
-Los cambios deben trabajarse en ramas pequeñas y luego integrarse mediante Pull Request.
+El trabajo se organiza en **ramas por módulo o conjunto coherente de cambios**, con iteraciones y commits dentro de esa rama. Al concluir se revisa mediante un Pull Request hacia `main`. Los cambios solo documentales pueden realizarse directamente en `main` y las issues no son obligatorias para cada ajuste. La antigua rama `dev` ya no es un paso requerido.
+
+El rediseño de captura rápida en cápsula de dos líneas se encuentra **en evaluación**, no publicado; ver `docs/ui-design.md`.
+
+**Nota de release:** GitHub Releases registra `v0.4.0`, pero el Gradle de `main` conserva `versionName = "0.3.5"` y `versionCode = 5`. Corregir la discrepancia de forma controlada antes de generar la siguiente release (ver `docs/release-process.md`).
 
 ## Documentación del proyecto
 
