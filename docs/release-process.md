@@ -1,281 +1,68 @@
 # Release Process
 
-Este documento define el proceso recomendado para publicar una nueva versión de MiFlujo.
+Procedimiento para publicar versiones Android de MiFlujo sin comprometer datos reales.
 
-El objetivo es evitar errores comunes antes de generar y publicar un APK release.
+## Estado de referencia
 
-## Checklist rápido
+- Última GitHub Release consultada: **v0.4.0** (publicada el 14 de junio de 2026).
+- **Atención:** `app/build.gradle.kts` en `main` todavía declara `versionCode = 5` y `versionName = "0.3.5"`. Verificar el origen de esta discrepancia y actualizar de manera controlada **antes** de producir el siguiente APK. No reutilizar un `versionCode` ya distribuido.
+- `dev` fue una rama de integración histórica, **no obligatoria** en el flujo nuevo. Las ramas por módulo parten de `main` y sus PR vuelven a `main`.
 
-Antes de publicar una release:
+## Flujo de integración y release
 
-- [ ] Confirmar que los cambios están mergeados en `dev` o en la rama base definida para la release.
-- [ ] Confirmar que `dev` no está detrás de `main` antes de usarlo como base.
-- [ ] Crear PR hacia `main`.
-- [ ] Mergear a `main` solo si la app fue probada.
-- [ ] Actualizar `versionCode` y `versionName` antes de generar el APK final.
-- [ ] Ejecutar pruebas unitarias relevantes.
-- [ ] Ejecutar build debug.
-- [ ] Generar APK release firmado desde `main`.
-- [ ] Instalar la nueva release encima de la anterior sin desinstalar.
-- [ ] Confirmar que Room conserva los datos locales.
-- [ ] Crear tag de Git.
-- [ ] Crear GitHub Release.
-- [ ] Subir únicamente el APK como asset.
-- [ ] No subir el keystore `.jks`.
+1. Completar y validar un módulo en su rama (por ejemplo `ux/quick-entry`).
+2. Revisar diff, resultados de tests, riesgos de migración y seguridad; abrir PR hacia `main` para integrar el módulo.
+3. Integrar solamente cambios aprobados; una fusión no publica automáticamente un APK.
+4. Cuando haya cambios listos para distribuir, fijar una versión nueva y aumentar `versionCode` y `versionName` coherentemente en `app/build.gradle.kts`.
+5. Ejecutar pruebas unitarias pertinentes y compilar; realizar pruebas manuales reales.
+6. Generar APK release **firmado desde `main`**, usando el keystore original, que debe permanecer fuera del repositorio.
+7. Instalar la nueva versión **encima** de una instalación anterior de prueba, con la misma firma y `applicationId`, sin desinstalar; comprobar persistencia Room y funcionalidad cloud cuando corresponda.
+8. Crear tag `vX.Y.Z` que apunte al commit publicado y GitHub Release con APK firmado y notas de cambios.
 
-## 1. Preparar rama de integración
+La documentación menor puede ir directamente a `main` y no requiere release por sí sola. No es necesario crear una rama `dev` ni un PR extra de promoción.
 
-Antes de promover cambios a `main`, asegurarse de que la rama de integración tenga todo lo necesario.
-
-Normalmente la rama de integración es:
-
-```text
-dev
-```
-
-Pero si `main` tiene hotfixes o commits directos que todavía no están en `dev`, primero se debe actualizar `dev` o crear la rama de trabajo desde `main` para evitar reintroducir documentación o código viejo.
-
-Comandos sugeridos:
-
-```bash
-git switch dev
-git pull origin dev
-git fetch origin
-git log --oneline --decorate --graph --all -20
-```
-
-Luego validar:
+## Validación técnica
 
 ```bash
 ./gradlew :app:testDebugUnitTest
 ./gradlew :app:assembleDebug
 ```
 
-`dev` debe compilar correctamente y la app debe probarse en dispositivo físico cuando el cambio afecte UI o comportamiento del usuario.
+- `testDebugUnitTest`: ejecuta tests unitarios locales de debug del módulo app.
+- `assembleDebug`: compila el APK debug del módulo app.
 
-## 2. Crear PR hacia `main`
+Si el cambio afecta migraciones Room, respaldos, sincronización o reglas financieras, incluir las pruebas específicas y pruebas instrumentadas necesarias. La compilación no demuestra por sí sola que el APK sea seguro para producción.
 
-Las releases deben llegar a `main` mediante Pull Request.
+## Checklist manual mínimo
 
-Caso normal:
+- [ ] Abrir la app y confirmar movimientos y totales separados C$/US$.
+- [ ] Crear, editar y eliminar ingresos y egresos; verificar categorías y validaciones.
+- [ ] Comprobar historial, reportes y PDF cuando corresponda.
+- [ ] Generar y compartir backup JSON; validar restauración correcta, cancelación y rechazo de archivo inválido cuando corresponda.
+- [ ] Para Cloud Sync: cuenta autorizada/no autorizada, activación explícita, offline, reconciliación, borrados y restauración bloqueada según estado.
+- [ ] Si cambia la UI: teclado, accesibilidad, tamaños táctiles, modo claro/oscuro y dispositivo físico.
+- [ ] Actualizar **sin desinstalar** sobre la versión previa con datos ficticios; verificar que conserva Room, UUID, sesión/preferencias según comportamiento esperado y, si aplica, sincronización.
+- [ ] Confirmar `versionCode` creciente, `versionName` correcto, firma y tag coherentes.
+- [ ] No publicar `.jks`, `.keystore`, `local.properties`, tokens, datos reales ni APK debug.
 
-```text
-base: main
-compare: dev
-```
+## Firma y artefactos
 
-Para ramas específicas:
+Generar APK release firmado mediante Android Studio (Build → Generate Signed Bundle / APK → APK) u otro flujo de release previamente configurado y verificado. Usar **el mismo keystore** de las releases anteriores para permitir actualización directa.
 
-```text
-base: main
-compare: feature/*, fix/*, chore/*, docs/*
-```
+Si Google Sign-In falla con OAuth `statusCode=10`, verificar el certificado del **APK real instalado**, no solo el `signingReport`. El incidente y su diagnóstico se documentan en `docs/decisions.md` (decisión 053).
 
-Título sugerido para release:
+No instalar accidentalmente APKs antiguos presentes en rutas intermedias de Gradle.
 
-```text
-Release vX.Y.Z
-```
+## Versionado
 
-Ejemplo:
+- Patch: correcciones compatibles y mejoras pequeñas.
+- Minor: capacidades visibles relevantes.
+- Major: cambios incompatibles deliberados (no hay obligación de adoptar 1.0 todavía).
 
-```text
-Release v0.3.5
-```
-
-## 3. Actualizar versión de app
-
-Antes de generar el APK final, revisar `app/build.gradle.kts`.
-
-Actualizar:
-
-```kotlin
-versionCode = 5
-versionName = "0.3.5"
-```
-
-Reglas:
-
-- `versionCode` es interno para Android y debe aumentar en cada APK release.
-- `versionName` es visible para humanos y debe coincidir con la versión publicada.
-- No reutilizar el mismo `versionCode` para una release nueva.
-
-Ejemplo de secuencia actual:
-
-```text
-v0.1.0 -> versionCode 1, versionName "0.1.0"
-v0.1.1 -> versionCode 2, versionName "0.1.1"
-v0.2.0 -> versionCode 3, versionName "0.2.0"
-v0.3.0 -> versionCode 4, versionName "0.3.0"
-v0.3.5 -> versionCode 5, versionName "0.3.5"
-```
-
-## 4. Generar APK release firmado
-
-Desde Android Studio:
-
-```text
-Build -> Generate Signed Bundle / APK -> APK
-```
-
-Usar el mismo keystore `.jks` de releases anteriores.
-
-Importante:
-
-- El `.jks` debe estar fuera del repositorio.
-- No subir el `.jks` a GitHub.
-- Guardar contraseña y keystore de forma segura.
-
-El APK generado puede copiarse con nombre de versión:
-
-```bash
-cp app/release/app-release.apk ~/Downloads/MiFlujo-v0.3.5.apk
-```
-
-## 5. Probar actualización sin pérdida de datos
-
-Para verificar persistencia local:
-
-1. Instalar una release anterior.
-2. Crear datos de prueba.
-3. Instalar la nueva release encima sin desinstalar.
-4. Confirmar que los datos siguen visibles.
-
-Ejemplo:
-
-```bash
-adb install ~/Downloads/MiFlujo-v0.3.0.apk
-adb install -r ~/Downloads/MiFlujo-v0.3.5.apk
-```
-
-`-r` reemplaza la app existente manteniendo datos si el `applicationId` y la firma coinciden.
-
-No usar `adb uninstall` entre versiones si se quiere probar persistencia, porque desinstalar borra los datos locales de la app.
-
-## 6. Crear tag de Git
-
-Después de tener `main` actualizado:
-
-```bash
-git switch main
-git pull origin main
-git tag -a v0.3.5 -m "MiFlujo v0.3.5"
-git push origin v0.3.5
-```
-
-El tag debe coincidir con la release publicada.
-
-## 7. Crear GitHub Release
-
-En GitHub:
-
-```text
-Repo -> Releases -> Draft a new release
-```
-
-Usar:
-
-```text
-Tag: v0.3.5
-Title: MiFlujo v0.3.5
-```
-
-Subir como asset:
-
-```text
-MiFlujo-v0.3.5.apk
-```
-
-No subir:
-
-- `.jks`.
-- `.keystore`.
-- `local.properties`.
-- archivos temporales.
-- APKs debug.
-
-## 8. Pruebas manuales mínimas
-
-Antes de publicar o compartir el APK:
-
-- [ ] Abrir app después de actualizar.
-- [ ] Confirmar que los datos anteriores siguen ahí.
-- [ ] Agregar movimiento.
-- [ ] Editar movimiento.
-- [ ] Eliminar movimiento.
-- [ ] Revisar Home.
-- [ ] Revisar Movimientos.
-- [ ] Revisar Reporte.
-- [ ] Probar exportación PDF si hubo cambios en reporte/PDF.
-- [ ] Crear respaldo local JSON si hubo cambios en backup.
-- [ ] Guardar respaldo en Archivos si hubo cambios en backup.
-- [ ] Compartir respaldo si hubo cambios en backup.
-- [ ] Restaurar respaldo válido si hubo cambios en restore.
-- [ ] Intentar restaurar archivo inválido si hubo cambios en restore.
-- [ ] Cancelar confirmación de restore y confirmar que no modifica datos si hubo cambios en restore.
-- [ ] Si hubo cambios en Cloud Sync: probar inicio y cierre de sesión, cuenta no autorizada, sincronización manual, modo sin conexión y restauración bloqueada mientras sync esté activo.
-- [ ] Probar modo claro y modo oscuro si hubo cambios visuales.
-
-## 9. Tipos de release
-
-### Patch release
-
-Para bugfixes, documentación, auditoría, limpieza técnica y polish pequeño.
-
-Ejemplo:
-
-```text
-v0.3.0 -> v0.3.5
-```
-
-### Minor release
-
-Para nuevas capacidades relevantes.
-
-Ejemplo:
-
-```text
-v0.3.5 -> v0.4.0
-```
-
-### Major release
-
-No aplica todavía para MiFlujo.
-
-## 10. Release técnica v0.3.5
-
-`v0.3.5` es una release técnica pre-Firebase.
-
-Objetivo:
-
-```text
-Pre-Firebase Technical Baseline
-```
-
-Debe servir para:
-
-- Auditar el estado local-first.
-- Documentar riesgos antes de Firebase.
-- Preparar Room antes de migraciones sync.
-- Definir identidad global antes de UUID.
-- Definir restore cloud-safe antes de cloud sync.
-- Reducir riesgo de pérdida o corrupción de datos.
-
-No debe incluir:
-
-- Firebase.
-- Login.
-- Firestore.
-- Sync engine.
-- Cambios grandes de UI.
-- PR gigante con muchos temas mezclados.
+No usar ejemplos históricos (`v0.3.5`) como si fueran la próxima release. El número de la siguiente versión se decidirá según el alcance real y el `versionCode` distribuido.
 
 ## Regla final
 
-Una release no se considera lista solo porque compila.
-
-Debe cumplir:
-
 ```text
-Compila -> se instala -> actualiza sin borrar datos -> funciona en uso básico -> protege datos -> se publica con versión correcta
+Pruebas -> revisión -> main -> versión y firma -> actualización sin pérdida de datos -> tag y release
 ```
