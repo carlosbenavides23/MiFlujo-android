@@ -1,13 +1,7 @@
 package com.carlos.miflujo.ui.movement
 
 import android.app.DatePickerDialog
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
-import androidx.compose.animation.SizeTransform
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
@@ -31,7 +25,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.lerp
@@ -45,6 +38,8 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -53,6 +48,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material.icons.filled.CalendarToday
@@ -60,6 +56,8 @@ import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
@@ -68,8 +66,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.PopupProperties
 import com.carlos.miflujo.domain.model.*
 import com.carlos.miflujo.ui.formatVisibleDate
+import com.carlos.miflujo.ui.theme.financePositiveColor
+import com.carlos.miflujo.ui.theme.financeNegativeColor
 import java.time.LocalDate
 
 @Composable
@@ -80,10 +81,13 @@ internal fun QuickEntryDemo(onClose: () -> Unit) {
     val active = state.active
     val pending = state.pending
     val editing = state.editingId
+    val categoryMenu = remember { SelectorMenuState() }
+    val subcategoryMenu = remember { SelectorMenuState() }
     var transfer by remember { mutableStateOf<PendingTransfer?>(null) }
     var sourceBounds by remember { mutableStateOf<Rect?>(null) }
     var targetBounds by remember { mutableStateOf<Rect?>(null) }
     var hostBounds by remember { mutableStateOf<Rect?>(null) }
+    var selectorHostBounds by remember { mutableStateOf<Rect?>(null) }
     var transferReady by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val progress = remember { Animatable(0f) }
@@ -130,7 +134,23 @@ internal fun QuickEntryDemo(onClose: () -> Unit) {
     val activeSurface = if (colors.background.luminance() < 0.5f) Color(0xFF1B1E23) else colors.surfaceContainerHigh
     fun close() { if (state.hasWork) state = state.requestExit() else onClose() }
     Dialog(onDismissRequest = { close() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(modifier = Modifier.fillMaxSize().padding(12.dp).imePadding(), shape = RoundedCornerShape(28.dp)) {
+        Surface(modifier = Modifier.fillMaxSize()
+                .onGloballyPositioned { selectorHostBounds = it.boundsInWindow() }
+                .pointerInput(categoryMenu, subcategoryMenu) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            val down = event.changes.firstOrNull { it.pressed && !it.previousPressed }
+                            val origin = selectorHostBounds?.topLeft
+                            if (down != null && origin != null) {
+                                val position = down.position + origin
+                                categoryMenu.dismissOutside(position)
+                                subcategoryMenu.dismissOutside(position)
+                            }
+                        }
+                    }
+                }
+                .padding(12.dp).imePadding(), shape = RoundedCornerShape(28.dp)) {
             Box(Modifier.fillMaxSize().onGloballyPositioned { hostBounds = it.boundsInWindow() }) {
             Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Registro con cápsulas", style = MaterialTheme.typography.titleLarge)
@@ -139,8 +159,16 @@ internal fun QuickEntryDemo(onClose: () -> Unit) {
                     if (pending.isEmpty()) item { Text("Los movimientos pendientes aparecerán aquí.") }
                     items(pending, key = { it.id }) { entry ->
                         val draft = entry.draft
+                        val isEditing = editing == entry.id
+                        val canEdit = editing == null && !state.dirty
+                        val editDescription = when {
+                            isEditing -> "Movimiento en edición"
+                            editing != null -> "Edición no disponible: guarde o cancele la edición actual"
+                            state.dirty -> "Edición no disponible: termine la captura actual"
+                            else -> "Editar movimiento"
+                        }
                         val borderColor by animateColorAsState(
-                            if (editing == entry.id) colors.primary else colors.outlineVariant,
+                            if (isEditing) colors.primary else colors.outlineVariant,
                             tween(180), label = "pendingEditing",
                         )
                         Surface(
@@ -152,62 +180,72 @@ internal fun QuickEntryDemo(onClose: () -> Unit) {
                                 .onGloballyPositioned { if (transferId == entry.id) targetBounds = it.boundsInWindow() }
                                 .graphicsLayer { alpha = if (transferId == entry.id) 0f else 1f },
                         ) {
-                            Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text("${if (draft.type == MovementType.INCOME) "+" else "−"} ${if (draft.currency == Currency.CORDOBA) "C$" else "US$"} ${draft.amount}", style = MaterialTheme.typography.titleSmall)
-                                    Text(listOf(draft.detail.ifBlank { "Sin detalle" }, draft.date.formatVisibleDate(), categoryLabel(draft.category), subcategoryLabel(draft.subcategory)).filter { it.isNotBlank() }.joinToString(" · "), style = MaterialTheme.typography.bodySmall)
-                                }
-                                TextButton(onClick = {
+                            PendingSummary(draft, isEditing = isEditing) {
+                                IconButton(onClick = {
                                     val previousId = state.editingId
                                     state = state.edit(entry.id)
                                     if (previousId == null && state.editingId == entry.id) haptics.perform(QuickEntryHaptics.Action.EditStarted)
-                                }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (editing == entry.id) "En edición" else "Editar") }
+                                }, enabled = canEdit, modifier = Modifier.size(PendingActionSize)) {
+                                    Icon(Icons.Default.Edit, contentDescription = editDescription)
+                                }
                                 PendingMenu(onDelete = { state = state.requestDelete(entry.id) })
                             }
                         }
                     }
+                    if (pending.isNotEmpty() && (state.dirty || editing != null)) {
+                        item(key = "edit-unavailable") {
+                            Text(
+                                if (editing != null) "Guarde o cancele la edición para editar otro movimiento."
+                                else "Termine la captura para editar un movimiento.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = colors.onSurfaceVariant,
+                            )
+                        }
+                    }
                 }
                 Surface(shape = RoundedCornerShape(24.dp), color = activeSurface, contentColor = colors.onSurface, modifier = Modifier.fillMaxWidth().onGloballyPositioned { sourceBounds = it.boundsInWindow() }) {
-                    Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Column(Modifier.padding(horizontal = 8.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         if (editing != null) Text("Editando movimiento", style = MaterialTheme.typography.labelMedium)
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                            CapsuleToggle(
-                                value = active.type, label = if (active.type == MovementType.INCOME) "Ingreso, cambiar a egreso" else "Egreso, cambiar a ingreso",
-                                width = 52.dp, accent = if (active.type == MovementType.INCOME) CapsuleToggleColors.Income else CapsuleToggleColors.Expense,
-                                onClick = {
-                                    state = state.update(state.active.copy(type = if (state.active.type == MovementType.INCOME) MovementType.EXPENSE else MovementType.INCOME, category = null, subcategory = null))
-                                    haptics.perform(QuickEntryHaptics.Action.ToggleType)
-                                },
-                            ) { type -> MovementSymbol(type) }
+                            CompactEntryField(active.amount, { state = state.update(active.copy(amount = it)) }, "Monto", Modifier.weight(1f), KeyboardType.Decimal)
                             CapsuleToggle(
                                 value = active.currency, label = if (active.currency == Currency.CORDOBA) "Córdobas, cambiar a dólares" else "Dólares, cambiar a córdobas",
-                                width = 64.dp, accent = if (active.currency == Currency.CORDOBA) CapsuleToggleColors.Cordoba else CapsuleToggleColors.Dollar,
+                                accent = if (active.currency == Currency.CORDOBA) CapsuleToggleColors.Cordoba else CapsuleToggleColors.Dollar,
                                 foreground = if (active.currency == Currency.CORDOBA) CapsuleToggleColors.CordobaText else Color.White,
                                 onClick = {
                                     val previous = state.active.currency
                                     state = state.update(state.active.copy(currency = if (previous == Currency.CORDOBA) Currency.DOLLAR else Currency.CORDOBA))
                                     if (state.active.currency != previous) haptics.perform(QuickEntryHaptics.Action.ToggleCurrency)
                                 },
-                            ) { currency -> CurrencyWheel(currency) }
-                            CompactEntryField(active.amount, { state = state.update(active.copy(amount = it)) }, "Monto", Modifier.weight(1f), KeyboardType.Decimal)
+                            ) { currency -> CurrencyMorph(currency) }
+                            CapsuleToggle(
+                                value = active.type, label = if (active.type == MovementType.INCOME) "Ingreso, cambiar a egreso" else "Egreso, cambiar a ingreso",
+                                accent = if (active.type == MovementType.INCOME) CapsuleToggleColors.Income else CapsuleToggleColors.Expense,
+                                onClick = {
+                                    state = state.update(state.active.copy(type = if (state.active.type == MovementType.INCOME) MovementType.EXPENSE else MovementType.INCOME, category = null, subcategory = null))
+                                    haptics.perform(QuickEntryHaptics.Action.ToggleType)
+                                },
+                            ) { type -> MovementSymbol(type) }
                         }
                         Column {
                             CompactEntryField(active.detail, { state = state.update(active.copy(detail = it)) }, "Detalle (opcional)", Modifier.fillMaxWidth(), secondary = true)
                             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                                 val context = LocalContext.current
                                 CapsuleMenuControl(icon = Icons.Default.CalendarToday, label = "Fecha", text = if (active.date == LocalDate.now()) "Hoy" else active.date.formatVisibleDate(), modifier = Modifier.weight(1f), onClick = { DatePickerDialog(context, { _, y, m, d -> state = state.update(active.copy(date = LocalDate.of(y, m + 1, d))) }, active.date.year, active.date.monthValue - 1, active.date.dayOfMonth).show() })
-                                if (active.type == MovementType.EXPENSE) CategoryMenu(active.category, Modifier.weight(1f)) { state = state.update(active.copy(category = it, subcategory = null)) }
+                                if (active.type == MovementType.EXPENSE) CategoryMenu(active.category, categoryMenu, Modifier.weight(1f)) { state = state.update(active.copy(category = it, subcategory = null)) }
                                 else Text("Ingreso general", modifier = Modifier.weight(1f).padding(12.dp), style = MaterialTheme.typography.bodySmall)
                             }
                         }
-                        if (active.type == MovementType.EXPENSE && active.category == MovementCategory.FIXED_COST) SubcategoryMenu(active.subcategory) { state = state.update(active.copy(subcategory = it)) }
+                        if (active.type == MovementType.EXPENSE && active.category == MovementCategory.FIXED_COST) SubcategoryMenu(active.subcategory, subcategoryMenu) { state = state.update(active.copy(subcategory = it)) }
                     }
                 }
-                state.message?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    TextButton(onClick = { close() }) { Text("Salir") }
+                state.message?.let {
+                    Text(it, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
+                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(onClick = { close() }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Salir") }
                     if (editing == null) {
-                        TextButton(onClick = {
+                        OutlinedButton(onClick = {
                             val before = state.pending.size
                             val previousMessage = state.message
                             state = state.add()
@@ -221,19 +259,19 @@ internal fun QuickEntryDemo(onClose: () -> Unit) {
                             } else if (state.message != null && state.message != previousMessage) {
                                 haptics.perform(QuickEntryHaptics.Action.ValidationRejected)
                             }
-                        }) { Text("Agregar otro") }
+                        }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Agregar otro") }
                         Button(onClick = {
                             val previousMessage = state.message
                             state = state.confirm()
                             if (state.message != null && state.message != previousMessage) haptics.perform(QuickEntryHaptics.Action.ValidationRejected)
-                        }) { Text("Confirmar") }
+                        }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Confirmar") }
                     } else {
-                        TextButton(onClick = { state = state.cancelEdit() }) { Text("Cancelar") }
+                        OutlinedButton(onClick = { state = state.cancelEdit() }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Cancelar") }
                         Button(onClick = {
                             val previousMessage = state.message
                             state = state.saveEdit()
                             if (state.message != null && state.message != previousMessage) haptics.perform(QuickEntryHaptics.Action.ValidationRejected)
-                        }) { Text("Guardar cambios") }
+                        }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Guardar cambios") }
                     }
                 }
             }
@@ -271,6 +309,7 @@ internal fun QuickEntryDemo(onClose: () -> Unit) {
 
 // Visual snapshot only: never participates in validation or queue transitions.
 private data class PendingTransfer(val entry: PendingEntry, val source: Rect)
+private val PendingActionSize = 48.dp
 
 @Composable
 private fun TransferOverlay(flight: PendingTransfer, target: Rect, host: Rect, progress: Animatable<Float, androidx.compose.animation.core.AnimationVector1D>, sourceColor: androidx.compose.ui.graphics.Color) {
@@ -293,10 +332,39 @@ private fun TransferOverlay(flight: PendingTransfer, target: Rect, host: Rect, p
         color = lerp(sourceColor, MaterialTheme.colorScheme.surfaceContainerHigh, progress.value.coerceIn(0f, 1f)),
         contentColor = MaterialTheme.colorScheme.onSurface,
     ) {
-        Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
-            Text("${if (draft.type == MovementType.INCOME) "+" else "−"} ${if (draft.currency == Currency.CORDOBA) "C$" else "US$"} ${draft.amount}", style = MaterialTheme.typography.titleSmall)
-            Text(listOf(draft.detail.ifBlank { "Sin detalle" }, draft.date.formatVisibleDate(), categoryLabel(draft.category), subcategoryLabel(draft.subcategory)).filter { it.isNotBlank() }.joinToString(" · "), style = MaterialTheme.typography.bodySmall)
+        PendingSummary(draft) { Spacer(Modifier.size(width = PendingActionSize * 2, height = PendingActionSize)) }
+    }
+}
+
+@Composable
+private fun PendingSummary(draft: QuickEntryDraft, isEditing: Boolean = false, actions: @Composable RowScope.() -> Unit) {
+    val amountColor = if (draft.type == MovementType.INCOME) financePositiveColor() else financeNegativeColor()
+    val category = listOf(categoryLabel(draft.category), subcategoryLabel(draft.subcategory))
+        .filter { it.isNotBlank() }.joinToString(" · ")
+    Row(
+        Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                "${if (draft.type == MovementType.INCOME) "+" else "−"} ${if (draft.currency == Currency.CORDOBA) "C$" else "US$"} ${draft.amount}",
+                style = MaterialTheme.typography.titleMedium, color = amountColor,
+            )
+            if (isEditing) Text("En edición", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            if (draft.detail.isNotBlank()) Text(
+                draft.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 3, overflow = TextOverflow.Ellipsis,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (category.isNotBlank()) Text(
+                    category, modifier = Modifier.weight(1f, fill = false),
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+                Text(draft.date.formatVisibleDate(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
+        actions()
     }
 }
 
@@ -305,11 +373,11 @@ private object CapsuleToggleColors {
     val Expense = Color(0xFFC34850)
     val Cordoba = Color(0xFF8995A5)
     val CordobaText = Color(0xFF20242B)
-    val Dollar = Color(0xFF5E7F67)
+    val Dollar = Color(0xFF5B7C64)
 }
 
 @Composable
-private fun <T> CapsuleToggle(value: T, label: String, width: androidx.compose.ui.unit.Dp, accent: androidx.compose.ui.graphics.Color, foreground: Color = Color.White, onClick: () -> Unit, content: @Composable (T) -> Unit) {
+private fun <T> CapsuleToggle(value: T, label: String, accent: androidx.compose.ui.graphics.Color, foreground: Color = Color.White, onClick: () -> Unit, content: @Composable (T) -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -320,7 +388,7 @@ private fun <T> CapsuleToggle(value: T, label: String, width: androidx.compose.u
     val symbolColor by animateColorAsState(foreground, tween(160), label = "toggleForeground")
     Button(
         onClick = onClick, interactionSource = interaction,
-        modifier = Modifier.width(width).heightIn(min = 48.dp).semantics { contentDescription = label }
+        modifier = Modifier.width(56.dp).height(48.dp).semantics { contentDescription = label }
             .graphicsLayer { scaleX = scale; scaleY = scale },
         shape = RoundedCornerShape(16.dp), contentPadding = PaddingValues(0.dp),
         colors = ButtonDefaults.buttonColors(containerColor = backgroundColor, contentColor = symbolColor),
@@ -349,29 +417,10 @@ private fun MovementSymbol(type: MovementType) {
 }
 
 @Composable
-private fun CurrencyWheel(currency: Currency) {
-    Box(Modifier.fillMaxWidth().heightIn(min = 48.dp).clipToBounds().clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
-        AnimatedContent(
-            targetState = currency,
-            contentAlignment = Alignment.Center,
-            label = "currencyWheel",
-            transitionSpec = {
-                val direction = if (targetState == Currency.DOLLAR) 1 else -1
-                val motion = spring<androidx.compose.ui.unit.IntOffset>(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)
-                (slideInVertically(motion) { direction * it } + fadeIn(tween(160))) togetherWith
-                    (slideOutVertically(motion) { -direction * it } + fadeOut(tween(140))) using SizeTransform(clip = true)
-            },
-        ) { target ->
-            Text(if (target == Currency.CORDOBA) "C$" else "US$", style = MaterialTheme.typography.titleSmall, maxLines = 1)
-        }
-    }
-}
-
-@Composable
 private fun PendingMenu(onDelete: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        IconButton(onClick = { expanded = true }) { Icon(Icons.Default.MoreVert, contentDescription = "Opciones del movimiento") }
+        IconButton(onClick = { expanded = true }, modifier = Modifier.size(PendingActionSize)) { Icon(Icons.Default.MoreVert, contentDescription = "Opciones del movimiento") }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(text = { Text("Eliminar") }, onClick = { expanded = false; onDelete() })
         }
@@ -395,22 +444,35 @@ private fun CapsuleMenuControl(icon: ImageVector, label: String, text: String, m
     }
 }
 
+// Outside taps are handled in the dialog, excluding the anchor. A non-focusable
+// popup otherwise dismisses on DOWN before the anchor receives its own click.
+private class SelectorMenuState {
+    var expanded by mutableStateOf(false)
+    var anchor: Rect? = null
+
+    fun dismissOutside(position: Offset) {
+        if (expanded && anchor?.contains(position) != true) expanded = false
+    }
+}
+
 @Composable
-private fun CategoryMenu(value: MovementCategory?, modifier: Modifier = Modifier, onSelect: (MovementCategory) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    Box(modifier) {
-        CapsuleMenuControl(icon = Icons.Default.Category, label = "Categoría", text = categoryLabel(value).ifBlank { "Categoría" }, modifier = Modifier.fillMaxWidth(), onClick = { expanded = true })
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            listOf(MovementCategory.FIXED_COST, MovementCategory.MAINTENANCE, MovementCategory.OTHER).forEach { item -> DropdownMenuItem(text = { Text(categoryLabel(item)) }, onClick = { onSelect(item); expanded = false }) }
+private fun CategoryMenu(value: MovementCategory?, menu: SelectorMenuState, modifier: Modifier = Modifier, onSelect: (MovementCategory) -> Unit) {
+    DisposableEffect(menu) { onDispose { menu.expanded = false; menu.anchor = null } }
+    BackHandler(enabled = menu.expanded) { menu.expanded = false }
+    Box(modifier.onGloballyPositioned { menu.anchor = it.boundsInWindow() }) {
+        CapsuleMenuControl(icon = Icons.Default.Category, label = "Categoría", text = categoryLabel(value).ifBlank { "Categoría" }, modifier = Modifier.fillMaxWidth(), onClick = { menu.expanded = !menu.expanded })
+        DropdownMenu(expanded = menu.expanded, onDismissRequest = { menu.expanded = false }, properties = PopupProperties(focusable = false, dismissOnClickOutside = false)) {
+            listOf(MovementCategory.FIXED_COST, MovementCategory.MAINTENANCE, MovementCategory.OTHER).forEach { item -> DropdownMenuItem(text = { Text(categoryLabel(item)) }, onClick = { onSelect(item); menu.expanded = false }) }
         }
     }
 }
 @Composable
-private fun SubcategoryMenu(value: MovementSubcategory?, onSelect: (MovementSubcategory) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    Box { OutlinedButton(onClick = { expanded = true }, modifier = Modifier.heightIn(min = 48.dp), shape = RoundedCornerShape(16.dp)) { Text(subcategoryLabel(value).ifBlank { "Subcategoría" }) }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            MovementSubcategory.entries.forEach { item -> DropdownMenuItem(text = { Text(subcategoryLabel(item)) }, onClick = { onSelect(item); expanded = false }) }
+private fun SubcategoryMenu(value: MovementSubcategory?, menu: SelectorMenuState, onSelect: (MovementSubcategory) -> Unit) {
+    DisposableEffect(menu) { onDispose { menu.expanded = false; menu.anchor = null } }
+    BackHandler(enabled = menu.expanded) { menu.expanded = false }
+    Box(Modifier.onGloballyPositioned { menu.anchor = it.boundsInWindow() }) { OutlinedButton(onClick = { menu.expanded = !menu.expanded }, modifier = Modifier.heightIn(min = 48.dp), shape = RoundedCornerShape(16.dp)) { Text(subcategoryLabel(value).ifBlank { "Subcategoría" }) }
+        DropdownMenu(expanded = menu.expanded, onDismissRequest = { menu.expanded = false }, properties = PopupProperties(focusable = false, dismissOnClickOutside = false)) {
+            MovementSubcategory.entries.forEach { item -> DropdownMenuItem(text = { Text(subcategoryLabel(item)) }, onClick = { onSelect(item); menu.expanded = false }) }
         }
     }
 }
@@ -425,7 +487,7 @@ private fun CompactEntryField(value: String, onChange: (String) -> Unit, label: 
         modifier = modifier.heightIn(min = 48.dp).border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp)).semantics { contentDescription = label },
         decorationBox = { inner ->
             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.weight(1f).padding(start = 12.dp, end = if (value.isEmpty()) 12.dp else 0.dp), contentAlignment = Alignment.CenterStart) {
+                Box(Modifier.weight(1f).padding(start = 8.dp, end = if (value.isEmpty()) 8.dp else 0.dp), contentAlignment = Alignment.CenterStart) {
                     if (value.isEmpty()) Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     inner()
                 }
