@@ -75,6 +75,7 @@ Este es un proyecto de un desarrollador; evitar proceso innecesariamente granula
 - Evitar mezclar cambios de módulos independientes en una rama. Nunca publicar automáticamente al fusionar.
 - Antes de editar archivos, inspeccionar implementación y documentos existentes; documentar hechos actuales por separado de propuestas.
 - ChatGPT ayuda a definir arquitectura, alcance y UX; Codex puede implementar, probar y preparar PR; la decisión final de integración y release es humana.
+- Mantener `docs/work-in-progress.md` al completar hitos del módulo, cambiar decisiones o dejar tareas pendientes. Al retomar una sesión, contrastarlo con el código y Git (rama, árbol e historial) y corregir datos obsoletos; enlazar la documentación de detalle en vez de duplicarla.
 
 ## Seguridad de datos y entornos de prueba
 

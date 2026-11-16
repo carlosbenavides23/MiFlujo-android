@@ -51,6 +51,11 @@ fun AddMovementDialog(
     onDismissRequest: () -> Unit,
     onSubmit: (AddMovementInput) -> Unit,
 ) {
+    var showPrototype by rememberSaveable { mutableStateOf(false) }
+    if (showPrototype) {
+        QuickEntryDemo(onClose = { showPrototype = false })
+        return
+    }
     val formStateKey = initialMovement?.id
     val initialDate = (initialMovement?.date ?: LocalDate.now()).formatVisibleDate()
     val dialogTitle = if (initialMovement == null) "Agregar movimiento" else "Editar movimiento"
@@ -171,8 +176,11 @@ fun AddMovementDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismissRequest) {
-                Text(text = "Cancelar")
+            Column {
+                if (initialMovement == null) {
+                    TextButton(onClick = { showPrototype = true }) { Text("Probar cápsulas") }
+                }
+                TextButton(onClick = onDismissRequest) { Text(text = "Cancelar") }
             }
         },
     )
@@ -736,4 +744,13 @@ private fun Currency.amountPrefix(): String {
         Currency.CORDOBA -> "C$"
         Currency.DOLLAR -> "US$"
     }
+}
+
+// The prototype uses the same validation as the existing form, without submitting data.
+internal fun quickEntryValidationMessage(
+    type: MovementType, amount: String, currency: Currency, date: LocalDate,
+    category: MovementCategory?, subcategory: MovementSubcategory?,
+): String? {
+    val errors = validateAddMovementForm(type, amount, currency, date.formatVisibleDate(), category, subcategory).errors
+    return listOfNotNull(errors.amount, errors.date, errors.category, errors.subcategory).firstOrNull()
 }
