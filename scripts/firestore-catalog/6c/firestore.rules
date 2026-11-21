@@ -1,0 +1,285 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwnUser(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isAuthorizedUser(uid) {
+      return isOwnUser(uid)
+        && get(/databases/$(database)/documents/authorizedUsers/$(uid)).data.enabled == true;
+    }
+
+    function hasValidMovementFields(data) {
+      let fields = [
+        'uuid',
+        'type',
+        'amountMinor',
+        'currency',
+        'date',
+        'category',
+        'subcategory',
+        'detail',
+        'createdAt',
+        'updatedAt',
+        'deletedAt',
+        'schemaVersion'
+      ];
+
+      return data.keys().hasAll(fields)
+        && data.keys().hasOnly(fields);
+    }
+
+    function hasValidMovementTypes(data) {
+      return data.uuid is string
+        && data.uuid.matches('^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')
+        && data.type is string
+        && data.type in ['INCOME', 'EXPENSE']
+        && data.amountMinor is int
+        && data.amountMinor > 0
+        && data.currency is string
+        && data.currency in ['CORDOBA', 'DOLLAR']
+        && data.date is string
+        && data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && data.category is string
+        && data.category in ['GENERAL_INCOME', 'FIXED_COST', 'MAINTENANCE', 'OTHER']
+        && (data.subcategory == null || data.subcategory is string)
+        && (data.detail == null || data.detail is string)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && (data.deletedAt == null || data.deletedAt is timestamp)
+        && data.schemaVersion is int
+        && data.schemaVersion == 1;
+    }
+
+    function hasValidMovementClassification(data) {
+      return (
+          data.type == 'INCOME'
+          && data.category == 'GENERAL_INCOME'
+          && data.subcategory == null
+        )
+        || (
+          data.type == 'EXPENSE'
+          && data.category == 'FIXED_COST'
+          && data.subcategory in ['WATER', 'ELECTRICITY', 'INTERNET']
+        )
+        || (
+          data.type == 'EXPENSE'
+          && data.category in ['MAINTENANCE', 'OTHER']
+          && data.subcategory == null
+        );
+    }
+
+    function isValidMovement(data, movementUuid) {
+      return hasValidMovementFields(data)
+        && hasValidMovementTypes(data)
+        && hasValidMovementClassification(data)
+        && data.uuid == movementUuid;
+    }
+
+    function hasValidSyncMetadataFields(data) {
+      let fields = ['schemaVersion', 'updatedAt'];
+
+      return data.keys().hasAll(fields)
+        && data.keys().hasOnly(fields)
+        && data.schemaVersion is int
+        && data.schemaVersion > 0
+        && data.updatedAt is timestamp;
+    }
+
+    match /authorizedUsers/{uid} {
+      allow get: if isOwnUser(uid);
+      allow list: if false;
+      allow create, update, delete: if false;
+    }
+
+    // Administrative marker. Missing means legacy; 0 freezes both client protocols.
+    function protocol(uid) {
+      let path = /databases/$(database)/documents/users/$(uid)/metadata/movementProtocol;
+      return !exists(path) ? 1 : markerVersion(get(path).data);
+    }
+
+    function markerVersion(data) {
+      return data.keys().hasOnly(['version']) && data.version is int ? data.version : 0;
+    }
+
+    match /users/{uid}/metadata/movementProtocol {
+      allow get: if isAuthorizedUser(uid);
+      allow list, write: if false;
+    }
+
+    function validMovementLinks(uid, data) {
+      return (data.categoryUuid == null && data.subcategoryUuid == null)
+        || (isCatalogUuid(data.categoryUuid)
+            && getAfter(/databases/$(database)/documents/users/$(uid)/categories/$(data.categoryUuid)).data.schemaVersion == 1
+            && getAfter(/databases/$(database)/documents/users/$(uid)/categories/$(data.categoryUuid)).data.scope in [data.type, 'BOTH']
+            && (data.subcategoryUuid == null
+                || (isCatalogUuid(data.subcategoryUuid)
+                    && getAfter(/databases/$(database)/documents/users/$(uid)/subcategories/$(data.subcategoryUuid)).data.schemaVersion == 1
+                    && getAfter(/databases/$(database)/documents/users/$(uid)/subcategories/$(data.subcategoryUuid)).data.categoryUuid == data.categoryUuid)));
+    }
+
+    function validMovementV2(uid, uuid, data) {
+      let fields = [
+        'schemaVersion', 'uuid', 'type', 'amountMinor', 'currency', 'date', 'detail',
+        'createdAt', 'updatedAt', 'deletedAt', 'categoryUuid', 'subcategoryUuid', 'revision'
+      ];
+      return data.keys().hasAll(fields) && data.keys().hasOnly(fields)
+        && data.schemaVersion is int && data.schemaVersion == 2
+        && isCatalogUuid(data.uuid) && data.uuid == uuid
+        && data.type in ['INCOME', 'EXPENSE']
+        && data.currency in ['CORDOBA', 'DOLLAR']
+        && data.amountMinor is int && data.amountMinor > 0
+        && data.date is string && data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && (data.detail == null || data.detail is string)
+        && data.createdAt is timestamp && data.updatedAt is timestamp
+        && (data.deletedAt == null || data.deletedAt is timestamp)
+        && data.revision is int && data.revision > 0
+        && validMovementLinks(uid, data);
+    }
+
+    function validMovementV2Update(uid, uuid, before, after) {
+      return before.schemaVersion == 2 && validMovementV2(uid, uuid, after)
+        && (before == after
+            || (before.deletedAt == null && after.uuid == before.uuid && after.createdAt == before.createdAt
+                && before.revision < 9223372036854775807 && after.revision == before.revision + 1));
+    }
+
+    match /users/{uid}/movements/{movementUuid} {
+      allow get, list: if isAuthorizedUser(uid);
+
+      allow create: if isAuthorizedUser(uid) && (
+        (protocol(uid) == 1 && isValidMovement(request.resource.data, movementUuid))
+        || (protocol(uid) == 2 && validMovementV2(uid, movementUuid, request.resource.data)
+            && request.resource.data.revision == 1)
+      );
+
+      allow update: if isAuthorizedUser(uid) && (
+        (protocol(uid) == 1 && resource.data.schemaVersion == 1
+            && isValidMovement(request.resource.data, movementUuid)
+            && request.resource.data.uuid == resource.data.uuid
+            && request.resource.data.createdAt == resource.data.createdAt)
+        || (protocol(uid) == 2 && validMovementV2Update(uid, movementUuid, resource.data, request.resource.data))
+      );
+
+      allow delete: if false;
+    }
+
+    match /users/{uid}/metadata/sync {
+      allow get: if isAuthorizedUser(uid);
+
+      allow create, update: if isAuthorizedUser(uid) && protocol(uid) == 1
+        && hasValidSyncMetadataFields(request.resource.data);
+
+      allow delete: if false;
+    }
+
+    // Catalog document schema v1 is shared with the earlier experiment.
+    function isCatalogUuid(value) {
+      return value is string
+        && value.matches('^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$');
+    }
+
+    function hasCatalogFields(data, extra) {
+      let fields = [
+        'schemaVersion', 'uuid', 'name', 'iconKey', 'archived', 'sortOrder',
+        'revisionCounter', 'revisionActorUuid'
+      ].concat(extra);
+      return data.keys().hasAll(fields) && data.keys().hasOnly(fields);
+    }
+
+    function validCatalogText(value, maxBytes) {
+      return value is string && value.toUtf8().size() <= maxBytes && value.trim().size() > 0;
+    }
+
+    function validCatalogData(data, uuid) {
+      return data.schemaVersion is int && data.schemaVersion == 1
+        && isCatalogUuid(data.uuid) && data.uuid == uuid
+        && validCatalogText(data.name, 480) && validCatalogText(data.iconKey, 128)
+        && data.archived is bool
+        && data.sortOrder is int && data.sortOrder >= -2147483648 && data.sortOrder <= 2147483647
+        && data.revisionCounter is int && data.revisionCounter >= 0
+        && isCatalogUuid(data.revisionActorUuid);
+    }
+
+    function validCatalogAdvance(before, after) {
+      return after == before || after.revisionCounter > before.revisionCounter
+        || (after.revisionCounter == before.revisionCounter
+            && after.revisionActorUuid > before.revisionActorUuid);
+    }
+
+    function seedCategoryGroups() {
+      return {
+        'e2e2de81-2c70-37cb-adda-392be081ad53': 'INCOME',
+        '299690db-dcc7-380d-850f-535c74bd8827': 'FIXED_COST',
+        '9a93cc1f-a2ca-3969-b4d8-3ead840589ec': 'MAINTENANCE',
+        'ee7fe63c-f73b-381f-9260-f2cdee3c51c5': 'OTHER'
+      };
+    }
+
+    function seedSubcategoryUuids() {
+      return [
+        '919bb4b6-da9e-3857-b442-d682d5d80c2d',
+        '4307fcb5-e7e5-3e01-afd3-3cbefc523e13',
+        'f1b7ab2a-33aa-3912-969a-a45c9d4481f1'
+      ];
+    }
+
+    function validCategoryShape(data, uuid) {
+      let groups = seedCategoryGroups();
+      return hasCatalogFields(data, ['scope', 'reportGroup']) && validCatalogData(data, uuid)
+        && !(uuid in seedSubcategoryUuids())
+        && ((data.scope == 'INCOME' && data.reportGroup == 'INCOME')
+            || (data.scope in ['EXPENSE', 'BOTH'] && data.reportGroup in ['FIXED_COST', 'MAINTENANCE', 'OTHER']))
+        && (!(uuid in groups)
+            || (data.reportGroup == groups[uuid] && data.scope == (groups[uuid] == 'INCOME' ? 'INCOME' : 'EXPENSE')));
+    }
+
+    function validSubcategoryShape(data, uuid) {
+      return hasCatalogFields(data, ['categoryUuid']) && validCatalogData(data, uuid)
+        && isCatalogUuid(data.categoryUuid) && data.categoryUuid != uuid
+        && !(data.categoryUuid in seedSubcategoryUuids()) && !(uuid in seedCategoryGroups())
+        && (!(uuid in seedSubcategoryUuids()) || data.categoryUuid == '299690db-dcc7-380d-850f-535c74bd8827');
+    }
+
+    function hasCatalogParent(uid, categoryUuid) {
+      return existsAfter(/databases/$(database)/documents/users/$(uid)/categories/$(categoryUuid));
+    }
+
+    match /users/{uid}/categories/{uuid} {
+      allow read: if isAuthorizedUser(uid);
+      allow create: if isAuthorizedUser(uid) && protocol(uid) == 2 && validCategoryShape(request.resource.data, uuid)
+        && !existsAfter(/databases/$(database)/documents/users/$(uid)/subcategories/$(uuid));
+      allow update: if isAuthorizedUser(uid) && protocol(uid) == 2 && validCategoryShape(request.resource.data, uuid)
+        && request.resource.data.uuid == resource.data.uuid
+        && request.resource.data.scope == resource.data.scope
+        && request.resource.data.reportGroup == resource.data.reportGroup
+        && request.resource.data.schemaVersion == resource.data.schemaVersion
+        && validCatalogAdvance(resource.data, request.resource.data);
+      allow delete: if false;
+    }
+
+    match /users/{uid}/subcategories/{uuid} {
+      allow read: if isAuthorizedUser(uid);
+      allow create: if isAuthorizedUser(uid) && protocol(uid) == 2 && validSubcategoryShape(request.resource.data, uuid)
+        && !existsAfter(/databases/$(database)/documents/users/$(uid)/categories/$(uuid))
+        && hasCatalogParent(uid, request.resource.data.categoryUuid);
+      allow update: if isAuthorizedUser(uid) && protocol(uid) == 2 && validSubcategoryShape(request.resource.data, uuid)
+        && request.resource.data.uuid == resource.data.uuid
+        && request.resource.data.categoryUuid == resource.data.categoryUuid
+        && request.resource.data.schemaVersion == resource.data.schemaVersion
+        && hasCatalogParent(uid, request.resource.data.categoryUuid)
+        && validCatalogAdvance(resource.data, request.resource.data);
+      allow delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
