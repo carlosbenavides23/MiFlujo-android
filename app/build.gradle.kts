@@ -24,6 +24,11 @@ android {
     }
 
     buildTypes {
+        create("catalogLab") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".cataloglab"
+            matchingFallbacks += "debug"
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
@@ -41,6 +46,7 @@ android {
     }
     sourceSets {
         getByName("androidTest").assets.directories.add("$projectDir/schemas")
+        getByName("catalogLab").res.srcDir("src/debug/res")
     }
 }
 

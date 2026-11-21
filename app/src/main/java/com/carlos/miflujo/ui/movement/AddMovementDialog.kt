@@ -583,7 +583,7 @@ private fun validateAddMovementForm(
     )
 }
 
-private fun parseAmountMinorOrNull(rawAmount: String): Long? {
+internal fun parseAmountMinorOrNull(rawAmount: String): Long? {
     val normalizedAmount = rawAmount.trim()
     if (normalizedAmount.isBlank()) return null
     if (!normalizedAmount.all { it.isDigit() || it == '.' || it == ',' }) return null
@@ -688,7 +688,7 @@ private const val MAX_DATE_DIGITS = 6
 private const val MAX_MOVEMENT_AMOUNT_MINOR = 99_999_999_999L
 private const val MAX_MOVEMENT_AMOUNT_ERROR = "El monto máximo permitido es 999,999,999.99."
 
-private fun Long.formatAmountInput(): String {
+internal fun Long.formatAmountInput(): String {
     val whole = this / 100L
     val cents = this % 100L
     return "$whole.${cents.toString().padStart(2, '0')}"

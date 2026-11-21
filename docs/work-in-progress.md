@@ -290,3 +290,200 @@ esta iteración. Room, Firebase, sincronización y reglas financieras no cambian
 - Si no se pueden extraer los glifos, C/U tienen contornos no admitidos, no se reconocen sus terminales, se excede el límite de muestreo o el texto medido ya desborda, se conserva el Text original sin deformación. No se vuelve a las letras genéricas. Una escala de fuente que no quepa en los 56 × 48 dp sigue siendo una limitación del tamaño fijo del botón; no se reduce silenciosamente la fuente.
 - Verificación: siete tests de geometría pasaron en JVM directa con Kotlin 2.2.10/JUnit 4.13.2 (topología, correspondencia y grosor, error de normalización, posiciones, separación temporal, dólar y continuidad). También pasó una compilación aislada de los auxiliares del selector con el plugin Compose y las dependencias locales, sin Gradle; esto no compila ni prueba la app completa. Se revisó una lámina de seis estados con contornos de Noto Sans obtenidos mediante AWT en el equipo, que no reproduce Android ni la fuente del teléfono. `git diff --check` y comprobación de archivos nuevos sin seguimiento sin errores. No se ejecutaron Gradle ni ADB.
 - Pendiente en dispositivo: comparar C$/US$ en reposo con el Text original; observar el primer y último fotograma del morph por diferencias de hinting/peso/baseline; comprobar separación y reagrupación en ambos sentidos, pulsaciones rápidas e inversiones, dólar reconocible, centrado y recortes con distintas escalas de fuente, TalkBack, háptica y ambos temas; verificar escala de animación reducida/cero. La continuidad de rasterización y el adaptador nativo de extracción aún no se han ejecutado en Android.
+
+## Renderizado aislado de glifos durante el morph
+
+- Se confirmó que `CurrencyMorph.kt` agrupaba los contornos de C/U, S y `$` en un solo `Path` con `EvenOdd`. Ahora convierte y dibuja cada `GlyphOutline` por separado, manteniendo `EvenOdd` en el Path de ese glifo para conservar los huecos internos (incluido el del dólar). No se tocaron geometrías, posiciones, separación, spring, texto de reposo ni controles.
+- La interacción de `EvenOdd` entre contornos de glifos superpuestos es una causa plausible del artefacto, pero la hipótesis visual no queda confirmada por inspección estática. Las pruebas JVM de geometría no ejercitan el rasterizador de Compose ni los píxeles de las intersecciones; confirmar en teléfono si desaparecen las deformaciones intermedias del `$` y revisar ambos sentidos, pulsaciones rápidas, legibilidad y ausencia de huecos/saltos.
+- Los tests JVM de geometría y `git diff --check` se ejecutaron sin Gradle; no se ejecutó ADB. La verificación visual del artefacto queda pendiente en dispositivo.
+
+## Continuidad del renderizado del dólar
+
+- El usuario confirmó que separar los Paths no eliminó el ajuste final de la línea vertical del `$`. La inspección identifica un cambio instantáneo de representación: mientras `transition.isRunning` se dibujaban polígonos rellenos; al terminar se sustituían por `Text`. El antialiasing de un Path no reproduce necesariamente el hinting del texto, aun con la misma fuente. El Paint de extracción usa hinting, pero extraer y aplanar contornos no aplica el rasterizado de texto al dibujarlos. Esta es la causa probable del salto; no se ha confirmado mediante comparación de píxeles en Android, ni se puede afirmar que aparezca sin animación usando solo las pruebas JVM disponibles.
+- Las posiciones parten del mismo layout centrado y baseline de Compose. El desplazamiento y el recentrado producen posiciones fraccionarias que también pueden cambiar la cobertura de una línea fina durante el recorrido. No se encontró otro cambio explícito de grosor o color al terminar: Path y Text toman `LocalContentColor`, cuyo tween y el del fondo pertenecen a `CapsuleToggle`. No se modificaron esos tweens ni se redondearon las posiciones para intentar ocultar el problema.
+- Corrección localizada en `CurrencyMorph.kt`: C/U y S siguen dibujándose como contornos geométricos. El dólar se dibuja durante todo el recorrido con `drawText(TextLayoutResult)`, que usa el renderizador de párrafos de Compose, igual que Text. Se mide la cadena completa C$ con su prefijo transparente (solo cambia la pintura, no las métricas); así se conservan el contexto tipográfico, tracking y baseline. Se traslada ese layout siguiendo exactamente el desplazamiento del contorno del dólar, incluido el recentrado, y se aplica el color animado actual. El Text original de la cadena completa se conserva en reposo. No se añadió crossfade ni se modificaron las curvas, correspondencias, spring, separación o reagrupación.
+- Las fuentes locales de Compose UI Text 1.10.4 confirman que `drawText` pinta `multiParagraph` y que el prefijo transparente se aplica con un span de color. Pasaron siete tests JVM de geometría y la compilación aislada del selector con el plugin Compose y dependencias locales, sin Gradle. `git diff --check` sin errores. Esto no ejecuta el rasterizador de Android ni valida la app completa; no se ejecutaron Gradle ni ADB.
+- Pendiente en teléfono: observar específicamente el asta vertical del dólar antes, durante y después del último fotograma en ambos sentidos; repetir con escala de animación lenta y normal, e invertir rápidamente el destino. Comprobar que no cambia bruscamente su grosor, baseline o posición al entrar/salir del reposo, que no aparece el prefijo C duplicado y que no hay recortes ni cambios de color. Revisar ambas monedas en reposo, ambos temas, fuentes ampliadas y animaciones desactivadas. Si el ajuste persiste, comparar capturas del extremo animado y del Text en reposo con el mismo color y posición para distinguir diferencias de cobertura subpíxel de diferencias de layout; no retocar C/U sin esa evidencia.
+
+## Inspector manual del morph de moneda
+
+- En instalaciones con `ApplicationInfo.FLAG_DEBUGGABLE` activo, «Registro con cápsulas» ofrece «Inspeccionar morph de moneda». El diálogo tiene slider, porcentaje, accesos a 0 %, 50 % y 100 % y cierre; su estado es local y no modifica la moneda ni movimientos de la demostración. No se muestra en una instalación no depurable.
+- `CurrencyMorph` acepta progreso manual opcional y comparte geometría, posiciones y dibujo con el selector; 0 % y 100 % muestran el Text de reposo, igual que el selector normal, y los valores interiores muestran los contornos con el dólar dibujado mediante texto. El fondo y el texto interpolan directamente sus colores. La vista se mide en 56 × 48 dp y se amplía 3× solo en la capa visual; el escalado puede alterar la apariencia de los píxeles frente al tamaño normal. Si la fuente no permite construir el modelo o desborda, se mantiene el fallback de texto existente y no se verá morph.
+- Pendiente en teléfono: abrir la demostración en una instalación debug, abrir el inspector y detenerse en 0 %, 25 %, 50 %, 75 % y 100 %; revisar ambos sentidos, el asta del dólar y los saltos cerca de los extremos. Comprobar cierre, accesibilidad, fuente ampliada y que la moneda y movimientos de la cápsula sigan intactos. Verificar en una instalación release que el acceso no se muestra. No se ha validado visualmente en Android.
+- Verificación local: siete tests JVM de geometría y compilación aislada de los auxiliares del selector con el plugin Compose, sin Gradle; `git diff --check` sin errores. La compilación aislada no incluye la pantalla completa ni valida el diálogo en Android. No se ejecutaron Gradle ni ADB.
+
+## Acceso oculto al inspector de moneda
+
+- Se retiró el botón visible del encabezado. En instalaciones debug, una pulsación prolongada sobre el selector de moneda abre el diálogo inspector existente; al cerrarlo se conserva el estado de la demostración. La disponibilidad se determina con `ApplicationInfo.FLAG_DEBUGGABLE`, por lo que el reconocedor de pulsación prolongada no se instala en release. El toque normal sigue en el `Button` original y conserva su alternancia/háptica.
+- Revisión estática y `git diff --check`; no se ejecutaron Gradle ni ADB. En teléfono, probar toque breve (una alternancia y una háptica), pulsación larga (abre inspector sin alternar ni háptica), mantener y soltar, cerrar con Atrás/toque fuera y verificar que el borrador/cola quedan iguales. Comprobar también que en release el toque breve funciona y la pulsación larga no abre el inspector. No está validado en dispositivo.
+
+## Base de categorías personalizables (fase preparatoria)
+
+- Diseño y contratos en [customizable-categories.md](customizable-categories.md): categorías/subcategorías con identidad local y portable, iconKey, archivado, orden, scopes y grupos de reporte independientes del nombre. El destino de Movement usa categoryId/subcategoryId opcionales; se implementó CategorySelection como contrato validable de esa relación.
+- Se añadieron modelos, mapeo exhaustivo de los enums a semillas, clasificación base de reportes, entidades Room y DAO de catálogo. Una migración candidata 3 -> 4 crea/siembra el catálogo, pero **no se registra**, no modifica movimientos y no cambia la base v3. No se ha migrado la información del usuario. Movement, el formulario y los reportes vigentes siguen usando enums; no se habilitan todavía categorías personalizadas ni «Sin categoría» en la captura.
+- La activación requiere cambiar de forma coordinada referencias de Movement/Room, validación, JSON de respaldo, DTO/reglas y sincronización del catálogo por UID y UUID. Los formatos actuales solo admiten enums; activar IDs locales antes de resolver esto perdería relaciones en backup/cloud. El documento detalla backfill sin pérdida, claves de semillas, FKs y chequeos, instalación limpia, compatibilidad y verificaciones necesarias. También deja pendiente el repositorio con validación/transacciones antes de conectar el DAO a una pantalla de administración.
+- Reportes: resolvedor nuevo para INCOME/FIXED_COST/MAINTENANCE/OTHER/UNCATEGORIZED, separado de la suma monetaria. La integración en resumen mensual/PDF, el desglose personalizado y las líneas heredadas de agua/luz/internet están pendientes. Se propone no cambiar reportGroup una vez utilizado para evitar reclasificar el historial al editar nombres.
+- Verificación: seis pruebas JVM de los contratos/mapeo/grupos pasaron con el compilador Kotlin/JUnit locales, sin Gradle. Se ejecutaron el DDL y las semillas candidatas sobre SQLite del equipo: cuatro categorías, tres subcategorías, FK y RESTRICT correctos. No equivale a ejecutar la migración con Room: faltan esquema generado/KSP, compilación Android e instrumentación sobre una copia ficticia de las versiones históricas. `git diff --check` sin errores; no se ejecutaron Gradle ni ADB. No se modificaron los cambios locales previos de morphing/inspector.
+- Próximo hito: completar el corte de persistencia/transportes/reportes antes de la UI. Después, único selector integrado con «Sin categoría», iconos y navegación compacta; administración CRUD, archivado y orden con protección de identidades. Ver el documento enlazado para la secuencia y pruebas pendientes.
+
+## Contratos definitivos del catálogo (iteración 1)
+
+- Decisiones en [customizable-categories.md](customizable-categories.md): UUID canónico portable, siete semillas v3 determinísticas congeladas y creación de usuario v4 aleatoria. Se sustituyeron las claves preparatorias `miflujo:…` en LegacyCategoryCatalog; no había migración registrada ni datos reales con esas claves. Long sigue siendo solo identidad local.
+- Se añadieron errores explícitos para referencias desconocidas, pertenencia, ámbito y archivado. La edición histórica puede conservar exactamente la selección archivada y tipo almacenados, sin eludir integridad. Se añadieron operaciones de metadata y guardas de estructura para el repositorio futuro; scope/reportGroup/padre quedan inmutables desde creación. Los data classes y DAO aún requieren que ese repositorio aplique las guardas.
+- Comparadores de orden `(sortOrder, uuid)` y primitiva de revisión lógica `(counter, actorUuid)`, con validación y rechazo de overflow. Se documentó resolución determinística de ficha completa, cambios offline, ACK por revisión, dependencias pendientes y recuperación de identidades al restaurar. El contrato puede descartar uno de dos cambios concurrentes; no es merge por campo ni garantía de archivo global instantáneo. No se implementó un motor de sincronización.
+- Verificación: 15 tests JVM (seis existentes y nueve nuevos) pasaron mediante Kotlin 2.2.10/JUnit locales, sin Gradle. Cubren UUID/algoritmo heredado, formato, creación aleatoria, relaciones, archivadas, estructura, orden y revisiones. `git diff --check` y revisión de whitespace de archivos nuevos sin errores. No se ejecutaron Gradle ni ADB.
+- Pendiente para persistencia: adoptar las guardas en todas las escrituras, orden UUID en DAO (aún desempata por id), revisión/pendientes transaccionales, validación histórica y migración completa con FKs/esquemas/pruebas Room. Movement, reportes, formatos de backup, Firebase y registro de migraciones siguen intactos. No se modificaron los cambios previos de la interfaz.
+
+## Persistencia transaccional aislada del catálogo (iteración 2)
+
+- Se implementaron CategoryRepository y RoomCategoryRepository con creación, búsquedas por UUID, listas por tipo/archivo, edición de metadata, reordenamiento atómico y consultas históricas. Se aplican las guardas de dominio, se exige revisión esperada para evitar escrituras obsoletas y se comprueba padre existente/no archivado al crear hijos. Archivar no elimina ni altera sus hijos.
+- CategoryCatalogDatabase es experimental, sin inyección en la app, con archivo fijo separado `category-catalog-experiment.db`. La candidata 3→4 se registra únicamente en esa base; MiFlujoDatabase y su contenedor siguen sin cambios. Movement/MovementEntity, datos financieros, reportes, respaldos y Cloud Sync permanecen intactos.
+- Schema común para candidata e inicialización limpia: UUID únicos, FK padre RESTRICT, triggers de estructura inmutable y no borrado, estados/revisiones válidos, actor UUID singleton. Nuevas columnas revisionCounter/revisionActorUuid/syncState y tabla catalog_installation. El DAO ordena por posición y UUID portable, con filtro de archivado/ámbito.
+- Creación local usa revisión 1; edición efectiva incrementa la revisión y persiste PENDING en la misma transacción. No-op conserva estado/revisión. Semillas con revisión 0 y actor reservado quedan PENDING. ACK/error son condicionales a UUID y revisión exactos: no limpian cambios nuevos ni convierten una revisión ya reconocida en ERROR por un fallo tardío. ERROR sigue siendo reintentable. Sin red ni modificación del scheduler actual.
+- Verificación ejecutada: 19 pruebas JVM (15 contratos y cuatro de mappers/metadata), nueve pruebas SQLite del equipo sobre SQL real y consultas del DAO. Compilación Kotlin aislada del código nuevo y fuentes de siete pruebas instrumentadas con dependencias locales, sin KSP. `git diff --check` y whitespace de archivos nuevos sin errores. No se ejecutaron Gradle ni ADB.
+- Pendiente Android/Room: ejecutar CategoryCatalogRoomTest sobre la base in-memory y el archivo de test separado; validar DAO generado, transacciones/rollback, actor persistente al reabrir y equivalencia real de tabla/índices/FKs/triggers entre creación Room y candidata. El test de migración usa una fuente v3 mínima con sentinel financiero; no sustituye la futura prueba completa desde los esquemas financieros 1/2/3. No se generó un JSON de esquema ficticio ni se afirma equivalencia Room por los resultados SQLite.
+- Respaldos compatibles aún pendientes: snapshot transaccional de catálogo incluyendo archivadas/revisiones y padre por UUID, parser nuevo con lectura v1/v2, remapeo a IDs locales y restore coordinado con movimientos/bloqueos cloud. El actor de instalación no se copia entre dispositivos. El restore futuro necesita un camino de mantenimiento probado porque el DAO habitual prohíbe borrar físicamente el catálogo. Ver [customizable-categories.md](customizable-categories.md).
+
+## Respaldo compatible de catálogo (iteración 3, experimental)
+
+- Contrato completo en [catalog-backup-format.md](catalog-backup-format.md), enlazado desde [customizable-categories.md](customizable-categories.md). CatalogBackupJson lee v1/v2/v3 y escribe v3, sin conexión al exportador/importador ni SettingsViewModel. Producción conserva parser/serializer v1/v2 y Room v3.
+- DTOs portables separados de Movement/MovementEntity: catálogo con UUID, ámbito, grupo, iconKey, archivo, orden y revisión causal; relaciones por UUID y nullable explícito. Se omiten IDs locales, estados de envío y fila de instalación. Validación completa de estructura, referencias, duplicados y valores financieros antes de restaurar. Se permiten nombres iguales y referencias históricas archivadas; referencias desconocidas no crean categorías ni se convierten en «Sin categoría».
+- Compatibilidad histórica: delegación al parser actual para conservar todas sus validaciones y posterior mapeo de enums a semillas UUID congeladas. v2 conserva UUID de movimiento; v1 sigue generándolos al leer. Los valores monetarios Long, monedas, fechas, detalle y timestamps con nanosegundos se mantienen. La única lectura nueva del DAO obtiene todos los hijos para no omitir huérfanos de una base corrupta durante un snapshot.
+- ExperimentalBackupStore usa exclusivamente BackupSandboxDatabase, archivo distinto `category-backup-sandbox.db`, versión experimental 1, sin migraciones registradas ni inyección en la app. Las filas BackupMovementEntity son staging, no el modelo financiero real. Snapshot y restore usan transacción: validar estructura conocida, retirar solo dos protecciones de borrado, limpiar movimientos/hijos/padres, insertar catálogo y remapear UUID→IDs locales, insertar movimientos y reinstalar protecciones antes de confirmar. Fallar revierte datos y DDL. El actor de instalación permanece; catálogo queda PENDING con revisión preservada y movimientos staging LOCAL_ONLY.
+- Pruebas ejecutadas: 40 tests JVM (parser/serializer históricos y códec nuevo) aprobados; cuatro tests SQLite del equipo sobre primitivas de relación, valores exactos, remapeo y rollback explícito de datos/triggers aprobados. Compilación Kotlin aislada de los nuevos componentes y de cinco pruebas instrumentadas, sin KSP. `git diff --check` y whitespace de archivos nuevos sin errores. No se ejecutaron Gradle ni ADB.
+- Limitación: SQLite host no ejecuta ExperimentalBackupStore ni prueba DAO generado. Los cinco tests de ExperimentalBackupRoomTest están preparados, no ejecutados en Android; verifican JSON Android, relaciones remapeadas, archivo/pendientes/revisiones, actor, reemplazo vacío y fallo después del primer movimiento con rollback. El esquema Room del sandbox deberá generarse y verificarse al compilar con las herramientas del proyecto; no se inventó un JSON de esquema.
+- Pendiente de activación: modelo/referencias financieras reales, migración completa validada, lectura/exportación/restauración v3 en los consumidores de producción y coordinación con confirmación/bloqueos de restore simultáneo y Cloud Sync. Firestore y reportes siguen pendientes del corte coordinado. No se modificaron los mecanismos actuales ni los cambios locales previos de UI/inspector. El esquema experimental v4 del catálogo ya existía en el árbol al retomar esta sesión y no se modificó.
+
+## Contrato remoto del catálogo (iteración 4A)
+
+- El usuario informó 7/7 pruebas instrumentadas del catálogo y 5/5 del respaldo sandbox en Android físico. Corresponden a las iteraciones 2 y 3.
+- [Contrato remoto Firestore](catalog-firestore-contract.md) documenta la auditoría de movimientos v1, las colecciones por UID, los campos estrictos del catálogo v1 y una transición por cuenta con bloqueo de escrituras v1 antes de habilitar movimientos con referencias UUID.
+- DTO, mapa documental y funciones puras en `data/cloud/catalog`. La reconciliación compara la revisión lógica y protege la estructura. Se exige una confirmación exacta y se distinguen referencias ausentes de inválidas. La ficha ganadora puede descartar cambios concurrentes en otro campo.
+- Propuesta de reglas aislada en `scripts/firestore-catalog/firestore.rules` para propietarios autorizados, versiones, campos, tamaños, estructura, revisiones, archivo y referencias a padres. Suite con datos ficticios en `scripts/firestore-catalog`. Las reglas actuales de movimientos y metadatos conservan su comportamiento.
+- Pasaron 55 pruebas JVM, nueve nuevas y 46 de regresión, con compilación Kotlin aislada y JUnit. Pasaron la comprobación de sintaxis JavaScript y `git diff --check`. En la primera ejecución, el entorno restringido impidió iniciar el emulador con `EPERM`. Se completó la comprobación en la verificación posterior.
+- La conexión con Cloud Sync, la persistencia de ganadores y la adopción de referencias UUID en movimientos corresponden a iteraciones posteriores. Producción sigue en Room v3, respaldo v2 y movimientos remotos v1.
+
+### Verificación de Firestore Emulator (4A)
+
+- El entorno restringido rechazó la creación de sockets TCP IPv4 e IPv6 con `EPERM` antes de `bind`. Node presentó el fallo como `listen EPERM`. Una prueba mínima ajena a Firebase reprodujo el error, y la misma configuración del proyecto funcionó con permisos de red local.
+- Pasaron 5/5 casos con Firebase CLI 15.20.0 y Firestore Emulator 1.21.0 en una copia temporal de `demo-miflujo-catalog`. Cubren autorización, estructura, inmutabilidad, revisiones, archivado, relaciones padre/hijo y compatibilidad v1. Los rechazos de permisos de los casos negativos eran esperados.
+- Se usaron identidades ficticias, loopback y una configuración nueva de la CLI. El código y las reglas quedaron idénticos a los probados. La [guía para Fedora con fish](catalog-firestore-contract.md#ejecutar-las-pruebas-en-fedora-con-fish) deja los comandos de reproducción.
+
+## Motor experimental de catálogo (iteración 4B)
+
+- `CatalogSyncEngine` coordina sesión, fuente local y fuente remota, con resultados tipados. `ScopedCatalogStore` liga los pendientes y el actor persistente a un archivo Room por UID y reutiliza `RoomCategoryRepository`. `EmulatorCatalogClient` usa una app Firebase separada con Auth y Firestore Emulator del proyecto fijo `demo-miflujo-catalog`.
+- La corrida lee las dos colecciones desde el servidor, reconcilia y publica primero categorías, y luego aplica o publica subcategorías con padre confirmado. Las transacciones Firestore comparan la revisión actual en servidor. Room aplica respuestas contra la ficha más reciente y preserva ediciones posteriores a la solicitud. Un ACK perdido se recupera al releer el documento por UUID.
+- Una lectura incompleta aborta antes de tocar filas. Documentos inválidos y conflictos bloquean el UUID afectado. Un padre ausente aplaza a sus hijos. Un fallo transitorio puede marcar `ERROR` en la revisión consultada y mantiene el pendiente. Las revisiones ganan por ficha completa, por lo que dos ediciones concurrentes en campos distintos pueden perder una.
+- Pasaron 68 pruebas JVM, incluidas 13 nuevas de coordinación, más 5/5 de Firebase Emulator reutilizadas de 4A. Pasó la preparación de la cuenta ficticia en Auth y Firestore Emulator. El usuario confirmó 3/3 pruebas instrumentadas en Android físico, incluidas las dos de Room y la de extremo a extremo contra el proyecto demo. `git diff --check` pasó.
+- Arquitectura, límites y comandos de reproducción en el [contrato Firestore](catalog-firestore-contract.md#motor-experimental-del-catálogo-4b). La configuración HTTP de emuladores se limita a debug. El motor carece de llamadas desde Cloud Sync, programadores, UI y base financiera. La integración con producción y la activación pertenecen a un corte posterior.
+
+## Reportes y PDF experimentales (iteración 5)
+
+- La [auditoría y el contrato de reportes flexibles](customizable-categories.md#reportes-y-pdf-experimentales-iteración-5) cubren los repositorios de movimientos, el cálculo, Inicio, Reportes y el PDF. El flujo activo sigue usando los modelos heredados.
+- Se prepararon el cálculo mensual, los adaptadores de enums y del snapshot experimental, filas dinámicas para Compose y un generador PDF independiente con paginación. Las referencias sin resolver mantienen sus importes y tienen un renglón distinto de «Sin categoría».
+- Verificación local con el compilador Kotlin, la caché Compose, el SDK Android y JUnit, sin Gradle ni ADB. Pasaron 15 pruebas JVM, 10 nuevas y 5 del cálculo anterior. Cubren equivalencia exacta en ambas monedas, fechas límite, subtotales, archivo, UUID y orden, referencias inválidas, importes grandes y paginación lógica. La prueba instrumentada compiló en el mismo chequeo aislado.
+- El usuario confirmó que el cambio a la caché privada de la app permitió generar el PDF en el POCO. El archivo abrió con al menos tres páginas, pero falló la comparación de las páginas que contenían las dos marcas extraídas. Se detectó que `Layout.draw` puede incluir en el dibujo la primera línea del fragmento siguiente al usar el límite inferior del clip. El generador ahora entrega únicamente las líneas de cada fragmento y conserva su posición y dirección. Pasaron 18 pruebas JVM, incluidas tres nuevas para el límite exacto de una página, una fila de 20 000 líneas y el detalle íntegro que recibe el PDF.
+- Pendiente en Android: volver a ejecutar `FlexibleReportPdfGeneratorTest.exportsSeveralPagesWithFullAmountsAndLongContent` desde el margen de Android Studio con la variante debug y un dispositivo de pruebas o AVD con API 35 o superior. Usa datos sintéticos y un PDF temporal en la caché privada. Comprueba el renderizado dentro de los márgenes y, por separado, la extracción de los renglones numerados completos, en orden y sin duplicados, de los nombres y de los importes. Logcat informa el número de páginas y las marcas extraídas de cada una bajo `FlexibleReportPdfTest`.
+- El usuario observó seis páginas en el POCO, con miles de caracteres pero cero marcas reconocidas en las páginas 2 a 5. Solo se reconocieron `LINEA235` a `LINEA240` y `FINDETALLE` en la página 6. La comparación anterior insertaba un espacio entre bloques de Android y podía partir una marca. Un caso sintético reproduce esa limitación. Falta atribuir el fallo del POCO a esos límites de bloque o al propio texto extraído. En esta revisión se añadió diagnóstico en la prueba instrumentada sin cambiar el generador.
+- Al repetir la prueba, `FlexibleReportPdfTest` registra muestras escapadas de las páginas 1, 2, 3 y 5, cantidad de bloques, filas de píxeles con tinta en el cuerpo y la primera marca ausente con sus vecinas y coordenadas de `searchText` cuando estén disponibles. El argumento opcional del runner `flexiblePdfKeepDiagnostic=true` conserva el PDF sintético solo si falla una aserción. La ruta privada se registra para abrirlo desde Device Explorer o contrastar el texto con Poppler. Pasaron 22 pruebas JVM, cuatro de ellas de comparación y diagnóstico de texto. Validación en Android pendiente.
+- La integración coordinada deberá suministrar una lectura coherente de movimientos y catálogo, consumir las filas en las pantallas actuales y conectar el generador con el exportador. Room de producción sigue en v3 y el respaldo activo en v2.
+
+### Verificación final del PDF experimental
+
+El PDF recuperado del POCO X7 Pro tiene seis páginas y 74 121 bytes. Poppler recupera los 242 marcadores del detalle en orden. La extracción Android había reconocido siete y ahora se registra únicamente como diagnóstico. El generador se conserva. La prueba instrumentada valida la apertura, los márgenes de la imagen, varias páginas consecutivas con renglones visibles y los anchos, la alineación y la zona del punto decimal de los importes. Poppler valida por separado el contenido exacto de los renglones por orden de página, su continuidad, los nombres y las ocurrencias de los importes.
+
+**Recuperación en Android Studio.** En la configuración Android Instrumented Tests del método `exportsSeveralPagesWithFullAmountsAndLongContent` y con la variante debug, añadí el argumento del runner `flexiblePdfInspect=true`. Poné un breakpoint en el `Log.i` de `logPdfForInspection` y lanzá **Debug** sobre el POCO. Al detenerse, el PDF ya está cerrado y el APK sigue instalado. Consultá `file.absolutePath` en el depurador, abrí **View → Tool Windows → Device Explorer** y usá **Save As** sobre el archivo de la caché privada. Guardalo como `~/Downloads/miflujo-diagnostico.pdf` o ajustá el comando siguiente. Después reanudá el depurador para que prosiga la limpieza y puedas consultar el resultado final de la prueba. El breakpoint también se alcanza si falla una aserción después de generar el PDF.
+
+**Fedora con fish.** Desde la raíz del repositorio, instalá las herramientas si faltan y ejecutá el verificador sobre la copia recién obtenida.
+
+```fish
+sudo dnf install poppler-utils python3
+python3 scripts/pdf-report/verify_flexible_report.py "$HOME/Downloads/miflujo-diagnostico.pdf"
+python3 -B -m unittest discover -s scripts/pdf-report -v
+```
+
+El PDF anterior pasó el verificador final. El raster de Poppler confirma el punto decimal visible, aunque su capa de texto extrae, por ejemplo, `758 07`. El script admite ese separador concreto y exige todos los dígitos, los separadores de miles y las ocurrencias esperadas. Se conservaron y pasaron las 22 pruebas JVM y las cuatro pruebas Python del verificador. Queda pendiente ejecutar la versión final en el POCO y verificar en Fedora la copia de esa misma ejecución.
+
+## Migración Room de movimientos con catálogo (iteración 6A)
+
+- Se auditó el camino activo de Room v3 y sus consumidores. La [candidata 6A](customizable-categories.md#movimientos-con-catálogo-y-migración-room-iteración-6a) representa UUID en el borde del repositorio e IDs anulables en Room. Migra por semillas, copia y verifica el conteo antes de sustituir la tabla, conserva metadatos y detiene la migración ante filas incompatibles. La creación limpia instala el mismo catálogo y los mismos triggers. El único registro de la migración candidata vive en las pruebas.
+- Pasaron 70 pruebas JVM con Kotlin/JUnit, incluidas dos nuevas de modelo, y tres casos host SQLite sobre copia literal, FKs, triggers y rollback del cambio de tabla. Compilaron las fuentes de seis pruebas instrumentadas en un chequeo Kotlin aislado. El chequeo no ejecuta Room ni KSP. Para repetir las de SQLite, ejecutar `python3 -B scripts/test_catalog_movement_sqlite.py`.
+- El usuario informó que pasaron las seis pruebas instrumentadas de 6A en un dispositivo físico. En el árbol está el esquema exportado de `CatalogMovementDatabase` v4. La verificación instrumentada del PDF de la iteración 5 sigue pendiente.
+
+## Integración de respaldos en la candidata Room (iteración 6B)
+
+- Rama `ux/quick-entry`. `CatalogMovementBackupStore` conecta el contenido visible de `CatalogMovementDatabase` con el códec experimental v3. Comparte con el sandbox la lectura y el reemplazo del catálogo. El lector prueba sintaxis JSON y claves repetidas antes de aplicar los contratos de v1/v2/v3. Las semillas heredadas comparten su revisión inicial entre el lector y la base candidata.
+- La [auditoría y el contrato de 6B](customizable-categories.md#respaldo-y-restauración-con-catálogo-iteración-6b) describen la equivalencia financiera, la conversión a milisegundos, los límites de compatibilidad histórica y el reemplazo atómico con remapeo por UUID. Se admite únicamente el destino local aislado. Se bloquea el reemplazo cuando hay vínculo de cuenta, tombstones o evidencia de sincronización en la candidata.
+- Pasaron 72 pruebas JVM mediante Kotlin 2.2.10 y JUnit, cinco nuevas. Pasaron 18 pruebas host SQLite, dos nuevas para las consultas de backup y el rollback de la sustitución parcial. El comando de SQLite fue `python3 -B -m unittest discover -s scripts -p 'test_catalog*_sqlite.py' -v`. Pasó `git diff --check`. Compilaron las fuentes instrumentadas en un chequeo Kotlin aislado. El chequeo host carece de generación KSP y de ejecución del DAO y del lector JSON de Android.
+- Pendiente en Android Studio con la variante `debug` y una instalación de pruebas aislada. Ejecutar los seis casos de `CatalogMovementBackupRoomTest`, el caso nuevo `CatalogMovementMigrationTest.movedV3RowsCanBeExportedAndRestoredWithoutChangingFinancialContent` y la regresión de `ExperimentalBackupRoomTest` para el sandbox compartido. Las pruebas usan bases en memoria o archivos sintéticos y cubren JSON Android, precisión, remapeo, FKs, triggers, cuentas y rollback sobre SQLite. No se ejecutaron Gradle ni ADB.
+- Producción sigue en Room v3 y respaldo JSON v2. La siguiente iteración requiere acordar cómo recuperar una base con historial cloud y validar el corte coordinado de repositorios, formularios, reportes y respaldo con confirmación y exclusión de sync. 6C queda por iniciar.
+
+## Cloud Sync coordinado (iteración 6C)
+
+- El usuario informó que las pruebas Android de respaldo y restauración de 6B pasaron. La
+  [integración aislada de 6C](customizable-categories.md#cloud-sync-con-catálogo-y-movimientos-iteración-6c)
+  reutiliza el motor de catálogo, la base de modelos y las validaciones de 6A. Una partición
+  Room por UID conserva la revisión base de movimientos v2. El protocolo candidato y sus
+  reglas viven en `scripts/firestore-catalog/6c/`.
+- Pasaron **125 pruebas JVM** con Kotlin 2.2.10 y JUnit, incluidas 10 nuevas, y **18 pruebas SQLite**
+  del equipo de las iteraciones anteriores. Compilaron las fuentes de las pruebas Android
+  mediante Kotlin aislado. Quedan por ejecutar tres casos de `AccountMovementSyncTest`
+  sobre Android, incluidas la partición y exclusión de restauraciones, la edición concurrente
+  con el ACK y la prueba de Room + Firebase SDK con Auth y Firestore Emulator.
+- Pasaron **6/6 pruebas de Firestore Emulator** 1.21.0 con Firebase CLI 15.20.0 y se verificó
+  el fixture de cuenta y marcador v2 en Auth y Firestore Emulator para el proyecto
+  `demo-miflujo-catalog`. Pasó `git diff --check`. La verificación usó una copia temporal y
+  sockets locales. El chequeo Kotlin carece de KSP, ejecución Android, Gradle y ADB.
+- La prueba con el SDK Firebase admite un [dispositivo físico por USB](customizable-categories.md#prueba-android-con-firebase-emulator-en-avd-o-por-usb)
+  con `catalogMovementEmulatorHost=127.0.0.1` y conserva `10.0.2.2` como valor por defecto
+  para AVD. Pendiente ejecutar la prueba instrumentada en el POCO X7 Pro.
+- En el primer intento en el POCO, el registro de Android Studio mostró
+  `catalogMovementEmulatorHost=` vacío. Se completó el valor en la configuración local,
+  se añadió un mensaje de validación y se cubrieron ambos hosts y el rechazo de otros
+  valores con pruebas JVM. Pendiente repetir la ejecución en el POCO.
+- Producción usa Room v3, respaldo v2 y el motor vigente. El corte propuesto requiere migración
+  administrativa por UID, recuperación de pendientes v1, exclusión de restauraciones,
+  tratamiento de conflictos y verificación del flujo Android. 6D queda por iniciar.
+
+## Integración funcional y validación (iteración 6D)
+
+- El usuario informó que 6A, 6B y 6C aprobaron sus pruebas Android. La
+  [variante catalogLab](customizable-categories.md#integración-funcional-experimental-iteración-6d)
+  conecta cápsulas y selección por UUID con Room, reportes, PDF, JSON y el coordinador de
+  emulador. Su paquete y sus bases están aislados. Producción usa Room v3, respaldo v2
+  y el motor cloud actual.
+- Pasaron 133 pruebas JVM con Kotlin/JUnit, 18 de SQLite del equipo y 6/6 de Firestore
+  Emulator con datos ficticios. Pasó `git diff --check`. Compilaron las fuentes Compose
+  e instrumentadas en un chequeo Kotlin aislado. La fusión aislada del manifiesto base,
+  la variante y Firebase Common confirmó el paquete separado, la actividad de pruebas
+  y la eliminación del proveedor de inicialización automática. Queda el empaquetado
+  completo con KSP y la ejecución Android. Esta iteración se verificó sin Gradle ni ADB.
+- Queda ejecutar los dos casos `labWorkflow*` y la comparación de esquemas en
+  `CatalogMovementMigrationTest`, la prueba SDK actualizada de `AccountMovementSyncTest`
+  y el recorrido de la interfaz en `catalogLab`. Usar bases sintéticas y los dos emuladores
+  preparados para 6C. Verificar también el manifiesto fusionado y la instalación separada.
+- Para el corte quedan la procedencia de pendientes v3, el relevo de WorkManager,
+  la resolución de conflictos, el backfill por UID y la recuperación de errores.
+  El flujo integrado está preparado para su validación Android aislada.
+
+- Android Studio confirmó el mismo error de compilación en `MiFlujoAppContainer.kt` y
+  `MiFlujoApp.kt`. Las fuentes compartidas referencian `default_web_client_id` y Google
+  Services omite ese recurso en `catalogLab` porque su archivo ficticio carece de OAuth web.
+  La variante ahora define el símbolo como cadena vacía en su propio conjunto de recursos.
+  La inicialización Firebase predeterminada sigue excluida de su manifiesto. Queda recompilar
+  la variante completa desde Android Studio.
+
+## Consolidación de quick-entry para dev
+
+- Se consolidaron el prototipo de cápsulas y las iteraciones de catálogo, Room v4, JSON v3,
+  reportes, sincronización y `catalogLab`. Las reglas del catálogo 4A quedaron en
+  `scripts/firestore-catalog/` junto a su configuración candidata de emulador. El archivo
+  raíz y la configuración de despliegue conservan el contrato actual.
+- Gradle offline aprobó las 346 pruebas JVM y ensambló `debug`, `catalogLab` y el APK
+  instrumentado de debug. La compilación de la variante confirmó la corrección del
+  recurso OAuth y su manifiesto fusionado conserva el paquete separado, sin actividad
+  principal ni proveedor Firebase predeterminado. Pasaron 21 pruebas Python de catálogo
+  y configuración, cuatro del verificador PDF y 11 de Firestore Emulator.
+- Queda ejecutar la validación integral de 6D en Android y verificar el recorrido visual
+  de la variante aislada. El PR hacia `dev` conserva los bloqueos de activación documentados
+  en [6D](customizable-categories.md#integración-funcional-experimental-iteración-6d).
