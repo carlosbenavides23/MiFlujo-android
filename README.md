@@ -8,7 +8,7 @@ Subtítulo de la app:
 Flujo de efectivo mensual
 ```
 
-La app está pensada para un uso simple y directo: registrar movimientos de dinero, revisar cómo va el mes, generar un reporte mensual y conservar los datos sin depender de nube, cuentas, login ni conversión de moneda.
+La app está pensada para un uso simple y directo: registrar movimientos de dinero, revisar cómo va el mes, generar un reporte mensual y conservar los datos sin depender de conexión, cuenta obligatoria ni conversión de moneda.
 
 Principio central del producto:
 
@@ -20,13 +20,17 @@ Abro, registro dinero, veo cómo va el mes, cierro.
 
 MiFlujo ya cuenta con un MVP funcional entregado, probado en dispositivo físico y publicado como APK firmado.
 
-Versión estable publicada:
+Última versión estable publicada:
 
 ```text
-v0.3.5
+v0.4.0
 ```
 
-La versión `v0.3.5` es la baseline técnica pre-Firebase publicada:
+La versión `v0.4.0` incorpora Cloud Sync opcional con Firebase y Firestore. La
+app mantiene Room como fuente de verdad local y sigue siendo utilizable sin
+conexión ni inicio de sesión.
+
+La versión `v0.3.5` fue la baseline técnica pre-Firebase:
 
 ```text
 Pre-Firebase Technical Baseline
@@ -42,9 +46,10 @@ Incluye:
 - UUID estable por movimiento con migración Room.
 - Backup schema v2 con UUID y compatibilidad de importación con schema v1.
 
-La configuración base de Firebase, las reglas de Firestore y el inicio de sesión con estado de autorización están en desarrollo para `v0.4.0`.
-
-La sincronización de movimientos todavía no está implementada. Iniciar sesión no sube ni descarga movimientos y MiFlujo continúa funcionando local-only.
+`v0.4.0` incluye inicio de sesión con Google, autorización por UID, Cloud Sync
+opcional con Firestore, controles manuales y disparadores seguros de
+sincronización. Cloud Sync es opcional: la app sigue funcionando localmente sin
+conexión, sin iniciar sesión y con Room como fuente de verdad para la UI.
 
 ## Funcionalidades
 
@@ -78,7 +83,10 @@ La sincronización de movimientos todavía no está implementada. Iniciar sesió
 - Restauración local JSON validada.
 - Persistencia local con Room.
 - Inicio de sesión con Google para identificar la cuenta de Cloud Sync.
-- Consulta del estado de autorización por UID sin activar sincronización.
+- Consulta del estado de autorización por UID.
+- Cloud Sync opcional de movimientos con Firestore para cuentas autorizadas.
+- Sincronización manual, al volver la app a primer plano y al recuperar conectividad mientras está abierta.
+- Respaldo con WorkManager para cambios locales pendientes cuando hay red.
 
 ## Alcance del producto
 
@@ -98,7 +106,6 @@ Incluye actualmente:
 
 No incluye actualmente:
 
-- Sincronización en la nube.
 - Backend.
 - Integración bancaria.
 - OCR.
@@ -111,7 +118,7 @@ No incluye actualmente:
 - Merge avanzado de respaldos.
 - Sincronización multi-dispositivo.
 
-El inicio de sesión actual solo identifica la cuenta y consulta si su UID está autorizado. No activa Cloud Sync ni modifica movimientos locales o remotos.
+Iniciar sesión o quedar autorizado no activa Cloud Sync por sí solo. La persona usuaria debe habilitarlo y ejecutar una primera sincronización explícita. Puede desactivarlo o cerrar sesión sin borrar sus movimientos locales ni los datos remotos existentes.
 
 ## Stack técnico
 
@@ -139,7 +146,7 @@ La UI no accede directamente a Room. Los datos pasan por ViewModels y Repository
 
 Los reportes se calculan a partir de los movimientos almacenados, no como registros independientes.
 
-Room/local es la fuente principal de datos. Cualquier sincronización futura debe ser opcional y no debe romper el uso offline-first.
+Room/local es la fuente principal de datos. Firestore es una capa remota opcional de sincronización y no reemplaza el uso offline-first.
 
 ## Reglas importantes del producto
 
@@ -162,7 +169,8 @@ US$ 100.00 -> 10000
 
 ## Pre-Firebase Technical Baseline
 
-La versión `v0.3.5` publicó la baseline técnica previa a Firebase Cloud Sync.
+La versión `v0.3.5` publicó la baseline técnica previa a Firebase Cloud Sync;
+`v0.4.0` publicó la capacidad opcional de Cloud Sync construida sobre ella.
 
 Objetivo:
 
@@ -170,7 +178,7 @@ Objetivo:
 Auditar, limpiar y preparar la base técnica antes de sincronización cloud.
 ```
 
-La baseline se completó sin implementar Firebase, login, Firestore ni Cloud Sync. El trabajo quedó dividido en issues pequeñas:
+La baseline se completó antes de implementar Firebase, login, Firestore y Cloud Sync. El trabajo quedó dividido en issues pequeñas:
 
 - `#96`: auditoría técnica pre-Firebase.
 - `#97`: estrategia de identidad y sincronización cloud.
@@ -213,16 +221,18 @@ Compila la app en modo debug para validar que el proyecto construye correctament
 ## Flujo de ramas
 
 ```text
-main      -> releases estables
-dev       -> integración de cambios post-MVP
-feature/* -> nuevas funcionalidades
-fix/*     -> correcciones de bugs
-style/*   -> cambios visuales o de UI
-chore/*   -> tareas de mantenimiento
-docs/*    -> documentación
+main              -> base estable y documentación
+ux/*              -> rediseños o experimentos de experiencia por módulo
+feature/*         -> funcionalidades por módulo
+fix/*             -> correcciones agrupadas por área
+refactor/*        -> refactorizaciones de alcance definido
 ```
 
-Los cambios deben trabajarse en ramas pequeñas y luego integrarse mediante Pull Request.
+El trabajo se organiza en **ramas por módulo o conjunto coherente de cambios**, con iteraciones y commits dentro de esa rama. Al concluir se revisa mediante un Pull Request hacia `main`. Los cambios solo documentales pueden realizarse directamente en `main` y las issues no son obligatorias para cada ajuste. La antigua rama `dev` ya no es un paso requerido.
+
+El rediseño de captura rápida en cápsula de dos líneas se encuentra **en evaluación**, no publicado; ver `docs/ui-design.md`.
+
+**Nota de release:** GitHub Releases registra `v0.4.0`, pero el Gradle de `main` conserva `versionName = "0.3.5"` y `versionCode = 5`. Corregir la discrepancia de forma controlada antes de generar la siguiente release (ver `docs/release-process.md`).
 
 ## Documentación del proyecto
 
@@ -247,7 +257,7 @@ El archivo `AGENTS.md` contiene reglas importantes para agentes de IA o colabora
 
 Ideas futuras, sujetas a feedback real del usuario y planificación técnica:
 
-- Firebase Cloud Sync opcional, planificado en `docs/firebase-cloud-sync-plan.md`.
+- Mejoras posteriores de Cloud Sync, documentadas en `docs/firebase-cloud-sync-plan.md`.
 - Changelog visible dentro de Ajustes.
 - Acerca de MiFlujo.
 - Comparación entre meses.

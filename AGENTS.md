@@ -1,430 +1,112 @@
 # AGENTS.md
 
-## Project
+## Proyecto y estado verificado
 
-This is a local-first Android app for monthly cash flow tracking.
+MiFlujo es una app Android **local-first** para registrar ingresos y egresos, consultar flujo de efectivo mensual, generar PDF y crear/restaurar respaldos JSON.
 
-App name: MiFlujo  
-Subtitle: Flujo de efectivo mensual  
-Repository: MiFlujo-android  
-Package name: com.carlos.miflujo
+- Repositorio: `MiFlujo-android`.
+- Paquete: `com.carlos.miflujo`.
+- Usuario principal: adulto no técnico; la captura rápida y la protección de sus datos son prioritarias.
+- Última GitHub Release publicada al revisar esta documentación: **v0.4.0**.
+- `v0.3.5` fue la baseline técnica pre-Firebase; **no es trabajo pendiente**.
+- `v0.4.0` ya incorpora Google Sign-In, autorización por UID y Cloud Sync opcional con Firebase/Firestore. **No está prohibido trabajar en el código cloud existente**; cualquier cambio debe preservar sus garantías de privacidad y seguridad.
+- **Inconsistencia pendiente de verificar antes de la próxima release:** `app/build.gradle.kts` declara `versionCode = 5` y `versionName = "0.3.5"`, aunque GitHub Releases y README identifican `v0.4.0` como publicación más reciente. No asumir que el Gradle actual corresponde al APK publicado.
 
-Primary user: non-technical adult user.  
-Main goal: register income and expenses quickly, generate a monthly cash flow summary, export reports, and protect data with local backups.
+Principio del producto:
 
-Core product principle:
+> Abro, registro dinero, veo cómo va el mes, cierro.
 
-```text
-Open the app, register money, see how the month is going, close the app.
-```
+## Reglas de producto que no deben romperse
 
-## Current state
+- Registrar, editar y eliminar ingresos/egresos; mostrar resumen e historial mensual.
+- C$ y US$ permanecen **separados**, sin conversión ni saldo combinado.
+- El dinero se almacena como `Long` en unidades menores; **nunca** `Float` ni `Double` para importes.
+- Montos positivos; tipo, moneda y fecha válidos. En egresos la categoría es obligatoria; en costos fijos también la subcategoría (agua, luz o internet).
+- Detalle recomendado, no obligatorio.
+- Reportes mensuales se calculan desde movimientos persistidos. El PDF es para lectura; **no** reemplaza al backup JSON.
+- Backup JSON v2 conserva UUID; la importación admite v1 y v2 según reglas vigentes. Restaurar valida primero, pide confirmación y reemplaza movimientos localmente de forma transaccional.
+- No permitir restauración cuando los controles actuales de Cloud Sync la bloqueen. Ver `docs/business-rules.md` y `docs/cloud-safe-restore.md`.
 
-MiFlujo already has a functional MVP released and tested on a physical device.
+## Arquitectura real
 
-The current stable release is:
-
-```text
-v0.3.0
-```
-
-`v0.3.0` includes monthly report PDF export, a Settings screen, local JSON backup export, and local JSON backup restore.
-
-Current planned work:
-
-```text
-v0.3.5 - Pre-Firebase Technical Baseline
-```
-
-`v0.3.5` is a technical baseline phase before Firebase Cloud Sync. It must audit, document, clean up, and prepare the project before cloud sync. It must not implement Firebase yet.
-
-Post-MVP work must be guided by real user feedback, small issues, and low-risk changes.
-
-Do not treat the project as a blank-slate app or redesign it from scratch.
-
-## Product scope
-
-The app must support:
-
-- Register income.
-- Register expenses.
-- Select currency per movement:
-  - C$
-  - US$
-- Classify expenses as:
-  - Fixed cost: water, electricity, internet.
-  - Maintenance.
-  - Other.
-- Add an optional but recommended detail/description to each movement.
-- Generate a monthly cash flow report.
-- Export the monthly report as PDF.
-- Show totals separated by currency.
-- Edit movements.
-- Delete movements.
-- Persist data locally with Room.
-- Create local JSON backups.
-- Save or share local JSON backups.
-- Restore local JSON backups after full validation and explicit confirmation.
-
-The app must NOT include unless explicitly requested, designed, and planned:
-
-- Login.
-- Cloud sync.
-- Firebase.
-- Firestore.
-- Backend services.
-- Bank integrations.
-- OCR.
-- Invoicing.
-- AI features inside the app.
-- Advanced accounting modules.
-- Automatic currency conversion.
-- Exchange rate handling.
-- Mixed-currency net totals.
-- Merge-based restore.
-- Multi-device sync.
-
-## Currency rules
-
-The app supports córdobas and dollars.
-
-Currencies must be handled separately.
-
-Do not convert between currencies.
-
-Do not calculate a single combined total across C$ and US$.
-
-Reports must show:
-
-- C$ income, C$ expenses, C$ net cash flow.
-- US$ income, US$ expenses, US$ net cash flow.
-
-## Money precision
-
-Do not store money as `Double` or `Float`.
-
-Store money as integer minor units using `Long`.
-
-Examples:
+Kotlin, Jetpack Compose, Material 3, Coroutines/Flow, MVVM, Repository, Room, Firebase Auth/Firestore y WorkManager.
 
 ```text
-C$ 1,800.50 -> 180050
-US$ 100.00 -> 10000
+UI -> ViewModel -> Repository -> Room
+                        |
+                        +-> Cloud Sync opcional (Firestore)
 ```
 
-The user can type and see normal decimal amounts, but internal calculations must use integer values.
+Room es la fuente observable de la interfaz. Cloud Sync requiere autorización y activación explícita; no es requisito para uso offline. Mantener identidad remota por UUID, separación por UID, tombstones y comportamiento seguro ante errores. No escribir directamente a Room desde Composables ni usar Firestore como fuente exclusiva de la UI.
 
-Formatting changes must only affect visible UI text, not stored money values.
+Carpetas relevantes:
 
-## Design direction
+- `data/local`, `data/model`, `data/repository`: persistencia y acceso a movimientos.
+- `data/cloud/auth`, `data/cloud/firestore`, `data/cloud/sync`: autenticación y sincronización opcional.
+- `domain/model`, `domain/validation`, `domain/sync`, `domain/usecase`: reglas y lógica.
+- `ui/home`, `ui/movement`, `ui/report`, `ui/settings`, `ui/backup`, `ui/theme`: interfaz y operaciones de usuario.
+- `app/schemas/`: esquemas exportados de Room, necesarios para migraciones.
 
-Use Jetpack Compose and Material Design 3.
+No reorganizar módulos ni introducir nuevas dependencias o migraciones sin beneficio concreto y revisión.
 
-The UI must be:
+## Dirección UI y experimentación
 
-- Simple.
-- Readable.
-- Fast.
-- Clear for a non-technical user.
-- Focused on the current month.
-- Safe for data-changing operations.
+Mantener una interfaz sencilla, legible y accesible para el usuario principal. Material 3 Expressive se contempla **de forma ligera**, no como rediseño global automático.
 
-The main action should be an extended floating action button:
+La captura rápida en cápsula de **dos líneas** es una **propuesta pendiente**, no una función implementada:
 
-```text
-+ Agregar
-```
+- Primera línea: **un único control alternable** de ingreso/egreso (`+` / `−`), **un único control alternable** de moneda (C$ / US$) y monto.
+- Segunda línea: fecha compacta (`Hoy` cuando corresponda) con selector de calendario, y categoría contextual; subcategoría cuando aplique.
+- Descripción disponible y registro consecutivo como objetivo a diseñar y probar.
+- Feedback háptico y movimiento discreto, sin reducir objetivos táctiles, accesibilidad ni claridad.
+- Al editar, preservar valores existentes; no sustituirlos por valores por defecto.
+- Probar persistencia, validaciones y prevención de envíos duplicados antes de entregar.
 
-Do not design the app like a complex accounting tool.
+Ver `docs/ui-design.md` para límites y preguntas abiertas. No tratar propuestas UX como requisitos ya aceptados para producción.
 
-Do not add visual complexity unless it directly improves real user experience.
+## Flujo de trabajo vigente
 
-Home is for a quick overview.
+Este es un proyecto de un desarrollador; evitar proceso innecesariamente granular.
 
-Report is for detailed monthly analysis and PDF export.
+- `main`: base estable; documentación y correcciones documentales pequeñas pueden actualizarse **directamente en main**.
+- Ramas temporales **por módulo o conjunto coherente de trabajo**, no una rama por ajuste: por ejemplo `ux/quick-entry`, `feature/reporting`, `fix/cloud-sync`.
+- Iterar con varios commits dentro de la rama del módulo; revisar y crear **un PR hacia main** al concluir el módulo.
+- No son obligatorias una issue por cambio, una PR por ajuste, ni una rama `dev` de integración. `dev` es heredada, no base obligatoria.
+- Evitar mezclar cambios de módulos independientes en una rama. Nunca publicar automáticamente al fusionar.
+- Antes de editar archivos, inspeccionar implementación y documentos existentes; documentar hechos actuales por separado de propuestas.
+- ChatGPT ayuda a definir arquitectura, alcance y UX; Codex puede implementar, probar y preparar PR; la decisión final de integración y release es humana.
+- Mantener `docs/work-in-progress.md` al completar hitos del módulo, cambiar decisiones o dejar tareas pendientes. Al retomar una sesión, contrastarlo con el código y Git (rama, árbol e historial) y corregir datos obsoletos; enlazar la documentación de detalle en vez de duplicarla.
 
-Settings is for backup, restore, information, changelog, and future technical options.
+## Seguridad de datos y entornos de prueba
 
-## Visual color rules
+- La app es utilizada con datos financieros reales. No borrar, restaurar ni modificar datos de producción para probar UI.
+- Para experimentos, usar datos ficticios y un entorno/instalación aislado. Si se crea una variante debug instalable en paralelo, separar `applicationId` y configuración Firebase o desactivar Cloud Sync: **una rama Git no aísla datos de un dispositivo ni de Firestore**.
+- Nunca subir keystores (`.jks`, `.keystore`), credenciales, tokens, `local.properties` ni datos financieros de usuario.
+- No cambiar esquema Room o formato de backup sin estrategia de migración, pruebas y documentación.
 
-MiFlujo may use Android dynamic color for the general app identity when available.
+## Verificación
 
-Dynamic color can apply to:
+Para cambios solamente documentales: comprobar enlaces, coherencia con código y fechas/versiones; no hace falta compilar.
 
-- FAB.
-- Buttons.
-- Navigation.
-- Selected states.
-- Chips.
-- General Material components.
-
-Financial meaning must not depend entirely on dynamic color.
-
-Use stable semantic colors for financial values:
-
-```text
-Soft green -> income, positive amounts, positive net flow
-Soft red   -> expenses, negative amounts, negative net flow
-```
-
-Do not turn the entire app green or red.
-
-App identity color and financial meaning color are separate concepts.
-
-Destructive actions such as restore confirmation or delete confirmation must be clearly communicated.
-
-## Architecture
-
-Use:
-
-- Kotlin.
-- Jetpack Compose.
-- Material Design 3.
-- Room.
-- Coroutines / Flow.
-- MVVM.
-- Repository Pattern.
-
-Conceptual flow:
-
-```text
-UI
-↓
-ViewModel
-↓
-Repository
-↓
-Room Database
-```
-
-The UI must not access Room DAOs directly.
-
-Reports must be calculated from stored movements, not stored manually as independent report records.
-
-Room/local is the primary source of truth in the current app.
-
-Future Firebase Cloud Sync must be optional and layered on top of the local-first model. It must not make the app unusable offline.
-
-## Suggested package structure
-
-```text
-app/
-└── src/main/java/com/carlos/miflujo/
-    ├── data/
-    │   ├── local/
-    │   ├── model/
-    │   └── repository/
-    ├── domain/
-    │   ├── model/
-    │   └── usecase/
-    └── ui/
-        ├── backup/
-        ├── home/
-        ├── movement/
-        ├── report/
-        ├── settings/
-        ├── theme/
-        └── components/
-```
-
-## Business rules
-
-- Income increases the monthly income total for its currency.
-- Expense increases the monthly expense total for its currency.
-- Monthly net cash flow is calculated per currency:
-  - net C$ = income C$ - expenses C$
-  - net US$ = income US$ - expenses US$
-- A movement belongs to a month based on its date.
-- Amounts must be positive.
-- Currency is required.
-- Movement type is required.
-- Expense category is required.
-- Fixed cost subcategory is required when the category is fixed cost.
-- Detail is recommended but not required.
-- Backup JSON must be validated before restore.
-- Restore must not modify data until the user confirms explicitly.
-- Local restore currently replaces all movements inside a Room transaction.
-
-## PDF, backup, and restore rules
-
-PDF export and JSON backup are different features.
-
-PDF:
-
-- Human-readable monthly report.
-- Used for sharing or reviewing.
-- Must not be treated as a technical backup.
-
-JSON backup:
-
-- Machine-readable local backup.
-- Used for restoring movements.
-- Must include schema version and app identifier.
-- Must preserve real movement fields.
-
-Restore:
-
-- Must validate the entire file before confirmation.
-- Must reject invalid backups without modifying data.
-- Must require explicit confirmation.
-- Current local restore replaces all movements.
-- Current local restore preserves positive unique IDs from the backup.
-- Future cloud-safe restore behavior must be documented before Firebase sync.
-
-## Code rules
-
-- Do not add features outside the current issue unless explicitly requested.
-- Prefer small, localized changes.
-- Do not introduce networking.
-- Do not introduce authentication.
-- Do not introduce Firebase.
-- Do not introduce Firestore.
-- Do not introduce cloud sync.
-- Do not introduce automatic currency conversion.
-- Do not mix currency totals.
-- Do not hard-code UI text deep inside business logic.
-- Prefer small, testable functions.
-- Keep financial logic easy to review.
-- Add tests for business rules when possible.
-- Do not modify data/domain/persistence layers for UI-only issues.
-- Do not change Room schema without planning a migration.
-- Do not introduce new dependencies unless explicitly allowed.
-- Do not change backup schema without updating tests and docs.
-- Do not assume local Room IDs are valid cloud identities.
-
-## Pre-Firebase v0.3.5 rules
-
-For `v0.3.5`, the goal is to reduce risk before Firebase Cloud Sync.
-
-Allowed work:
-
-- Documentation updates.
-- Technical audit documentation.
-- Cloud sync strategy documentation.
-- Restore cloud-safe behavior documentation.
-- Android Auto Backup policy documentation.
-- Room schema export preparation.
-- Centralizing movement validation.
-- Adding UUID only after strategy and migration plan are documented.
-- Backup schema v2 only after UUID strategy is documented.
-
-Forbidden in `v0.3.5` unless explicitly approved later:
-
-- Firebase setup.
-- Login.
-- Firestore collections.
-- Remote writes.
-- Remote reads.
-- Sync engine.
-- Conflict resolution implementation.
-- Large UI redesign.
-- PRs mixing unrelated issues.
-
-Recommended order:
-
-1. `#96` docs: guardar auditoría técnica pre-Firebase.
-2. `#97` docs: definir estrategia de identidad y sincronización cloud.
-3. `#102` docs: definir comportamiento cloud-safe para restauración de backups.
-4. `#103` chore: definir política de Android Auto Backup para datos financieros.
-5. `#98` chore: habilitar Room schema export antes de migraciones sync.
-6. `#101` refactor: centralizar validación de reglas de negocio de movimientos.
-7. `#99` feature: agregar UUID estable a movimientos.
-8. `#100` feature: crear backup schema v2 con UUID.
-
-## Post-MVP workflow
-
-Work should follow this flow:
-
-```text
-Real feedback -> GitHub issue -> small branch -> implementation -> review -> PR -> dev -> main -> release
-```
-
-Branch strategy:
-
-```text
-main      -> stable releases
-dev       -> integration branch
-feature/* -> new functionality
-fix/*     -> bug fixes
-style/*   -> UI or visual changes
-chore/*   -> maintenance tasks
-docs/*    -> documentation
-```
-
-Prefer one issue per branch.
-
-Avoid mixing unrelated bugfixes, UI changes, and features in the same branch.
-
-## Release rules
-
-Before every release APK:
-
-- Merge tested changes into `main`.
-- Update `versionCode`.
-- Update `versionName`.
-- Generate the signed APK from `main`.
-- Use the same release keystore as previous releases.
-- Test updating over the previous release without uninstalling.
-- Confirm Room data persists after update.
-- Create a Git tag matching the release version.
-- Publish a GitHub Release with the APK asset.
-
-Never commit or upload:
-
-- `.jks`.
-- `.keystore`.
-- `local.properties`.
-- debug APKs.
-- secrets.
-- tokens.
-
-## Validation rules
-
-For documentation-only changes:
-
-- Review the rendered Markdown.
-- Check that the docs do not contradict current code or release state.
-- No Gradle command is required unless code changed.
-
-For code changes, run:
-
-```bash
-./gradlew :app:assembleDebug
-```
-
-For changes affecting business rules, also run relevant tests or add tests when possible.
-
-For backup, restore, or report logic, run:
+Para cambios Kotlin:
 
 ```bash
 ./gradlew :app:testDebugUnitTest
 ./gradlew :app:assembleDebug
 ```
 
-For UI changes, validate manually on a physical device when possible.
+El primer comando ejecuta tests unitarios de la variante debug del módulo `app`. El segundo compila su APK debug. Ejecutar pruebas instrumentadas pertinentes en dispositivo/emulador cuando se modifique Room o UI; los tests locales no sustituyen validación visual y de interacción.
 
-For release changes, test update behavior without uninstalling the previous release.
+Para publicar, seguir `docs/release-process.md`: revisar versión del Gradle, compilar y firmar desde `main`, probar actualización **sin desinstalar**, verificar conservación de Room y reglas de Cloud Sync, tag y GitHub Release.
 
-## Documentation rules
+## Documentos de referencia
 
-Before coding, read:
+- `README.md`: panorama y release publicada.
+- `docs/product-spec.md`, `docs/mvp-scope.md`: producto y límites históricos.
+- `docs/business-rules.md`, `docs/data-model.md`: invariantes y persistencia.
+- `docs/ui-design.md`: experiencia actual y propuestas.
+- `docs/cloud-sync-strategy.md`, `docs/firebase-cloud-sync-plan.md`, `docs/cloud-safe-restore.md`: sincronización y restauración.
+- `docs/decisions.md`: decisiones y su estado.
+- `docs/release-process.md`: publicación.
 
-- `AGENTS.md`.
-- `docs/product-spec.md`.
-- `docs/mvp-scope.md`.
-- `docs/business-rules.md`.
-- `docs/data-model.md`.
-- `docs/ui-design.md`.
-- `docs/decisions.md`.
-
-For release work, also read:
-
-- `docs/release-process.md`.
-
-For pre-Firebase work, also read:
-
-- `docs/audit-pre-firebase.md`.
-
-When a product, architecture, workflow, visual identity, data model, backup/restore behavior, or release decision changes, update `docs/decisions.md`.
-
-When the release process changes, update `docs/release-process.md`.
+Actualizar documentos cuando cambie una decisión material. Evitar reescribir documentación histórica que permanece útil como antecedente.

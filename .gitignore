@@ -30,6 +30,8 @@ render.experimental.xml
 
 # Google Services (e.g. APIs or Firebase)
 google-services.json
+# Synthetic Firebase Emulator configuration for the isolated catalog variant.
+!app/src/catalogLab/google-services.json
 
 # Android Profiling
 *.hprof

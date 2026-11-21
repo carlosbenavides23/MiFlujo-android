@@ -16,7 +16,11 @@ Este documento forma parte de:
 v0.3.5 - Pre-Firebase Technical Baseline
 ```
 
-No implementa Firebase, login, Firestore ni sincronización. Solo define la política para evitar pérdida, duplicación o eliminación remota accidental de datos.
+En su issue original, este documento no implementaba Firebase, login, Firestore ni sincronización. Define la política para evitar pérdida, duplicación o eliminación remota accidental de datos.
+
+La política ya está aplicada en `main`: Cloud Sync es opcional y la restauración
+local se bloquea únicamente mientras existe una operación de cuenta o sync, o
+Cloud Sync está habilitado, activado y usa una cuenta autorizada.
 
 La decisión final para `v0.4.0` también está consolidada en:
 
@@ -36,7 +40,7 @@ El comportamiento actual es:
 4. Si el archivo es válido, muestra confirmación.
 5. Si el usuario confirma, reemplaza todos los movimientos locales dentro de una transacción Room.
 
-Este comportamiento es correcto mientras la app funciona solo como local-first sin Cloud Sync activa.
+Este comportamiento es correcto cuando la app está efectivamente en modo local-only.
 
 ## Principio principal
 
@@ -53,7 +57,7 @@ Lo que se debe controlar es la restauración destructiva cuando haya datos sincr
 
 ## Política general
 
-Cloud Sync futuro será opcional y privado/controlado.
+Cloud Sync es opcional y privado/controlado.
 
 Usuarios normales:
 

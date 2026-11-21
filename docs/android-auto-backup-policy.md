@@ -42,7 +42,7 @@ Mecanismos posibles si no se deshabilita:
 
 ```text
 1. Backup JSON manual
-2. Cloud Sync Firebase futura
+2. Cloud Sync Firebase opcional
 3. Android Auto Backup del sistema
 ```
 
@@ -61,7 +61,7 @@ Android restaura una base de datos local vieja
 ↓
 MiFlujo abre con datos restaurados automáticamente
 ↓
-Cloud Sync futura intenta descargar/subir datos
+Cloud Sync intenta descargar/subir datos
 ↓
 Riesgo de duplicados, sobrescritura o conflicto
 ```
@@ -107,7 +107,7 @@ Este flujo es explícito y entendible.
 
 ## Política para usuarios con Cloud Sync
 
-Usuarios autorizados con Cloud Sync futura:
+Usuarios autorizados con Cloud Sync:
 
 - usarán Room local,
 - podrán usar Cloud Sync opcional,
@@ -138,7 +138,7 @@ Esto es preferible a una restauración automática silenciosa para datos financi
 
 ## Relación con Cloud Sync
 
-Cloud Sync futura será opcional y privada/controlada.
+Cloud Sync es opcional y privado/controlado.
 
 Debe estar basada en:
 
@@ -188,7 +188,7 @@ La issue `#103` se considera lista cuando:
 - Se documenta que Android Auto Backup debe deshabilitarse para MiFlujo.
 - Se explica por qué no debe usarse para datos financieros.
 - Se define que backup JSON manual es el mecanismo local explícito.
-- Se define que Cloud Sync futura será el mecanismo cloud opcional/controlado.
+- Se define que Cloud Sync será el mecanismo cloud opcional/controlado.
 - Se documenta el riesgo de mezclar Auto Backup, backup JSON y Cloud Sync.
 - Se define que la restauración debe pasar por flujos explícitos de la app.
 - No se implementa Firebase.

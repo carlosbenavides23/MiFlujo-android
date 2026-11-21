@@ -6,7 +6,7 @@ MiFlujo debe tener una interfaz simple, sobria, moderna y clara.
 
 La app no debe sentirse como una herramienta contable compleja.
 
-Debe sentirse como una herramienta rápida para registrar movimientos, consultar cómo va el mes, generar reportes y proteger datos locales.
+Debe sentirse como una herramienta rápida para registrar movimientos, consultar cómo va el mes, generar reportes y proteger datos locales. Cloud Sync es secundario y no debe competir con el flujo diario.
 
 Principio de diseño:
 
@@ -244,6 +244,10 @@ Ajustes organiza funciones que no son parte del flujo diario.
 
 Debe incluir:
 
+- Sección Cloud Sync.
+- Inicio de sesión con Google y estado de autorización.
+- Activación o desactivación explícita de Cloud Sync.
+- Acción `Sincronizar ahora`, estado de la última sincronización y feedback claro de errores.
 - Sección Datos.
 - Crear respaldo local.
 - Restaurar respaldo.
@@ -257,6 +261,8 @@ Reglas:
 - Debe manejar correctamente el botón Atrás del sistema.
 - Debe evitar animaciones bruscas.
 - Las acciones destructivas deben pedir confirmación clara.
+- Iniciar sesión o quedar autorizado no debe activar sincronización automáticamente.
+- Mientras Cloud Sync esté activo, la restauración local debe indicar por qué no está disponible y cómo volver a modo local-only.
 
 ## Backup y restore en UI
 
@@ -314,3 +320,40 @@ Home debe ser rápido.
 Reporte debe ser detallado.
 
 Ajustes debe ser seguro y explícito.
+
+## Propuesta UX en evaluación: registro rápido (noviembre de 2026)
+
+**Estado:** diseño acordado para explorar, **no implementado**. La pantalla actual se encuentra en `ui/movement/AddMovementDialog.kt` y utiliza un `AlertDialog` con secciones verticales, elecciones separadas de tipo/moneda y fecha editable como texto. No describir esta propuesta como comportamiento presente en la app.
+
+### Problema y objetivo
+
+La persona usuaria ha registrado movimientos en notas breves como `+ C$100 compra de tornillos 3/4 14/11`. Queremos mantener esa rapidez mental y reducir escritura manual, omisiones y errores.
+
+El objetivo es una **cápsula compacta de dos líneas** para controles principales, con descripción accesible debajo y posibilidad de capturar varios movimientos sin salir de la pantalla.
+
+### Distribución conceptual
+
+- **Línea 1:** un solo control que alterna **ingreso/egreso** (`+` ↔ `−`) en cada toque; otro solo control que alterna **C$/US$** en cada toque; monto numérico.
+- **Línea 2:** fecha compacta como `Hoy` cuando corresponda (tocar abre calendario) y categoría contextual para egresos. Mostrar subcategoría si es costo fijo, sin romper las reglas actuales.
+- **Debajo:** detalle opcional y acción de guardar; opción de continuar capturando tras un guardado confirmado.
+
+No sustituir los dos controles alternables por grupos de dos chips: son **dos controles únicos**, cada uno con dos estados.
+
+### Diseño y accesibilidad
+
+- Tomar Material 3 Expressive como inspiración **ligera**: forma redondeada, movimiento sutil y respuesta háptica donde aporte confirmación; no introducir dependencia/API experimental sin revisión.
+- Mantener texto, contraste y superficies táctiles accesibles; el signo y el símbolo monetario deben ser legibles, no depender solamente del color.
+- La categoría puede ocupar más espacio o ajustar distribución si hay texto largo, fuente grande o ancho limitado. No sacrificar ergonomía por forzar una sola línea.
+- Fecha inicial de un movimiento nuevo: día local actual; en edición: **fecha guardada**. El rótulo `Hoy` debe representar correctamente la fecha seleccionada.
+- Considerar estados de error, teclado, accesibilidad y prevención de doble guardado.
+
+### Comportamientos todavía por validar
+
+- Valores iniciales de tipo, moneda y categoría para **nuevo** movimiento (sin interferir con edición).
+- Qué campos conservar al guardar y continuar, y cómo avisar visualmente del éxito.
+- Presentación de subcategorías de costos fijos y de errores de validación dentro del diseño compacto.
+- Forma final de la superficie (diálogo, hoja inferior u otra): debe decidirse tras probar tamaños de pantalla y teclado.
+
+### Límite técnico
+
+Una primera iteración visual no debe modificar esquemas Room, identificadores UUID, reglas financieras, formatos de backup ni sincronización cloud. Se integrará con ViewModel y repositorio existentes cuando el prototipo haya demostrado ser usable. La rama de trabajo prevista es `ux/quick-entry`, con varias iteraciones y un PR de módulo hacia `main`.

@@ -1069,3 +1069,30 @@ local-first y evita dejar atrapado al usuario después de probar Cloud Sync.
 La restauración continúa siendo local y transaccional. No elimina datos remotos,
 no solicita scheduler, no encola WorkManager y restaura movimientos como
 `LOCAL_ONLY` sin convertirlos automáticamente en trabajo cloud pendiente.
+
+## 062 - Estado de implementación de Cloud Sync en `main`
+
+Después de publicar `v0.3.5`, `main` integra el trabajo de `v0.4.0`: Firebase
+Auth con Google, autorización por UID, reglas de Firestore, sincronización de
+movimientos, controles manuales y disparadores seguros de scheduler.
+
+Cloud Sync sigue siendo opcional. Iniciar sesión o resultar autorizado no inicia
+una sincronización; requiere habilitación local y una primera ejecución explícita.
+Room continúa siendo la fuente observable de la UI. La app permanece utilizable
+sin conexión, sin sesión y con Cloud Sync desactivado.
+
+`v0.4.0` se publicó como release estable. Los documentos de plan y estrategia
+deben leerse como diseño vigente y referencia de implementación, no como
+indicación de que la funcionalidad sigue ausente del código de `main`.
+
+## 063 - Retomar MiFlujo con ramas por módulo y UX de registro compacto (noviembre de 2026)
+
+**Estado:** decisiones de flujo vigentes; diseño de registro rápido **propuesto, no implementado**.
+
+- `main` es la referencia estable. Cambios únicamente documentales pueden realizarse directamente allí.
+- El trabajo de código se agrupa por **módulos coherentes**, no por cambios pequeños individuales. Una rama puede reunir diversas iteraciones, commits y pruebas; al concluir se revisa mediante un PR hacia `main`.
+- `dev` deja de ser una etapa obligatoria. Al comprobar el estado de GitHub, `dev` tenía cero commits exclusivos y estaba tres commits detrás de `main`. No se elimina automáticamente.
+- Las issues son opcionales cuando el alcance es claro. Fusionar un módulo no implica publicar una release.
+- Se prioriza como siguiente experimento `ux/quick-entry`: captura compacta en cápsula de dos líneas, dos controles de alternancia **únicos** (+/− y C$/US$), fecha compacta, categoría condicional, descripción y eventual registro consecutivo.
+- El rediseño debe ser ligero, accesible, preservar validación y persistencia existentes y probarse con datos ficticios aislados de la instalación y Cloud Sync reales.
+- Se detectó desfase de documentación/build: GitHub Release y README registran `v0.4.0`, mientras `app/build.gradle.kts` todavía contiene `versionName = "0.3.5"` y `versionCode = 5`. Verificar y resolver **antes de la próxima release**, no modificar silenciosamente como parte de actualización documental.
