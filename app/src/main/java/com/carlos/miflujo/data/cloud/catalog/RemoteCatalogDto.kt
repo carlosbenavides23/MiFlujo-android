@@ -1,5 +1,6 @@
 package com.carlos.miflujo.data.cloud.catalog
 
+import com.carlos.miflujo.domain.category.CatalogIconColor
 import com.carlos.miflujo.domain.category.CatalogRevision
 import com.carlos.miflujo.domain.category.Category
 import com.carlos.miflujo.domain.category.CategoryScope
@@ -14,6 +15,7 @@ sealed interface RemoteCatalogEntry {
     val uuid: String
     val name: String
     val iconKey: String
+    val iconColor: CatalogIconColor?
     val archived: Boolean
     val sortOrder: Int
     val revision: CatalogRevision
@@ -28,6 +30,7 @@ data class RemoteCategoryDto(
     override val archived: Boolean,
     override val sortOrder: Int,
     override val revision: CatalogRevision,
+    override val iconColor: CatalogIconColor? = null,
 ) : RemoteCatalogEntry {
     init {
         // Reuse the scope, group and metadata checks of the domain model.
@@ -46,6 +49,7 @@ data class RemoteSubcategoryDto(
     override val archived: Boolean,
     override val sortOrder: Int,
     override val revision: CatalogRevision,
+    override val iconColor: CatalogIconColor? = null,
 ) : RemoteCatalogEntry {
     init {
         requireValidCatalogMetadata(uuid, name, iconKey)
@@ -67,12 +71,12 @@ private fun requireRemoteTextLimits(name: String, iconKey: String) {
 }
 
 fun StoredCategory.toRemoteDto(): RemoteCategoryDto = with(value) {
-    RemoteCategoryDto(uuid, name, scope, reportGroup, iconKey, archived, sortOrder, revision)
+    RemoteCategoryDto(uuid, name, scope, reportGroup, iconKey, archived, sortOrder, revision, iconColor)
 }
 
 fun StoredSubcategory.toRemoteDto(parent: Category): RemoteSubcategoryDto = with(value) {
     require(parent.id == categoryId) { "Wrong local parent" }
-    RemoteSubcategoryDto(uuid, parent.uuid, name, iconKey, archived, sortOrder, revision)
+    RemoteSubcategoryDto(uuid, parent.uuid, name, iconKey, archived, sortOrder, revision, iconColor)
 }
 
 /** The UID comes from the authorized account used for the operation. The server enforces ownership. */

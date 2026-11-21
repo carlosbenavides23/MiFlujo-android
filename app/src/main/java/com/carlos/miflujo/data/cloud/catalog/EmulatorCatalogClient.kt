@@ -78,6 +78,9 @@ class EmulatorCatalogClient private constructor(
 
     override suspend fun publish(uid: String, entry: RemoteCatalogEntry): RemoteCatalogEntry = firestoreCall {
         requireSession(uid)
+        if (boundUser == null && entry.iconColor != null) {
+            throw CatalogSyncException(CatalogIssueKind.PROTOCOL_MISMATCH)
+        }
         val isCategory = entry is RemoteCategoryDto
         val path = if (isCategory) CloudCatalogPath.category(uid, entry.uuid)
         else CloudCatalogPath.subcategory(uid, entry.uuid)
@@ -96,7 +99,8 @@ class EmulatorCatalogClient private constructor(
             requireSession(uid)
             when (decision) {
                 null, CatalogReconciliation.LOCAL_WINS -> {
-                    transaction.set(reference, RemoteCatalogFields.encode(entry))
+                    val version = if (boundUser != null) RemoteCatalogFields.Version else RemoteCatalogFields.LegacyVersion
+                    transaction.set(reference, RemoteCatalogFields.encode(entry, version))
                     entry
                 }
                 CatalogReconciliation.IDENTICAL, CatalogReconciliation.REMOTE_WINS -> checkNotNull(remote)
@@ -111,7 +115,7 @@ class EmulatorCatalogClient private constructor(
     private fun protocol(uid: String) = firestore.document("users/$uid/metadata/movementProtocol")
 
     private fun requireProtocol(snapshot: DocumentSnapshot) {
-        if (snapshot.data != mapOf("version" to 2L)) {
+        if (snapshot.data != mapOf("version" to 3L)) {
             throw CatalogSyncException(CatalogIssueKind.PROTOCOL_MISMATCH)
         }
     }

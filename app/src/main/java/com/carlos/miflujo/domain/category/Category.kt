@@ -22,6 +22,7 @@ data class Category(
     val iconKey: String = "category",
     val archived: Boolean = false,
     val sortOrder: Int = 0,
+    val iconColor: CatalogIconColor? = null,
 ) {
     init {
         require(id >= 0)
@@ -31,8 +32,9 @@ data class Category(
     }
 
     fun edited(name: String = this.name, iconKey: String = this.iconKey,
-               archived: Boolean = this.archived, sortOrder: Int = this.sortOrder): Category =
-        copy(name = name, iconKey = iconKey, archived = archived, sortOrder = sortOrder)
+               archived: Boolean = this.archived, sortOrder: Int = this.sortOrder,
+               iconColor: CatalogIconColor? = this.iconColor): Category =
+        copy(name = name, iconKey = iconKey, archived = archived, sortOrder = sortOrder, iconColor = iconColor)
 
     /** Repository boundary: data-class copy and deserialization are not trusted updates. */
     fun requireSameStructureAs(previous: Category) {
@@ -48,6 +50,7 @@ data class Subcategory(
     val iconKey: String = "category",
     val archived: Boolean = false,
     val sortOrder: Int = 0,
+    val iconColor: CatalogIconColor? = null,
 ) {
     init {
         require(id >= 0 && categoryId > 0)
@@ -55,8 +58,9 @@ data class Subcategory(
     }
 
     fun edited(name: String = this.name, iconKey: String = this.iconKey,
-               archived: Boolean = this.archived, sortOrder: Int = this.sortOrder): Subcategory =
-        copy(name = name, iconKey = iconKey, archived = archived, sortOrder = sortOrder)
+               archived: Boolean = this.archived, sortOrder: Int = this.sortOrder,
+               iconColor: CatalogIconColor? = this.iconColor): Subcategory =
+        copy(name = name, iconKey = iconKey, archived = archived, sortOrder = sortOrder, iconColor = iconColor)
 
     fun requireSameStructureAs(previous: Subcategory) {
         require(id == previous.id && uuid == previous.uuid && categoryId == previous.categoryId)

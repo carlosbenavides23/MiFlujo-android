@@ -116,7 +116,7 @@ class CategoryCatalogRoomTest {
             old.version = 3
         }
         val migrated = Room.databaseBuilder(context, CategoryCatalogDatabase::class.java, MigrationTestFile)
-            .addMigrations(CATEGORY_CATALOG_MIGRATION_3_4).addCallback(CategoryCatalogDatabase.initializer).build()
+            .addMigrations(CATEGORY_CATALOG_MIGRATION_3_4, CATALOG_ICON_COLOR_4_5).addCallback(CategoryCatalogDatabase.initializer).build()
         try {
             val oldSql = migrated.openHelper.writableDatabase // Room validates the catalog tables here.
             val freshSql = db.openHelper.writableDatabase

@@ -11,6 +11,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.room.Room
 import com.carlos.miflujo.data.cataloglab.CatalogLabSession
+import com.carlos.miflujo.data.category.CATALOG_ICON_COLOR_4_5
 import com.carlos.miflujo.data.cloud.catalog.EmulatorCatalogClient
 import com.carlos.miflujo.data.cloud.catalog.EmulatorMovementAccount
 import com.carlos.miflujo.data.cloud.catalog.awaitCatalogTask
@@ -41,7 +42,7 @@ internal class CatalogLabModel(
     constructor(application: Application) : this(
         application,
         Room.databaseBuilder(application, CatalogMovementDatabase::class.java, "catalog-lab-local.db")
-            .addCallback(CatalogMovementDatabase.initializer).build(),
+            .addCallback(CatalogMovementDatabase.initializer).addMigrations(CATALOG_ICON_COLOR_4_5).build(),
     )
     private val local = CatalogLabSession.local(database)
     private var client: EmulatorCatalogClient? = null

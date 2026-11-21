@@ -621,7 +621,7 @@ Secuencia propuesta para un UID:
 env -u FIREBASE_TOKEN -u GOOGLE_APPLICATION_CREDENTIALS -u GOOGLE_CLOUD_PROJECT \
   -u GCLOUD_PROJECT -u FIREBASE_CONFIG XDG_CONFIG_HOME="$PWD/firebase-config" CI=1 \
   firebase emulators:exec --project demo-miflujo-catalog --only auth,firestore \
-  'node --test movement.test.mjs && node seed-android.mjs --movement-v2'
+  'node --test movement.test.mjs && node seed-android.mjs --catalog-colors'
 ```
 
 ### Prueba Android con Firebase Emulator en AVD o por USB
@@ -634,11 +634,11 @@ env -u FIREBASE_TOKEN -u GOOGLE_APPLICATION_CREDENTIALS -u GOOGLE_CLOUD_PROJECT 
    ```
 
 2. En otra terminal, desde la raíz del repositorio, preparar la cuenta ficticia y el
-   marcador v2.
+   marcador 3 del protocolo experimental con color.
 
    ```sh
    env FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 \
-     node scripts/firestore-catalog/seed-android.mjs --movement-v2
+     node scripts/firestore-catalog/seed-android.mjs --catalog-colors
    ```
 
 3. Para el POCO X7 Pro, conectar el teléfono por USB con la depuración USB activada y
@@ -754,3 +754,25 @@ Las pruebas Compose usan Room en memoria y se habilitan con `-PcatalogLabUiTests
 Con esa propiedad, los APK de prueba usan el paquete separado
 `com.carlos.miflujo.cataloglab.uitest` y su APK instrumentado. El flujo normal de
 `catalogLab` y la app principal conservan sus paquetes y sus bases.
+
+### Color opcional del icono
+
+El formulario muestra diez colores en dos filas de cinco. **Usar color predeterminado**
+es un control aparte. La marca visible y el estado accesible identifican la selección.
+La vista previa, el catálogo y los movimientos aplican el tinte al dibujo. Las muestras
+mantienen el tono de referencia y los iconos ajustan su contraste contra la superficie
+del tema cuando hace falta. [Contraste no textual, W3C](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast).
+
+Room añade `iconColor` anulable al catálogo y a las subcategorías. Las bases candidatas
+de movimientos y catálogo migran de v4 a v5, y las bases sandbox y por cuenta migran de
+v1 a v2. Se conservan los UUID, las revisiones, las marcas de archivo y los movimientos.
+NULL usa el color del tema. La exportación experimental ahora genera JSON v4 y admite
+importar v1–v3 con el color del tema.
+
+El cliente de sincronización coordinada requiere el marcador 3 en la cuenta ficticia.
+El paso de preparación usa `seed-android.mjs --catalog-colors`. La cuenta mantiene los
+documentos de movimientos v2. El catálogo nuevo se escribe como v2 y puede leer fichas
+v1 sin color. Si se cambia una ficha v1 después del corte, se escribe v2 con una
+revisión nueva. Las reglas candidatas del emulador impiden que una escritura v1
+sobrescriba esos documentos. Un ensayo antiguo con marcador 2 requiere elevarlo de
+forma explícita. Los pendientes locales se conservan mientras el protocolo no coincide.

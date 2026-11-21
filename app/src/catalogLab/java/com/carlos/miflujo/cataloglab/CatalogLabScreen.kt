@@ -177,7 +177,7 @@ internal fun CatalogLabScreen(model: CatalogLabModel) {
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     TextButton(enabled = controlsEnabled, onClick = { perform {
-                        val document = BackupDocument("miflujo-catalogo-v3.json", session.exportJson())
+                        val document = BackupDocument("miflujo-catalogo-v4.json", session.exportJson())
                         export = document
                         saveJson.launch(document.fileName)
                     } }) { Text("Exportar JSON") }
@@ -218,6 +218,12 @@ internal fun CatalogLabScreen(model: CatalogLabModel) {
                             row.date.toString(), if (row.type == MovementType.INCOME) "Ingreso" else "Egreso",
                             category?.name ?: "Sin categoría", child?.name, row.detail,
                         ).joinToString(" · ")) },
+                        leadingContent = if (category != null) ({
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                CatalogIcon(category.iconKey, color = category.iconColor)
+                                if (child != null) CatalogIcon(child.iconKey, color = child.iconColor)
+                            }
+                        }) else null,
                         trailingContent = {
                             Column {
                                 TextButton(enabled = controlsEnabled, onClick = { perform {

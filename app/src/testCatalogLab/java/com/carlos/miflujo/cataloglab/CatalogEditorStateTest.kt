@@ -1,5 +1,7 @@
 package com.carlos.miflujo.cataloglab
 
+import androidx.compose.ui.graphics.Color
+import com.carlos.miflujo.domain.category.CatalogIconColor
 import com.carlos.miflujo.domain.model.CatalogMovementDraft
 import com.carlos.miflujo.domain.model.CatalogMovementSelection
 import com.carlos.miflujo.domain.model.Currency
@@ -9,6 +11,19 @@ import org.junit.Test
 import java.time.LocalDate
 
 class CatalogEditorStateTest {
+    @Test
+    fun tenSwatchesReachThreeToOneOnLightAndDarkSurfaces() {
+        assertEquals(CatalogIconColor.entries, iconSwatches.keys.toList())
+        val backgrounds = listOf(Color.White, Color(0xFFF0EDF2), Color(0xFF121316), Color(0xFF292A30))
+        for ((key, swatch) in iconSwatches) {
+            for (background in backgrounds) {
+                val tint = catalogTint(swatch.reference, background)
+                assertTrue(key.key, iconContrast(tint, background) >= 3f)
+                if (iconContrast(swatch.reference, background) >= 3f) assertEquals(swatch.reference, tint)
+            }
+        }
+    }
+
     @Test
     fun searchesSpanishAliasesAndFallsBackForUnknownKeys() {
         assertEquals(50, catalogIcons.map { it.key }.distinct().size)

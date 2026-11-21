@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 /** Experimental catalog ONLY. Not injected into MiFlujoAppContainer or used by movements. */
 @Database(
     entities = [CategoryEntity::class, SubcategoryEntity::class, CatalogInstallationEntity::class],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class CategoryCatalogDatabase : RoomDatabase() {
@@ -23,6 +23,6 @@ abstract class CategoryCatalogDatabase : RoomDatabase() {
         /** Fixed distinct name prevents accidentally opening the financial database. */
         fun openIsolated(context: Context): CategoryCatalogDatabase = Room.databaseBuilder(
             context.applicationContext, CategoryCatalogDatabase::class.java, "category-catalog-experiment.db",
-        ).addCallback(initializer).addMigrations(CATEGORY_CATALOG_MIGRATION_3_4).build()
+        ).addCallback(initializer).addMigrations(CATEGORY_CATALOG_MIGRATION_3_4, CATALOG_ICON_COLOR_4_5).build()
     }
 }

@@ -9,6 +9,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import com.carlos.miflujo.domain.category.CatalogIconColor
 import com.carlos.miflujo.domain.category.Category
 import com.carlos.miflujo.domain.category.CategoryRepository
 import com.carlos.miflujo.domain.category.CategoryScope
@@ -22,6 +24,7 @@ internal data class CatalogItemInput(
     val iconKey: String = DEFAULT_CATALOG_ICON,
     val scope: CategoryScope = CategoryScope.EXPENSE,
     val group: ReportGroup = ReportGroup.OTHER,
+    val iconColor: CatalogIconColor? = null,
 )
 
 internal fun catalogNameError(name: String): String? = when {
@@ -31,7 +34,7 @@ internal fun catalogNameError(name: String): String? = when {
 }
 
 internal suspend fun CategoryRepository.createFromEditor(input: CatalogItemInput, uuid: String): String {
-    val value = Category(uuid = uuid, name = input.name, scope = input.scope, reportGroup = input.group, iconKey = input.iconKey)
+    val value = Category(uuid = uuid, name = input.name, scope = input.scope, reportGroup = input.group, iconKey = input.iconKey, iconColor = input.iconColor)
     val previous = category(uuid)
     if (previous == null) return createCategory(value).value.uuid
     check(previous.value.copy(id = 0) == value)
@@ -51,6 +54,7 @@ internal fun CatalogItemEditor(
 ) {
     var name by rememberSaveable { mutableStateOf(initial.name) }
     var icon by rememberSaveable { mutableStateOf(initial.iconKey) }
+    var iconColor by rememberSaveable { mutableStateOf(initial.iconColor) }
     var scope by rememberSaveable { mutableStateOf(initial.scope) }
     var group by rememberSaveable { mutableStateOf(initial.group.takeUnless { it == ReportGroup.INCOME } ?: ReportGroup.OTHER) }
     var showIcons by rememberSaveable { mutableStateOf(false) }
@@ -58,8 +62,8 @@ internal fun CatalogItemEditor(
     val newUuid = rememberSaveable { newCatalogUuid() }
     var busy by remember { mutableStateOf(false) }
     val coroutine = rememberCoroutineScope()
-    Dialog(onDismissRequest = { if (!busy) onDismiss() }) {
-        Surface(shape = MaterialTheme.shapes.large) {
+    Dialog(onDismissRequest = { if (!busy) onDismiss() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(Modifier.widthIn(max = 440.dp).padding(horizontal = 12.dp), shape = MaterialTheme.shapes.large) {
             Column(
                 Modifier.padding(16.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -70,10 +74,11 @@ internal fun CatalogItemEditor(
                     label = { Text("Nombre") }, singleLine = true,
                 )
                 OutlinedButton(enabled = !busy, onClick = { showIcons = true }) {
-                    CatalogIcon(icon)
+                    CatalogIcon(icon, color = iconColor)
                     Spacer(Modifier.width(8.dp))
                     Text("Elegir icono")
                 }
+                CatalogIconColorPicker(iconColor, enabled = !busy) { iconColor = it }
                 if (allowScope) {
                     EditorChoice("Tipo de movimiento", scope, CategoryScope.entries, { it.editorLabel() }, !busy) { scope = it }
                 }
@@ -92,7 +97,7 @@ internal fun CatalogItemEditor(
                             coroutine.launch {
                                 val saved = try {
                                     save(CatalogItemInput(if (unchangedName) name else name.trim(), icon, scope,
-                                        if (scope == CategoryScope.INCOME) ReportGroup.INCOME else group), newUuid)
+                                        if (scope == CategoryScope.INCOME) ReportGroup.INCOME else group, iconColor), newUuid)
                                 } catch (cancel: CancellationException) {
                                     throw cancel
                                 } catch (_: Exception) {

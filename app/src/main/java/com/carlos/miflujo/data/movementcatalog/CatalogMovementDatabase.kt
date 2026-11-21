@@ -52,7 +52,7 @@ internal interface CatalogMovementDao {
 /** Candidate for fresh installs and migration tests. No builder is wired into the app. */
 @Database(
     entities = [CatalogMovementEntity::class, CategoryEntity::class, SubcategoryEntity::class, CatalogInstallationEntity::class],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 @TypeConverters(SyncStatusConverters::class)

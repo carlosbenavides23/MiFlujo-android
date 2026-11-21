@@ -11,13 +11,15 @@ import java.util.UUID
 data class BackupCategory(
     val uuid: String, val name: String, val scope: CategoryScope, val reportGroup: ReportGroup,
     val iconKey: String, val archived: Boolean, val sortOrder: Int, val revision: CatalogRevision,
+    val iconColor: CatalogIconColor? = null,
 ) {
     fun domain() = Category(uuid = uuid, name = name, scope = scope, reportGroup = reportGroup,
-        iconKey = iconKey, archived = archived, sortOrder = sortOrder)
+        iconKey = iconKey, archived = archived, sortOrder = sortOrder, iconColor = iconColor)
 }
 data class BackupSubcategory(
     val uuid: String, val categoryUuid: String, val name: String, val iconKey: String,
     val archived: Boolean, val sortOrder: Int, val revision: CatalogRevision,
+    val iconColor: CatalogIconColor? = null,
 )
 data class BackupMovement(
     val uuid: String, val type: MovementType, val amountMinor: Long, val currency: Currency,
@@ -80,6 +82,6 @@ data class CatalogBackup(
     }
 }
 
-fun Category.backup(revision: CatalogRevision) = BackupCategory(uuid, name, scope, reportGroup, iconKey, archived, sortOrder, revision)
+fun Category.backup(revision: CatalogRevision) = BackupCategory(uuid, name, scope, reportGroup, iconKey, archived, sortOrder, revision, iconColor)
 fun Subcategory.backup(parentUuid: String, revision: CatalogRevision) =
-    BackupSubcategory(uuid, parentUuid, name, iconKey, archived, sortOrder, revision)
+    BackupSubcategory(uuid, parentUuid, name, iconKey, archived, sortOrder, revision, iconColor)

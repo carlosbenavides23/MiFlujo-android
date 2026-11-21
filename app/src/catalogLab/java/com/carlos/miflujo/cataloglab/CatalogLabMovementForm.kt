@@ -13,6 +13,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.carlos.miflujo.domain.backup.CatalogBackup
+import com.carlos.miflujo.domain.category.CatalogIconColor
 import com.carlos.miflujo.domain.category.CategoryRepository
 import com.carlos.miflujo.domain.category.CategoryScope
 import java.io.Serializable
@@ -73,20 +74,21 @@ internal fun CatalogLabMovementForm(
                 OutlinedTextField(date, { entry = entry.copy(date = it) }, label = { Text("Fecha (AAAA-MM-DD)") }, singleLine = true)
                 CatalogMenu(
                     label = parent?.let { if (it.archived) "${it.name} (archivada)" else it.name } ?: "Sin categoría",
-                    icon = parent?.iconKey, emptyLabel = "Sin categoría",
-                    options = parents.map { CatalogMenuItem(it.uuid, it.name, it.iconKey) },
+                    icon = parent?.iconKey, emptyLabel = "Sin categoría", iconColor = parent?.iconColor,
+                    options = parents.map { CatalogMenuItem(it.uuid, it.name, it.iconKey, it.iconColor) },
                     select = { entry = entry.selectCategory(it) },
                     onCreate = { creatingCategory = true },
                 )
                 if (parent != null && !parent.archived) {
                     CatalogMenu(
                         child?.let { if (it.archived) "${it.name} (archivada)" else it.name } ?: "Sin subcategoría",
-                        child?.iconKey, "Sin subcategoría", children.map { CatalogMenuItem(it.uuid, it.name, it.iconKey) },
+                        child?.iconKey, "Sin subcategoría", children.map { CatalogMenuItem(it.uuid, it.name, it.iconKey, it.iconColor) },
                         { entry = entry.copy(subcategoryUuid = it) },
+                        iconColor = child?.iconColor,
                     )
                 } else if (child != null) {
                     Row {
-                        CatalogIcon(child.iconKey)
+                        CatalogIcon(child.iconKey, color = child.iconColor)
                         Spacer(Modifier.width(8.dp))
                         Text(child.name)
                     }
@@ -128,7 +130,7 @@ internal fun CatalogLabMovementForm(
     )
 }
 
-private data class CatalogMenuItem(val uuid: String, val name: String, val icon: String)
+private data class CatalogMenuItem(val uuid: String, val name: String, val icon: String, val color: CatalogIconColor?)
 
 @Composable
 private fun CatalogMenu(
@@ -138,11 +140,12 @@ private fun CatalogMenu(
     options: List<CatalogMenuItem>,
     select: (String?) -> Unit,
     onCreate: (() -> Unit)? = null,
+    iconColor: CatalogIconColor? = null,
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         OutlinedButton(onClick = { expanded = true }) {
-            CatalogIcon(icon)
+            CatalogIcon(icon, color = iconColor)
             Spacer(Modifier.width(6.dp))
             Text(label)
         }
@@ -152,7 +155,7 @@ private fun CatalogMenu(
                 text = { Text("Crear nueva categoría") }, onClick = { expanded = false; onCreate() },
             )
             options.forEach { option ->
-                DropdownMenuItem(text = { Text(option.name) }, leadingIcon = { CatalogIcon(option.icon) },
+                DropdownMenuItem(text = { Text(option.name) }, leadingIcon = { CatalogIcon(option.icon, color = option.color, background = MaterialTheme.colorScheme.surfaceContainer) },
                     onClick = { expanded = false; select(option.uuid) })
             }
         }

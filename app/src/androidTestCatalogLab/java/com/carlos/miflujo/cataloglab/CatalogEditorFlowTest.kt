@@ -11,6 +11,7 @@ import com.carlos.miflujo.data.movementcatalog.CatalogMovementDatabase
 import com.carlos.miflujo.data.cloud.catalog.RemoteCatalogFields
 import com.carlos.miflujo.data.cloud.catalog.toRemoteDto
 import com.carlos.miflujo.domain.category.Category
+import com.carlos.miflujo.domain.category.CatalogIconColor
 import com.carlos.miflujo.domain.category.CategoryScope
 import com.carlos.miflujo.domain.category.ReportGroup
 import com.carlos.miflujo.domain.category.Subcategory
@@ -57,7 +58,8 @@ class CatalogEditorFlowTest {
         field("Nombre").performTextInput("Trabajo")
         restoration.emulateSavedInstanceStateRestore()
         chooseIcon("automovil", "Automóvil")
-        compose.onNodeWithText("Guardar categoría").performClick()
+        selectColor("Violeta")
+        saveForm("Guardar categoría")
         waitFor("Trabajo")
         waitFor("Guardar").performClick()
         waitFor("US$ 123.45")
@@ -65,6 +67,7 @@ class CatalogEditorFlowTest {
         val category = snapshot.categories.single { it.name == "Trabajo" }
         val movement = snapshot.movements.single()
         assertEquals("directions_car", category.iconKey)
+        assertEquals(CatalogIconColor.VIOLET, category.iconColor)
         assertEquals(category.uuid, movement.categoryUuid)
         assertEquals(12345L, movement.amountMinor)
         assertEquals(Currency.DOLLAR, movement.currency)
@@ -75,8 +78,11 @@ class CatalogEditorFlowTest {
             model.session.restore(backup)
             val restored = checkNotNull(model.session.categories.category(category.uuid))
             assertEquals(category.iconKey, restored.value.iconKey)
+            assertEquals(category.iconColor, restored.value.iconColor)
             val remote = restored.toRemoteDto()
-            assertEquals(category.iconKey, RemoteCatalogFields.decodeCategory(category.uuid, RemoteCatalogFields.encode(remote)).iconKey)
+            val decoded = RemoteCatalogFields.decodeCategory(category.uuid, RemoteCatalogFields.encode(remote))
+            assertEquals(category.iconKey, decoded.iconKey)
+            assertEquals(category.iconColor, decoded.iconColor)
             assertEquals(category.uuid, model.session.snapshot().movements.single().categoryUuid)
         }
     }
@@ -90,22 +96,30 @@ class CatalogEditorFlowTest {
         waitFor("Trabajo").performClick()
         waitFor("Nueva subcategoría").performClick()
         field("Nombre").performTextInput("Servicios")
-        compose.onNodeWithText("Guardar subcategoría").performClick()
+        selectColor("Menta")
+        saveForm("Guardar subcategoría")
         waitFor("Servicios")
         val old = runBlocking { model.session.snapshot() }
         val category = old.categories.single { it.name == "Trabajo" }
         val child = old.subcategories.single { it.name == "Servicios" }
         assertEquals(category.uuid, child.categoryUuid)
+        assertEquals(CatalogIconColor.MINT, category.iconColor)
+        assertEquals(category.iconColor, child.iconColor)
 
         compose.onAllNodesWithText("Editar")[0].performClick()
-        field("Nombre").performTextReplacement("Trabajo remoto")
+        compose.onNodeWithContentDescription("Menta").performScrollTo().assertIsSelected()
+        selectColor("Azul")
+        field("Nombre").performScrollTo().performTextReplacement("Trabajo remoto")
         chooseIcon("automovil", "Automóvil")
-        compose.onNodeWithText("Guardar categoría").performClick()
+        compose.onNodeWithContentDescription("Azul").performScrollTo().assertIsSelected()
+        saveForm("Guardar categoría")
         waitFor("Trabajo remoto")
         compose.onAllNodesWithText("Editar")[1].performClick()
-        field("Nombre").performTextReplacement("Conexión")
+        compose.onNodeWithContentDescription("Menta").performScrollTo().assertIsSelected()
+        compose.onNodeWithText("Usar color predeterminado").performScrollTo().performClick().assertIsSelected()
+        field("Nombre").performScrollTo().performTextReplacement("Conexión")
         chooseIcon("internet", "Internet")
-        compose.onNodeWithText("Guardar subcategoría").performClick()
+        saveForm("Guardar subcategoría")
         waitFor("Conexión")
 
         compose.onAllNodesWithText("Archivar")[1].performClick()
@@ -126,11 +140,12 @@ class CatalogEditorFlowTest {
         waitForEnabled("Activas").performClick()
         waitFor("Trabajo remoto")
         val current = runBlocking { model.session.snapshot() }
-        assertEquals(category.copy(name = "Trabajo remoto", iconKey = "directions_car", revision = current.categories.single { it.uuid == category.uuid }.revision),
+        assertEquals(category.copy(name = "Trabajo remoto", iconKey = "directions_car", iconColor = CatalogIconColor.BLUE, revision = current.categories.single { it.uuid == category.uuid }.revision),
             current.categories.single { it.uuid == category.uuid })
         val updated = current.subcategories.single { it.uuid == child.uuid }
         assertEquals("Conexión", updated.name)
         assertEquals("internet", updated.iconKey)
+        assertNull(updated.iconColor)
         assertEquals(category.uuid, updated.categoryUuid)
         assertFalse(updated.archived)
     }
@@ -141,9 +156,9 @@ class CatalogEditorFlowTest {
             val repo = model.session.categories
             val cat = repo.createCategory(Category(
                 name = "Gastos varios", scope = CategoryScope.EXPENSE, reportGroup = ReportGroup.OTHER,
-                iconKey = "home",
+                iconKey = "home", iconColor = CatalogIconColor.ORANGE,
             ))
-            val child = repo.createSubcategory(Subcategory(categoryId = cat.value.id, name = "Gasolina", iconKey = "directions_car"))
+            val child = repo.createSubcategory(Subcategory(categoryId = cat.value.id, name = "Gasolina", iconKey = "directions_car", iconColor = CatalogIconColor.ORANGE))
             repo.createCategory(Category(
                 name = cat.value.name, scope = CategoryScope.INCOME, reportGroup = ReportGroup.INCOME,
             ))
@@ -175,6 +190,8 @@ class CatalogEditorFlowTest {
         assertEquals(cat.value.uuid, movement.categoryUuid)
         assertEquals(child.value.uuid, movement.subcategoryUuid)
         assertEquals("Recibo histórico", movement.detail)
+        assertEquals(CatalogIconColor.ORANGE, snapshot.categories.single { it.uuid == cat.value.uuid }.iconColor)
+        assertEquals(CatalogIconColor.ORANGE, snapshot.subcategories.single { it.uuid == child.value.uuid }.iconColor)
         val report = model.session.report(snapshot, java.time.YearMonth.from(movement.date))
         assertEquals(512L, report.cordoba.totalExpenseMinor)
         assertEquals(0L, report.dollar.totalExpenseMinor)
@@ -196,11 +213,20 @@ class CatalogEditorFlowTest {
     private fun saveCategoryWithIcon(name: String, query: String, label: String) {
         field("Nombre").performTextInput(name)
         chooseIcon(query, label)
-        compose.onNodeWithText("Guardar categoría").performClick()
+        selectColor("Menta")
+        saveForm("Guardar categoría")
+    }
+
+    private fun selectColor(label: String) {
+        compose.onNodeWithContentDescription(label).performScrollTo().performClick().assertIsSelected()
+    }
+
+    private fun saveForm(label: String) {
+        compose.onNodeWithText(label).performScrollTo().performClick()
     }
 
     private fun chooseIcon(query: String, label: String) {
-        waitFor("Elegir icono").performClick()
+        waitFor("Elegir icono").performScrollTo().performClick()
         field("Buscar iconos").performTextInput(query)
         waitFor(label).performClick()
     }

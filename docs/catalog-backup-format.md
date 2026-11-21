@@ -174,3 +174,19 @@ reales; el bloqueo de esta base aislada no sustituye esos mecanismos de la app.
 
 No desplegar v3 parcialmente: todavía no hay lector/restaurador financiero real para este payload,
 ni compatibilidad de estos campos con Firestore. Todo el trabajo de esta entrega es preparatorio.
+
+## Extensión experimental v4 para color de icono
+
+El escritor actual usa `schemaVersion: 4`. La única diferencia de estructura frente
+a v3 es el campo obligatorio `iconColor` de cada categoría y subcategoría. Su valor
+es `null` para usar el color del tema, o una clave de la siguiente lista.
+
+```text
+red orange amber green mint cyan blue violet pink gray
+```
+
+El lector admite v1 y v2 con el adaptador histórico y v3 con su forma original.
+Todos reciben color nulo. En v4 se rechazan las claves desconocidas, los campos de
+color ausentes y los tipos incompatibles. Los movimientos y sus referencias UUID
+conservan el formato de v3. Los lectores experimentales antiguos requieren
+actualización para restaurar archivos v4. La aplicación de producción conserva JSON v2.

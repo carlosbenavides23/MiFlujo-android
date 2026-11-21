@@ -37,13 +37,14 @@ const fixture = await fetch(
     },
 );
 assert.ok(fixture.ok, `Firestore Emulator fixture setup failed: ${fixture.status}`);
-if (process.argv.includes("--movement-v2")) {
+const colorProtocol = process.argv.includes("--catalog-colors");
+if (colorProtocol || process.argv.includes("--movement-v2")) {
     const marker = await fetch(
         `${firestore}/v1/projects/${project}/databases/(default)/documents/users/${encodeURIComponent(account.localId)}/metadata/movementProtocol`,
         {
             method: "PATCH",
             headers: { Authorization: "Bearer owner", "Content-Type": "application/json" },
-            body: JSON.stringify({ fields: { version: { integerValue: "2" } } }),
+            body: JSON.stringify({ fields: { version: { integerValue: colorProtocol ? "3" : "2" } } }),
         },
     );
     assert.ok(marker.ok, `Firestore Emulator protocol fixture setup failed: ${marker.status}`);

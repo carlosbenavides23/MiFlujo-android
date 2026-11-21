@@ -14,10 +14,26 @@ class RemoteCatalogContractTest {
     private val parent = RemoteCategoryDto(parentUuid, "Hogar", CategoryScope.EXPENSE, ReportGroup.OTHER, "home", true, -2, revision)
     private val child = RemoteSubcategoryDto(childUuid, parentUuid, "Agua", "water", true, 3, revision)
 
+    @Test fun colorsAreVersionedAndIncludedInReconciliation() {
+        val prior = RemoteCatalogFields.encode(parent, RemoteCatalogFields.LegacyVersion)
+        assertFalse(prior.containsKey("iconColor"))
+        assertEquals(parent, RemoteCatalogFields.decodeCategory(parentUuid, prior))
+        val colored = parent.copy(iconColor = CatalogIconColor.VIOLET)
+        val fields = RemoteCatalogFields.encode(colored)
+        assertEquals("violet", fields["iconColor"])
+        assertEquals(colored, RemoteCatalogFields.decodeCategory(parentUuid, fields))
+        assertEquals(CatalogReconciliation.REVISION_CONTENT_MISMATCH, reconcileCatalog(parent, colored))
+        rejected { RemoteCatalogFields.encode(colored, RemoteCatalogFields.LegacyVersion) }
+        rejected { RemoteCatalogFields.decodeCategory(parentUuid, prior + ("iconColor" to "violet")) }
+        rejected { RemoteCatalogFields.decodeCategory(parentUuid, fields + ("iconColor" to "ultraviolet")) }
+        val colorfulChild = child.copy(iconColor = CatalogIconColor.CYAN)
+        assertEquals(colorfulChild, RemoteCatalogFields.decodeSubcategory(childUuid, RemoteCatalogFields.encode(colorfulChild)))
+    }
+
     @Test fun categoryRoundTripUsesOnlyTheContractFields() {
         val fields = RemoteCatalogFields.encode(parent)
         assertEquals(
-            setOf("schemaVersion", "uuid", "name", "scope", "reportGroup", "iconKey", "archived", "sortOrder", "revisionCounter", "revisionActorUuid"),
+            setOf("schemaVersion", "uuid", "name", "scope", "reportGroup", "iconKey", "iconColor", "archived", "sortOrder", "revisionCounter", "revisionActorUuid"),
             fields.keys,
         )
         assertEquals(-2L, fields["sortOrder"])
@@ -57,7 +73,7 @@ class RemoteCatalogContractTest {
             rejected { RemoteCatalogFields.decodeCategory(parentUuid, fields - key) }
         }
         val variants = listOf(
-            "schemaVersion" to 2L, "schemaVersion" to 1.0, "archived" to "true",
+            "schemaVersion" to 3L, "schemaVersion" to 1.0, "archived" to "true",
             "sortOrder" to Int.MAX_VALUE.toLong() + 1, "sortOrder" to 2.5,
             "revisionCounter" to -1L, "revisionActorUuid" to "origin",
             "scope" to "UNKNOWN", "reportGroup" to "INCOME", "name" to "  ",

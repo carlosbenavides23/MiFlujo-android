@@ -169,3 +169,27 @@ test('catalog edits retain the deterministic winner under concurrent transaction
   assert.equal(winner.name, 'Alto');
   await assertFails(setDoc(ref(left), { ...winner, name: 'Misma revisión' }));
 });
+
+test('color protocol upgrades catalog v1 without allowing old writes or invalid colors', async () => {
+  const db = client(a);
+  const parentRef = doc(db, dir(a, 'categories', cat));
+  const childRef = doc(db, dir(a, 'subcategories', child));
+  const colorParent = { ...parent, schemaVersion: 2, iconColor: 'blue', revisionCounter: 2 };
+  await phase(2);
+  await assertSucceeds(setDoc(parentRef, parent));
+  await assertFails(setDoc(parentRef, colorParent));
+  await phase(3);
+  await assertFails(setDoc(parentRef, { ...parent, revisionCounter: 2 }));
+  await assertFails(setDoc(parentRef, { ...colorParent, revisionCounter: 1 }));
+  await assertFails(setDoc(parentRef, { ...colorParent, iconColor: '#ffffff' }));
+  const { iconColor, ...missingColor } = colorParent;
+  await assertFails(setDoc(parentRef, missingColor));
+  await assertSucceeds(setDoc(parentRef, colorParent));
+  await assertSucceeds(setDoc(childRef, { ...subcategory, schemaVersion: 2, iconColor: 'blue' }));
+  await assertSucceeds(setDoc(movement(db), { ...v2, categoryUuid: cat, subcategoryUuid: child }));
+  await assertFails(setDoc(parentRef, { ...parent, revisionCounter: 3 }));
+  await assertSucceeds(setDoc(parentRef, { ...colorParent, iconColor: null, revisionCounter: 3 }));
+  assert.equal((await getDoc(parentRef)).data().iconColor, null);
+  assert.equal((await getDoc(childRef)).data().iconColor, 'blue');
+  await assertFails(setDoc(doc(client(b), dir(a, 'categories', cat)), colorParent));
+});

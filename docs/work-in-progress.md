@@ -505,3 +505,17 @@ El PDF anterior pasó el verificador final. El raster de Poppler confirma el pun
   reemplazar la instalación previa de catalogLab firmada con otra clave.
 - Pendientes la evaluación visual y los bloqueos de activación de 6D. Producción
   sigue usando Room v3, respaldo v2 y su Cloud Sync vigente.
+
+### Color opcional para iconos
+
+- `catalogLab` ofrece diez colores con vista previa, selección accesible y un control
+  independiente para volver al tema. El icono y su tinte se muestran en el catálogo,
+  los selectores y las referencias históricas.
+- Las bases experimentales añadieron una columna anulable mediante migraciones 4 → 5
+  y 1 → 2. Los colores se escriben en JSON v4 y en las fichas remotas v2 del marcador
+  experimental 3. Los lectores conservan compatibilidad con los archivos y documentos
+  anteriores. Ver el [contrato actualizado](customizable-categories.md#color-opcional-del-icono).
+- Pasaron **348 pruebas JVM en debug**, **352 en catalogLab**, **22 comprobaciones Python**,
+  **7 pruebas de Firestore Emulator** y **31 instrumentadas en el POCO X7 Pro**. Se
+  ensambló catalogLab. El POCO ejecutó la suite en los paquetes aislados de pruebas.
+  Las reglas y formatos de producción conservan su configuración vigente.

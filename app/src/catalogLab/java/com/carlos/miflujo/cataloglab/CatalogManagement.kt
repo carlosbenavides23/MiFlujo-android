@@ -89,7 +89,7 @@ internal fun CatalogManagement(
             Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainerLow) {
                 Column(Modifier.fillMaxWidth().padding(12.dp)) {
                     TextButton(onClick = { expanded = if (expanded == parent.uuid) null else parent.uuid }) {
-                        CatalogIcon(parent.iconKey)
+                        CatalogIcon(parent.iconKey, color = parent.iconColor, background = MaterialTheme.colorScheme.surfaceContainerLow)
                         Spacer(Modifier.width(8.dp))
                         Text(if (parent.archived) "${parent.name} (archivada)" else parent.name)
                     }
@@ -107,7 +107,7 @@ internal fun CatalogManagement(
                             ListItem(
                                 headlineContent = { Text(child.name) },
                                 supportingContent = if (child.archived) ({ Text("Archivada") }) else null,
-                                leadingContent = { CatalogIcon(child.iconKey) },
+                                leadingContent = { CatalogIcon(child.iconKey, color = child.iconColor) },
                             )
                             ItemActions(
                                 child.archived, busy, onEdit = { edit(EditKind.EDIT_CHILD, child.uuid) },
@@ -129,8 +129,8 @@ internal fun CatalogManagement(
         val parent = snapshot.categories.firstOrNull { it.uuid == editorId }
         val child = snapshot.subcategories.firstOrNull { it.uuid == editorId }
         val initial = when (kind) {
-            EditKind.EDIT_PARENT -> parent?.let { CatalogItemInput(it.name, it.iconKey, it.scope, it.reportGroup) }
-            EditKind.EDIT_CHILD -> child?.let { CatalogItemInput(it.name, it.iconKey) }
+            EditKind.EDIT_PARENT -> parent?.let { CatalogItemInput(it.name, it.iconKey, it.scope, it.reportGroup, it.iconColor) }
+            EditKind.EDIT_CHILD -> child?.let { CatalogItemInput(it.name, it.iconKey, iconColor = it.iconColor) }
             EditKind.CREATE_PARENT -> CatalogItemInput()
             EditKind.CREATE_CHILD -> CatalogItemInput().takeIf { parent != null && !parent.archived }
         }
@@ -151,16 +151,16 @@ internal fun CatalogManagement(
                     EditKind.EDIT_PARENT -> {
                         val target = checkNotNull(parent)
                         val row = checkNotNull(repository.category(target.uuid))
-                        repository.updateCategory(row.value.edited(name = input.name, iconKey = input.iconKey), target.revision).value.uuid
+                        repository.updateCategory(row.value.edited(name = input.name, iconKey = input.iconKey, iconColor = input.iconColor), target.revision).value.uuid
                     }
                     EditKind.EDIT_CHILD -> {
                         val target = checkNotNull(child)
                         val row = checkNotNull(repository.subcategory(target.uuid))
-                        repository.updateSubcategory(row.value.edited(name = input.name, iconKey = input.iconKey), target.revision).value.uuid
+                        repository.updateSubcategory(row.value.edited(name = input.name, iconKey = input.iconKey, iconColor = input.iconColor), target.revision).value.uuid
                     }
                     EditKind.CREATE_CHILD -> {
                         val parentRow = checkNotNull(repository.category(checkNotNull(parent).uuid)).value
-                        val value = Subcategory(uuid = uuid, categoryId = parentRow.id, name = input.name, iconKey = input.iconKey)
+                        val value = Subcategory(uuid = uuid, categoryId = parentRow.id, name = input.name, iconKey = input.iconKey, iconColor = input.iconColor)
                         val previous = repository.subcategory(uuid)
                         if (previous == null) repository.createSubcategory(value).value.uuid else {
                             check(previous.value.copy(id = 0) == value)

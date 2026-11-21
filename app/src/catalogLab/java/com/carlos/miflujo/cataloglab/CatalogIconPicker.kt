@@ -11,6 +11,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import com.carlos.miflujo.domain.category.CatalogIconColor
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
@@ -22,8 +24,11 @@ internal fun CatalogIcon(
     key: String?,
     modifier: Modifier = Modifier,
     description: String? = null,
+    color: CatalogIconColor? = null,
+    background: Color = MaterialTheme.colorScheme.surface,
 ) {
-    Icon(painterResource(resolveCatalogIcon(key).resource), description, modifier)
+    val tint = color?.let { catalogTint(iconSwatches.getValue(it).reference, background) } ?: LocalContentColor.current
+    Icon(painterResource(resolveCatalogIcon(key).resource), description, modifier, tint = tint)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

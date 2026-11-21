@@ -13,6 +13,7 @@ import androidx.room.TypeConverters
 import androidx.room.Upsert
 import androidx.room.withTransaction
 import com.carlos.miflujo.data.backup.readCatalogMovementSnapshot
+import com.carlos.miflujo.data.category.CATALOG_ICON_COLOR_1_2
 import com.carlos.miflujo.data.category.CatalogInstallationEntity
 import com.carlos.miflujo.data.category.CategoryDao
 import com.carlos.miflujo.data.category.CategoryEntity
@@ -56,7 +57,7 @@ internal interface MovementSyncBaselineDao {
 @Database(
     entities = [CatalogMovementEntity::class, CategoryEntity::class, SubcategoryEntity::class,
         CatalogInstallationEntity::class, MovementSyncBaseline::class],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 @TypeConverters(SyncStatusConverters::class)
@@ -187,7 +188,7 @@ internal class AccountMovementSyncStore private constructor(
             val uid = checkNotNull(session.currentUid())
             val name = accountMovementDatabaseName(uid)
             val database = Room.databaseBuilder(context.applicationContext, AccountMovementSyncDatabase::class.java, name)
-                .addCallback(CatalogMovementDatabase.initializer).build()
+                .addCallback(CatalogMovementDatabase.initializer).addMigrations(CATALOG_ICON_COLOR_1_2).build()
             return AccountMovementSyncStore(uid, database, session)
         }
     }

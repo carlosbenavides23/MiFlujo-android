@@ -1,20 +1,24 @@
 package com.carlos.miflujo.data.cloud.catalog
 
+import com.carlos.miflujo.domain.category.CatalogIconColor
 import com.carlos.miflujo.domain.category.CatalogRevision
 import com.carlos.miflujo.domain.category.CategoryScope
 import com.carlos.miflujo.domain.category.ReportGroup
 
 /** Firestore document maps. Reading a raw map lets us reject unknown fields and coercions. */
 object RemoteCatalogFields {
-    const val Version = 1L
+    const val LegacyVersion = 1L
+    const val Version = 2L
     private val commonKeys = setOf(
         "schemaVersion", "uuid", "name", "iconKey", "archived", "sortOrder", "revisionCounter", "revisionActorUuid",
     )
     private val categoryKeys = commonKeys + setOf("scope", "reportGroup")
     private val subcategoryKeys = commonKeys + "categoryUuid"
 
-    fun encode(entry: RemoteCatalogEntry): Map<String, Any> = buildMap {
-        put("schemaVersion", Version)
+    fun encode(entry: RemoteCatalogEntry, version: Long = Version): Map<String, Any?> = buildMap {
+        require(version == Version || (version == LegacyVersion && entry.iconColor == null))
+        put("schemaVersion", version)
+        if (version == Version) put("iconColor", entry.iconColor?.key)
         put("uuid", entry.uuid)
         put("name", entry.name)
         put("iconKey", entry.iconKey)
@@ -42,6 +46,7 @@ object RemoteCatalogFields {
             archived = fields.archived(),
             sortOrder = fields.sortOrder(),
             revision = fields.revision(),
+            iconColor = fields.iconColor(),
         )
     }
 
@@ -55,14 +60,22 @@ object RemoteCatalogFields {
             archived = fields.archived(),
             sortOrder = fields.sortOrder(),
             revision = fields.revision(),
+            iconColor = fields.iconColor(),
         )
     }
 
     private fun Map<String, Any?>.requireDocument(documentId: String, expectedKeys: Set<String>) {
-        require(keys == expectedKeys) { "Invalid catalog fields" }
-        require(integer("schemaVersion") == Version) { "Unsupported catalog version" }
+        val keysForVersion = when (integer("schemaVersion")) {
+            LegacyVersion -> expectedKeys
+            Version -> expectedKeys + "iconColor"
+            else -> throw IllegalArgumentException("Unsupported catalog version")
+        }
+        require(keys == keysForVersion) { "Invalid catalog fields" }
         require(string("uuid") == documentId) { "Catalog UUID must match document ID" }
     }
+
+    private fun Map<String, Any?>.iconColor(): CatalogIconColor? =
+        this["iconColor"]?.let { CatalogIconColor.fromKey(string("iconColor")) }
 
     private fun Map<String, Any?>.string(key: String) =
         this[key] as? String ?: throw IllegalArgumentException("Expected string: $key")
