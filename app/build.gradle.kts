@@ -5,8 +5,11 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+val catalogLabUiTests = providers.gradleProperty("catalogLabUiTests").orNull == "true"
+
 android {
     namespace = "com.carlos.miflujo"
+    if (catalogLabUiTests) testBuildType = "catalogLab"
     compileSdk {
         version = release(36) {
             minorApiLevel = 1
@@ -26,7 +29,9 @@ android {
     buildTypes {
         create("catalogLab") {
             initWith(getByName("debug"))
-            applicationIdSuffix = ".cataloglab"
+            applicationIdSuffix = if (catalogLabUiTests) ".cataloglab.uitest" else ".cataloglab"
+            manifestPlaceholders["catalogLabLabel"] =
+                if (catalogLabUiTests) "MiFlujo · Pruebas de catálogo" else "MiFlujo · Catálogo de pruebas"
             matchingFallbacks += "debug"
         }
         release {
@@ -90,5 +95,8 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.room.testing)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+    if (catalogLabUiTests) {
+        add("catalogLabImplementation", libs.androidx.compose.ui.test.manifest)
+    }
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

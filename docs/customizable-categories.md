@@ -727,3 +727,30 @@ administrativa de backfill, reanudable y con inventario antes y después, probad
 datos ficticios. Un fallo conserva el UID congelado. Ante una migración local fallida,
 Room conserva la v3 por rollback. Falta el flujo de recuperación para el usuario y verificar
 apertura, restauración y corte en instalaciones aisladas de Android antes de activar.
+
+## Gestión de categorías y subcategorías
+
+En la variante aislada `catalogLab`, abrir **Configuración → Categorías y subcategorías**.
+La lista expandible muestra fichas activas y archivadas. Se pueden crear, renombrar, cambiar
+el icono, archivar tras confirmación y restaurar. Si el padre está archivado, la interfaz pide
+restaurarlo primero para reactivar una subcategoría. Los nombres iguales son válidos y el UUID
+distingue cada ficha. El tipo y el grupo de reporte se eligen al crear una categoría y quedan
+fijos, igual que la relación padre-hijo.
+
+En **Nuevo** y **Editar movimiento**, el selector ofrece fichas activas compatibles con el tipo,
+subcategorías de su padre y la opción sin categoría. **Crear nueva categoría** conserva el importe,
+moneda, fecha y detalle del borrador y selecciona la ficha recién guardada. Una clasificación
+histórica archivada sigue visible con su nombre e icono. El repositorio decide si se conserva
+o se cambia al guardar.
+
+El selector incluye 50 [Material Symbols Rounded](https://developers.google.com/fonts/docs/material_symbols)
+como VectorDrawables, con búsqueda en español y nueve grupos. Los nombres de categorías son
+independientes de los nombres de los símbolos. Se almacena `iconKey` en Room, JSON v3 y el
+protocolo experimental. Un identificador desconocido se muestra como el icono genérico y
+se conserva al editar el nombre. La licencia y la revisión de origen están en los assets
+de la variante.
+
+Las pruebas Compose usan Room en memoria y se habilitan con `-PcatalogLabUiTests=true`.
+Con esa propiedad, los APK de prueba usan el paquete separado
+`com.carlos.miflujo.cataloglab.uitest` y su APK instrumentado. El flujo normal de
+`catalogLab` y la app principal conservan sus paquetes y sus bases.

@@ -1,5 +1,6 @@
 package com.carlos.miflujo.cataloglab
 
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -7,13 +8,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.carlos.miflujo.data.cataloglab.CatalogLabSession
 import com.carlos.miflujo.domain.backup.BackupMovement
 import com.carlos.miflujo.domain.backup.CatalogBackup
-import com.carlos.miflujo.domain.model.CatalogMovement
 import com.carlos.miflujo.domain.model.MovementType
 import com.carlos.miflujo.domain.report.FlexibleMonthlyReport
 import com.carlos.miflujo.ui.backup.BackupDocument
@@ -30,20 +30,20 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
-internal fun CatalogLabScreen(
-    local: CatalogLabSession,
-    onConnect: suspend (String) -> CatalogLabSession,
-    onDisconnect: suspend () -> Unit,
-) {
+internal fun CatalogLabScreen(model: CatalogLabModel) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var session by remember { mutableStateOf(local) }
+    val session = model.session
     var snapshot by remember { mutableStateOf<CatalogBackup?>(null) }
     var canRestore by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
-    var edit by remember { mutableStateOf<CatalogMovement?>(null) }
-    var formOpen by remember { mutableStateOf(false) }
+    var formOpen by rememberSaveable { mutableStateOf(false) }
+    var formOwner by rememberSaveable { mutableStateOf<String?>(null) }
+    var editingUuid by rememberSaveable { mutableStateOf<String?>(null) }
+    var settingsOwner by rememberSaveable { mutableStateOf<String?>(null) }
+    var settings by rememberSaveable { mutableStateOf(false) }
+    var manageCatalog by rememberSaveable { mutableStateOf(false) }
     var restore by remember { mutableStateOf<CatalogBackup?>(null) }
     var deleting by remember { mutableStateOf<BackupMovement?>(null) }
     var export by remember { mutableStateOf<BackupDocument?>(null) }
@@ -69,11 +69,19 @@ internal fun CatalogLabScreen(
     }
 
     suspend fun refresh() {
-        snapshot = session.snapshot()
-        canRestore = session.canRestore()
+        val currentSession = model.session
+        snapshot = currentSession.snapshot()
+        canRestore = currentSession.canRestore()
     }
 
-    LaunchedEffect(local) { perform { refresh() } }
+    LaunchedEffect(Unit) {
+        if (settingsOwner != session.accountUid) {
+            settings = false
+            manageCatalog = false
+        }
+        if (formOpen && (formOwner != session.accountUid || editingUuid != model.editingMovement?.uuid)) formOpen = false
+        perform { refresh() }
+    }
     val pickJson = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) perform {
             val input = withContext(Dispatchers.IO) {
@@ -108,13 +116,29 @@ internal fun CatalogLabScreen(
     val report = reportResult?.getOrNull()
     val controlsEnabled = !busy && export == null && pdf == null
     Scaffold { padding ->
-        LazyColumn(
+        when {
+            manageCatalog -> CatalogManagement(
+                data, session.categories, Modifier.fillMaxSize().padding(padding),
+                onBack = { manageCatalog = false },
+                refresh = { refresh() },
+                loadError = message.takeIf { data == null },
+            )
+            settings -> {
+                BackHandler { settings = false }
+                Column(Modifier.padding(padding).padding(16.dp)) {
+                    TextButton(onClick = { settings = false }) { Text("Volver") }
+                    Text("Configuración", style = MaterialTheme.typography.headlineSmall)
+                    TextButton(onClick = { manageCatalog = true }) { Text("Categorías y subcategorías") }
+                }
+            }
+            else -> LazyColumn(
             Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item {
                 Text("MiFlujo · Catálogo de pruebas", style = MaterialTheme.typography.titleLarge)
+                TextButton(enabled = controlsEnabled, onClick = { settingsOwner = session.accountUid; settings = true }) { Text("Configuración") }
                 Text(if (session.accountUid == null) "Base local · Datos ficticios" else "Cuenta ficticia · Firebase Emulator")
                 if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                 message?.let { Text(it) }
@@ -124,10 +148,9 @@ internal fun CatalogLabScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         for ((label, host) in listOf("Emulador por USB" to "127.0.0.1", "Emulador en AVD" to "10.0.2.2")) {
                             OutlinedButton(enabled = controlsEnabled, onClick = { perform {
-                                val connected = onConnect(host)
+                                model.connect(host)
                                 snapshot = null
                                 canRestore = false
-                                session = connected
                                 refresh()
                             } }) { Text(label) }
                         }
@@ -143,10 +166,9 @@ internal fun CatalogLabScreen(
                             }
                         } }) { Text("Sincronizar") }
                         OutlinedButton(enabled = controlsEnabled, onClick = { perform {
-                            session = local
                             snapshot = null
                             canRestore = false
-                            onDisconnect()
+                            model.disconnect()
                             refresh()
                         } }) { Text("Cerrar sesión de prueba") }
                     }
@@ -174,7 +196,12 @@ internal fun CatalogLabScreen(
             if (!reportTab && data != null) {
                 item {
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Button(enabled = controlsEnabled, onClick = { edit = null; formOpen = true }) { Text("Nuevo") }
+                        Button(enabled = controlsEnabled, onClick = {
+                            model.editingMovement = null
+                            editingUuid = null
+                            formOwner = session.accountUid
+                            formOpen = true
+                        }) { Text("Nuevo") }
                         TextButton(enabled = controlsEnabled, onClick = { perform {
                             session.addExampleCatalog()
                             refresh()
@@ -194,7 +221,9 @@ internal fun CatalogLabScreen(
                         trailingContent = {
                             Column {
                                 TextButton(enabled = controlsEnabled, onClick = { perform {
-                                    edit = checkNotNull(session.movements.find(row.uuid))
+                                    model.editingMovement = checkNotNull(session.movements.find(row.uuid))
+                                    editingUuid = row.uuid
+                                    formOwner = session.accountUid
                                     formOpen = true
                                 } }) { Text("Editar") }
                                 if (session.accountUid != null) TextButton(
@@ -228,12 +257,16 @@ internal fun CatalogLabScreen(
                 }
             }
         }
+        }
     }
 
-    if (formOpen && data != null) {
-        CatalogLabMovementForm(data, edit, busy, onDismiss = { formOpen = false }, saveError = message) { draft ->
+    if (formOpen && data != null && formOwner == session.accountUid && editingUuid == model.editingMovement?.uuid) {
+        CatalogLabMovementForm(
+            data, model.editingMovement, busy, onDismiss = { formOpen = false }, saveError = message,
+            repository = session.categories, onCatalogChanged = { perform { refresh() } },
+        ) { draft ->
             perform {
-                val previous = edit
+                val previous = model.editingMovement
                 if (previous == null) session.movements.create(draft) else session.movements.edit(previous, draft)
                 formOpen = false
                 refresh()

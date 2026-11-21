@@ -26,10 +26,13 @@ class CatalogLabConfigTest(unittest.TestCase):
     def test_lab_configuration_contains_only_demo_firebase_identity(self):
         config = json.loads((LAB / "google-services.json").read_text(encoding="utf-8"))
         self.assertEqual("demo-miflujo-catalog", config["project_info"]["project_id"])
-        client, = config["client"]
-        self.assertEqual("com.carlos.miflujo.cataloglab", client["client_info"]["android_client_info"]["package_name"])
-        self.assertEqual([{"current_key": "fake-demo-api-key"}], client["api_key"])
-        self.assertFalse(client.get("oauth_client"))
+        self.assertEqual(
+            ["com.carlos.miflujo.cataloglab", "com.carlos.miflujo.cataloglab.uitest"],
+            [client["client_info"]["android_client_info"]["package_name"] for client in config["client"]],
+        )
+        for client in config["client"]:
+            self.assertEqual([{"current_key": "fake-demo-api-key"}], client["api_key"])
+            self.assertFalse(client.get("oauth_client"))
 
     def test_lab_manifest_removes_default_firebase_and_production_activity(self):
         application = ET.parse(LAB / "AndroidManifest.xml").getroot().find("application")

@@ -487,3 +487,21 @@ El PDF anterior pasó el verificador final. El raster de Poppler confirma el pun
 - Queda ejecutar la validación integral de 6D en Android y verificar el recorrido visual
   de la variante aislada. El PR hacia `dev` conserva los bloqueos de activación documentados
   en [6D](customizable-categories.md#integración-funcional-experimental-iteración-6d).
+
+## Editor funcional de categorías y subcategorías
+
+- `ux/category-editor` parte de `origin/dev` en `8e57378`. El editor y el selector de
+  iconos funcionan en [catalogLab](customizable-categories.md#gestión-de-categorías-y-subcategorías)
+  con el repositorio experimental existente. Configuración abre la lista activa o
+  archivada. El formulario de movimientos conserva el borrador al crear una categoría
+  y mantiene la clasificación histórica cuando corresponde.
+- Pasaron **346 pruebas JVM en debug**, **349 en catalogLab** y **21 comprobaciones
+  Python** de SQLite y configuración. Se ensamblaron los APK de debug, catalogLab
+  y las pruebas instrumentadas. Pasaron **3/3 pruebas Compose en el POCO X7 Pro** con
+  Room en memoria y los paquetes independientes `com.carlos.miflujo.cataloglab.uitest`
+  y `com.carlos.miflujo.cataloglab.uitest.test`. Cubrieron guardado contextual y
+  restauración del estado, JSON v3 y el contrato remoto, creación y edición de fichas,
+  archivo, restauración y referencias históricas. La configuración instrumentada evitó
+  reemplazar la instalación previa de catalogLab firmada con otra clave.
+- Pendientes la evaluación visual y los bloqueos de activación de 6D. Producción
+  sigue usando Room v3, respaldo v2 y su Cloud Sync vigente.
