@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
@@ -23,6 +24,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFontFamilyResolver
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontSynthesis
 import androidx.compose.ui.text.font.FontWeight
@@ -33,7 +37,7 @@ import androidx.compose.ui.unit.dp
 import com.carlos.miflujo.domain.model.Currency
 
 @Composable
-internal fun CurrencyMorph(currency: Currency) {
+internal fun CurrencyMorph(currency: Currency, manualProgress: Float? = null) {
     val style = MaterialTheme.typography.titleSmall
     val outlineStyle = LocalTextStyle.current.merge(style).copy(color = Color.Unspecified)
     val density = LocalDensity.current
@@ -65,21 +69,46 @@ internal fun CurrencyMorph(currency: Currency) {
                 )
             }
         }
-        if (model == null || (!transition.isRunning && transition.currentState == transition.targetState)) {
+        // Keep the whole run's shaping, tracking and baseline, hiding only the morphing prefix.
+        // drawText uses Compose's paragraph renderer, including text hinting, for the moving $.
+        val dollarText = remember(outlineStyle, nativeTypeface, measurer, density, direction, textConstraints) {
+            measurer.measure(
+                AnnotatedString("C$", listOf(AnnotatedString.Range(SpanStyle(color = Color.Transparent), 0, 1))),
+                style = outlineStyle, maxLines = 1, constraints = textConstraints,
+            )
+        }
+        val dollarTextOrigin = Alignment.Center.align(dollarText.size, size, direction)
+        val manual = manualProgress?.coerceIn(0f, 1f)
+        val atRest = if (manual == null) !transition.isRunning && transition.currentState == transition.targetState
+            else manual == 0f || manual == 1f
+        if (model == null || atRest) {
             // Exactly the original composable/style/normal tracking at rest. No forced Text size.
-            Text(if (currency == Currency.CORDOBA) "C$" else "US$", style = style, maxLines = 1)
+            Text(if (manual?.let { it < 0.5f } ?: (currency == Currency.CORDOBA)) "C$" else "US$", style = style, maxLines = 1)
         } else {
             Canvas(Modifier.fillMaxSize()) {
-                val outlines = currencyMorphOutlines(model, progress.value, size.width.toFloat(), size.height.toFloat(), separation)
-                drawPath(outlines.toPath(), foreground)
+                val outlines = currencyMorphOutlines(model, manual ?: progress.value, size.width.toFloat(), size.height.toFloat(), separation)
+                outlines.dropLast(1).forEach { glyph ->
+                    drawPath(glyph.toPath(), foreground)
+                }
+                // Use the same translation as the unchanged dollar contour, including recentering.
+                // Do not round: snapping positions would introduce steps on rapid reversals.
+                val movingDollar = outlineBounds(listOf(outlines.last()))
+                val startDollar = outlineBounds(listOf(model.dollar.translate(model.dollarStart.x, model.dollarStart.y)))
+                drawText(
+                    dollarText, color = foreground,
+                    topLeft = Offset(
+                        dollarTextOrigin.x + movingDollar.left - startDollar.left,
+                        dollarTextOrigin.y + movingDollar.top - startDollar.top,
+                    ),
+                )
             }
         }
     }
 }
 
-private fun List<GlyphOutline>.toPath() = Path().apply {
+private fun GlyphOutline.toPath() = Path().apply {
     fillType = PathFillType.EvenOdd
-    for (outline in this@toPath) for (contour in outline.contours) {
+    for (contour in contours) {
         if (contour.size < 3) continue
         moveTo(contour.first().x, contour.first().y)
         contour.drop(1).forEach { lineTo(it.x, it.y) }

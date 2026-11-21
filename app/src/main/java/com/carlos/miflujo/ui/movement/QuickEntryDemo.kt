@@ -58,6 +58,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
@@ -76,6 +77,8 @@ import java.time.LocalDate
 @Composable
 internal fun QuickEntryDemo(onClose: () -> Unit) {
     var state by rememberSaveable { mutableStateOf(QuickEntryState()) }
+    var showMorphInspector by remember { mutableStateOf(false) }
+    val debuggable = LocalContext.current.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
     val hapticFeedback = LocalHapticFeedback.current
     val haptics = remember(hapticFeedback) { QuickEntryHaptics(hapticFeedback) }
     val active = state.active
@@ -155,6 +158,7 @@ internal fun QuickEntryDemo(onClose: () -> Unit) {
             Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Registro con cápsulas", style = MaterialTheme.typography.titleLarge)
                 Text("Demostración: nada se guarda. Use datos ficticios.", style = MaterialTheme.typography.bodySmall)
+                if (debuggable && showMorphInspector) CurrencyMorphInspector(onClose = { showMorphInspector = false })
                 LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (pending.isEmpty()) item { Text("Los movimientos pendientes aparecerán aquí.") }
                     items(pending, key = { it.id }) { entry ->
@@ -212,6 +216,7 @@ internal fun QuickEntryDemo(onClose: () -> Unit) {
                                 value = active.currency, label = if (active.currency == Currency.CORDOBA) "Córdobas, cambiar a dólares" else "Dólares, cambiar a córdobas",
                                 accent = if (active.currency == Currency.CORDOBA) CapsuleToggleColors.Cordoba else CapsuleToggleColors.Dollar,
                                 foreground = if (active.currency == Currency.CORDOBA) CapsuleToggleColors.CordobaText else Color.White,
+                                onLongClick = if (debuggable) ({ showMorphInspector = true }) else null,
                                 onClick = {
                                     val previous = state.active.currency
                                     state = state.update(state.active.copy(currency = if (previous == Currency.CORDOBA) Currency.DOLLAR else Currency.CORDOBA))
@@ -368,7 +373,7 @@ private fun PendingSummary(draft: QuickEntryDraft, isEditing: Boolean = false, a
     }
 }
 
-private object CapsuleToggleColors {
+internal object CapsuleToggleColors {
     val Income = Color(0xFF218B53)
     val Expense = Color(0xFFC34850)
     val Cordoba = Color(0xFF8995A5)
@@ -377,7 +382,46 @@ private object CapsuleToggleColors {
 }
 
 @Composable
-private fun <T> CapsuleToggle(value: T, label: String, accent: androidx.compose.ui.graphics.Color, foreground: Color = Color.White, onClick: () -> Unit, content: @Composable (T) -> Unit) {
+private fun CurrencyMorphInspector(onClose: () -> Unit) {
+    var progress by remember { mutableFloatStateOf(0f) }
+    val foreground = lerp(CapsuleToggleColors.CordobaText, Color.White, progress)
+    val background = lerp(CapsuleToggleColors.Cordoba, CapsuleToggleColors.Dollar, progress)
+    Dialog(onDismissRequest = onClose) {
+        Surface(shape = RoundedCornerShape(28.dp)) {
+            Column(
+                Modifier.fillMaxWidth().padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text("Inspector de moneda", style = MaterialTheme.typography.titleLarge)
+                // Measure at the real button size; scale only its final layer for inspection.
+                Box(Modifier.size(width = 168.dp, height = 144.dp), contentAlignment = Alignment.Center) {
+                    Surface(
+                        modifier = Modifier.size(width = 56.dp, height = 48.dp)
+                            .graphicsLayer { scaleX = 3f; scaleY = 3f },
+                        shape = RoundedCornerShape(16.dp), color = background, contentColor = foreground,
+                    ) {
+                        CurrencyMorph(Currency.CORDOBA, manualProgress = progress)
+                    }
+                }
+                Text("${(progress * 100).roundToInt()} %")
+                Slider(
+                    value = progress, onValueChange = { progress = it }, valueRange = 0f..1f,
+                    modifier = Modifier.semantics { contentDescription = "Progreso de transformación de moneda" },
+                )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    listOf(0f, 0.5f, 1f).forEach { value ->
+                        TextButton(onClick = { progress = value }) { Text("${(value * 100).roundToInt()} %") }
+                    }
+                }
+                TextButton(onClick = onClose) { Text("Cerrar") }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun <T> CapsuleToggle(value: T, label: String, accent: androidx.compose.ui.graphics.Color, foreground: Color = Color.White, onClick: () -> Unit, onLongClick: (() -> Unit)? = null, content: @Composable (T) -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -388,7 +432,11 @@ private fun <T> CapsuleToggle(value: T, label: String, accent: androidx.compose.
     val symbolColor by animateColorAsState(foreground, tween(160), label = "toggleForeground")
     Button(
         onClick = onClick, interactionSource = interaction,
-        modifier = Modifier.width(56.dp).height(48.dp).semantics { contentDescription = label }
+        modifier = Modifier.width(56.dp).height(48.dp)
+            .then(if (onLongClick != null) Modifier.pointerInput(onLongClick) {
+                detectTapGestures(onLongPress = { onLongClick() })
+            } else Modifier)
+            .semantics { contentDescription = label }
             .graphicsLayer { scaleX = scale; scaleY = scale },
         shape = RoundedCornerShape(16.dp), contentPadding = PaddingValues(0.dp),
         colors = ButtonDefaults.buttonColors(containerColor = backgroundColor, contentColor = symbolColor),
@@ -398,7 +446,7 @@ private fun <T> CapsuleToggle(value: T, label: String, accent: androidx.compose.
 }
 
 @Composable
-private fun MovementSymbol(type: MovementType) {
+internal fun MovementSymbol(type: MovementType) {
     val vertical by animateFloatAsState(
         targetValue = if (type == MovementType.INCOME) 1f else 0f,
         animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMedium),
@@ -478,7 +526,7 @@ private fun SubcategoryMenu(value: MovementSubcategory?, menu: SelectorMenuState
 }
 
 @Composable
-private fun CompactEntryField(value: String, onChange: (String) -> Unit, label: String, modifier: Modifier = Modifier, keyboardType: KeyboardType = KeyboardType.Text, secondary: Boolean = false) {
+internal fun CompactEntryField(value: String, onChange: (String) -> Unit, label: String, modifier: Modifier = Modifier, keyboardType: KeyboardType = KeyboardType.Text, secondary: Boolean = false) {
     BasicTextField(
         value = value, onValueChange = onChange, singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
