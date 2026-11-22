@@ -1,6 +1,5 @@
 package com.carlos.miflujo.ui.movement
 
-import android.app.DatePickerDialog
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -105,6 +104,7 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
     var draftRestorations by remember { mutableIntStateOf(0) }
     var saving by remember { mutableStateOf(false) }
     var creatingCategory by rememberSaveable { mutableStateOf(false) }
+    var choosingDate by rememberSaveable { mutableStateOf(false) }
     val validate = catalog?.validate ?: QuickEntryDraft::validationMessage
     val editingStored = catalog?.initialDraft != null
     fun save(entries: List<PendingEntry>) {
@@ -294,8 +294,13 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                                 selectionReset = draftRestorations,
                             )
                             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                                val context = LocalContext.current
-                                CapsuleMenuControl(icon = Icons.Default.CalendarToday, label = "Fecha", text = if (active.date == LocalDate.now()) "Hoy" else active.date.formatVisibleDate(), modifier = Modifier.weight(1f), onClick = { DatePickerDialog(context, { _, y, m, d -> state = state.update(active.copy(date = LocalDate.of(y, m + 1, d))) }, active.date.year, active.date.monthValue - 1, active.date.dayOfMonth).show() })
+                                CapsuleMenuControl(
+                                    icon = Icons.Default.CalendarToday,
+                                    label = "Fecha",
+                                    text = if (active.date == LocalDate.now()) "Hoy" else active.date.formatVisibleDate(),
+                                    modifier = Modifier.weight(1f),
+                                    onClick = { choosingDate = true },
+                                )
                                 if (catalog != null) {
                                     Box(Modifier.weight(1f).onGloballyPositioned { categoryMenu.anchor = it.boundsInWindow() }) {
                                         val motion = rememberCategoryPickerMotion(categoryMenu.expanded)
@@ -412,6 +417,16 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
             }
         }
     }
+    if (choosingDate) {
+        QuickEntryDateDialog(
+            initialDate = active.date,
+            onConfirm = { date ->
+                state = state.update(state.active.copy(date = date))
+                choosingDate = false
+            },
+            onDismiss = { choosingDate = false },
+        )
+    }
     if (catalog != null && creatingCategory) {
         catalog.categoryEditor({ uuid ->
             state = state.update(state.active.copy(catalogCategoryUuid = uuid))
@@ -449,6 +464,28 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
         confirmButton = { TextButton(onClick = onClose) { Text("Descartar y salir") } },
         dismissButton = { TextButton(onClick = { state = state.copy(confirmedCount = null) }) { Text("Seguir revisando") } },
     )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun QuickEntryDateDialog(
+    initialDate: LocalDate,
+    onConfirm: (LocalDate) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val pickerState = rememberDatePickerState(initialSelectedDate = initialDate)
+    val selectedDate = pickerState.getSelectedDate()
+    DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = { selectedDate?.let(onConfirm) }, enabled = selectedDate != null) {
+                Text("Aceptar")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
+    ) {
+        DatePicker(state = pickerState, showModeToggle = false)
+    }
 }
 
 // Visual snapshot only: never participates in validation or queue transitions.

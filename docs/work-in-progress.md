@@ -641,3 +641,14 @@ El PDF anterior pasó el verificador final. El raster de Poppler confirma el pun
   el borde de la tarjeta activa. Pasaron la revisión estática,
   `git diff --check`, la compilación de `catalogPreview` y la actualización en
   el POCO X7 Pro con `adb install -r`. Queda pendiente la validación manual.
+
+### Selector de fecha Material 3 en Quick Entry
+
+- `ux/quick-entry-polish` parte de la integración del PR #148 en `dev`.
+  El control compacto abre `DatePickerDialog` con `DatePicker` en el día y mes
+  del borrador activo. **Aceptar** aplica la fecha como `LocalDate`. **Cancelar**,
+  Atrás y tocar fuera cierran el diálogo conservando la fecha del formulario.
+- Pasaron la revisión estática, `git diff --check` y la compilación de
+  `catalogPreview`. La actualización por ADB en el POCO X7 Pro conservó la
+  base experimental y los metadatos de producción. Queda pendiente la revisión
+  visual directa en claro y oscuro.
