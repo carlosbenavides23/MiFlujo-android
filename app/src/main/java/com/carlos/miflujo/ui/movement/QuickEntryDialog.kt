@@ -65,7 +65,9 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -100,6 +102,7 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
     val scope = rememberCoroutineScope()
     val focus = LocalFocusManager.current
     var activeId by rememberSaveable { mutableStateOf(UUID.randomUUID().toString()) }
+    var draftRestorations by remember { mutableIntStateOf(0) }
     var saving by remember { mutableStateOf(false) }
     var creatingCategory by rememberSaveable { mutableStateOf(false) }
     val validate = catalog?.validate ?: QuickEntryDraft::validationMessage
@@ -238,7 +241,7 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                                 .onGloballyPositioned { if (transferId == entry.id) targetBounds = it.boundsInWindow() }
                                 .graphicsLayer { alpha = if (transferId == entry.id) 0f else 1f },
                         ) {
-                            PendingSummary(draft, isEditing = isEditing, catalogLabel = catalog?.categoryLabel?.invoke(draft.catalogCategoryUuid)) {
+                            PendingSummary(draft, catalogLabel = catalog?.categoryLabel?.invoke(draft.catalogCategoryUuid)) {
                                 IconButton(onClick = {
                                     val previousId = state.editingId
                                     state = state.edit(entry.id)
@@ -250,21 +253,20 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                             }
                         }
                     }
-                    if (editing != null) {
-                        item(key = "edit-unavailable") {
-                            Text(
-                                "Guarde o cancele la edición para editar otro movimiento.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = colors.onSurfaceVariant,
-                            )
-                        }
-                    }
                 }
                 Surface(shape = RoundedCornerShape(24.dp), color = activeSurface, contentColor = colors.onSurface, modifier = Modifier.fillMaxWidth().onGloballyPositioned { sourceBounds = it.boundsInWindow() }) {
                     Column(Modifier.padding(horizontal = 8.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        if (editing != null) Text("Editando movimiento", style = MaterialTheme.typography.labelMedium)
+                        if (editing != null) Text(
+                            "Editando movimiento",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = colors.primary,
+                        )
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                            CompactEntryField(active.amount, { state = state.update(active.copy(amount = it)) }, "Monto", Modifier.weight(1f), KeyboardType.Decimal)
+                            CompactEntryField(
+                                active.amount, { state = state.update(state.active.copy(amount = it)) },
+                                "Monto", Modifier.weight(1f), KeyboardType.Decimal,
+                                selectionReset = draftRestorations,
+                            )
                             CapsuleToggle(
                                 value = active.currency, label = if (active.currency == Currency.CORDOBA) "Córdobas, cambiar a dólares" else "Dólares, cambiar a córdobas",
                                 accent = if (active.currency == Currency.CORDOBA) CapsuleToggleColors.Cordoba else CapsuleToggleColors.Dollar,
@@ -286,7 +288,11 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                             ) { type -> MovementSymbol(type) }
                         }
                         Column {
-                            CompactEntryField(active.detail, { state = state.update(active.copy(detail = it)) }, "Detalle (opcional)", Modifier.fillMaxWidth(), secondary = true)
+                            CompactEntryField(
+                                active.detail, { state = state.update(state.active.copy(detail = it)) },
+                                "Detalle (opcional)", Modifier.fillMaxWidth(), secondary = true,
+                                selectionReset = draftRestorations,
+                            )
                             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                                 val context = LocalContext.current
                                 CapsuleMenuControl(icon = Icons.Default.CalendarToday, label = "Fecha", text = if (active.date == LocalDate.now()) "Hoy" else active.date.formatVisibleDate(), modifier = Modifier.weight(1f), onClick = { DatePickerDialog(context, { _, y, m, d -> state = state.update(active.copy(date = LocalDate.of(y, m + 1, d))) }, active.date.year, active.date.monthValue - 1, active.date.dayOfMonth).show() })
@@ -373,14 +379,21 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                     } else {
                         val editActionPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                         OutlinedButton(
-                            onClick = { state = state.cancelEdit() },
+                            onClick = {
+                                if (state.editingId != null) {
+                                    state = state.cancelEdit()
+                                    draftRestorations++
+                                }
+                            },
                             modifier = Modifier.heightIn(min = 48.dp),
                             contentPadding = editActionPadding,
                         ) { Text("Cancelar") }
                         Button(
                             onClick = {
                                 val previousMessage = state.message
+                                val wasEditing = state.editingId != null
                                 state = state.saveEdit(validate)
+                                if (wasEditing && state.editingId == null) draftRestorations++
                                 if (state.message != null && state.message != previousMessage) {
                                     haptics.perform(QuickEntryHaptics.Action.ValidationRejected)
                                 }
@@ -468,7 +481,7 @@ private fun TransferOverlay(flight: PendingTransfer, target: Rect, host: Rect, p
 }
 
 @Composable
-private fun PendingSummary(draft: QuickEntryDraft, isEditing: Boolean = false, catalogLabel: String? = null, actions: @Composable RowScope.() -> Unit) {
+private fun PendingSummary(draft: QuickEntryDraft, catalogLabel: String? = null, actions: @Composable RowScope.() -> Unit) {
     val amountColor = if (draft.type == MovementType.INCOME) financePositiveColor() else financeNegativeColor()
     val category = catalogLabel ?: listOf(categoryLabel(draft.category), subcategoryLabel(draft.subcategory))
         .filter { it.isNotBlank() }.joinToString(" · ")
@@ -481,7 +494,6 @@ private fun PendingSummary(draft: QuickEntryDraft, isEditing: Boolean = false, c
                 "${if (draft.type == MovementType.INCOME) "+" else "−"} ${if (draft.currency == Currency.CORDOBA) "C$" else "US$"} ${draft.amount}",
                 style = MaterialTheme.typography.titleMedium, color = amountColor,
             )
-            if (isEditing) Text("En edición", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
             if (draft.detail.isNotBlank()) Text(
                 draft.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 3, overflow = TextOverflow.Ellipsis,
@@ -722,9 +734,36 @@ private fun SubcategoryMenu(value: MovementSubcategory?, menu: SelectorMenuState
 }
 
 @Composable
-internal fun CompactEntryField(value: String, onChange: (String) -> Unit, label: String, modifier: Modifier = Modifier, keyboardType: KeyboardType = KeyboardType.Text, secondary: Boolean = false) {
+internal fun CompactEntryField(
+    value: String,
+    onChange: (String) -> Unit,
+    label: String,
+    modifier: Modifier = Modifier,
+    keyboardType: KeyboardType = KeyboardType.Text,
+    secondary: Boolean = false,
+    selectionReset: Int = 0,
+) {
+    // Keep selection and IME composition local, while the form owns the text.
+    var input by remember(selectionReset) {
+        mutableStateOf(TextFieldValue(value, TextRange(if (selectionReset == 0) 0 else value.length)))
+    }
+    val fieldValue = input.copy(text = value)
+    SideEffect {
+        if (fieldValue.selection != input.selection || fieldValue.composition != input.composition) {
+            input = fieldValue
+        }
+    }
+    var lastText by remember(value, selectionReset) { mutableStateOf(value) }
     BasicTextField(
-        value = value, onValueChange = onChange, singleLine = true,
+        value = fieldValue,
+        onValueChange = { updated ->
+            input = updated
+            if (lastText != updated.text) {
+                lastText = updated.text
+                onChange(updated.text)
+            }
+        },
+        singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         textStyle = (if (secondary) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge).copy(color = MaterialTheme.colorScheme.onSurface),
         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),

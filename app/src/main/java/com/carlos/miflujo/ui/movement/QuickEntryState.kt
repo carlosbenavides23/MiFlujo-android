@@ -56,7 +56,7 @@ internal data class QuickEntryState(
     }
 
     fun edit(id: String): QuickEntryState {
-        if (pendingEdit != null) return copy(message = "Guarde o cancele la edición antes de editar otro movimiento.")
+        if (pendingEdit != null) return this
         val entry = pending.find { it.id == id } ?: return this
         return copy(pendingEdit = entry, message = null)
     }

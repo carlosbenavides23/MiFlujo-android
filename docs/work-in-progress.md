@@ -636,3 +636,8 @@ El PDF anterior pasó el verificador final. El raster de Poppler confirma el pun
   por ADB con `install -r`. Se comprobó la conservación del archivo de la base
   experimental y la coincidencia de los metadatos de la app de producción.
   Queda pendiente la revisión visual manual de la fila de acciones.
+- Al recuperar el borrador con **Guardar** o **Cancelar**, el cursor se coloca al
+  final de monto y detalle. La edición se indica con **Editando movimiento** y
+  el borde de la tarjeta activa. Pasaron la revisión estática,
+  `git diff --check`, la compilación de `catalogPreview` y la actualización en
+  el POCO X7 Pro con `adb install -r`. Queda pendiente la validación manual.
