@@ -94,7 +94,9 @@ internal class QuickEntryCatalog(
 
 @Composable
 internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? = null) {
-    var state by rememberSaveable { mutableStateOf(QuickEntryState(active = catalog?.initialDraft ?: QuickEntryDraft())) }
+    var state by rememberSaveable {
+        mutableStateOf(QuickEntryState(creationDraft = catalog?.initialDraft ?: QuickEntryDraft()))
+    }
     val scope = rememberCoroutineScope()
     val focus = LocalFocusManager.current
     var activeId by rememberSaveable { mutableStateOf(UUID.randomUUID().toString()) }
@@ -218,11 +220,9 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                     items(pending, key = { it.id }) { entry ->
                         val draft = entry.draft
                         val isEditing = editing == entry.id
-                        val canEdit = editing == null && !state.dirty
                         val editDescription = when {
                             isEditing -> "Movimiento en edición"
                             editing != null -> "Edición no disponible: guarde o cancele la edición actual"
-                            state.dirty -> "Edición no disponible: termine la captura actual"
                             else -> "Editar movimiento"
                         }
                         val borderColor by animateColorAsState(
@@ -243,18 +243,17 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                                     val previousId = state.editingId
                                     state = state.edit(entry.id)
                                     if (previousId == null && state.editingId == entry.id) haptics.perform(QuickEntryHaptics.Action.EditStarted)
-                                }, enabled = canEdit, modifier = Modifier.size(PendingActionSize)) {
+                                }, enabled = editing == null, modifier = Modifier.size(PendingActionSize)) {
                                     Icon(Icons.Default.Edit, contentDescription = editDescription)
                                 }
                                 PendingMenu(onDelete = { state = state.requestDelete(entry.id) })
                             }
                         }
                     }
-                    if (pending.isNotEmpty() && (state.dirty || editing != null)) {
+                    if (editing != null) {
                         item(key = "edit-unavailable") {
                             Text(
-                                if (editing != null) "Guarde o cancele la edición para editar otro movimiento."
-                                else "Termine la captura para editar un movimiento.",
+                                "Guarde o cancele la edición para editar otro movimiento.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = colors.onSurfaceVariant,
                             )
@@ -372,12 +371,23 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                             if (state.message != null && state.message != previousMessage) haptics.perform(QuickEntryHaptics.Action.ValidationRejected)
                         }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (saving) "Guardando…" else "Confirmar") }
                     } else {
-                        OutlinedButton(onClick = { state = state.cancelEdit() }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Cancelar") }
-                        Button(onClick = {
-                            val previousMessage = state.message
-                            state = state.saveEdit(validate)
-                            if (state.message != null && state.message != previousMessage) haptics.perform(QuickEntryHaptics.Action.ValidationRejected)
-                        }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Guardar cambios") }
+                        val editActionPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                        OutlinedButton(
+                            onClick = { state = state.cancelEdit() },
+                            modifier = Modifier.heightIn(min = 48.dp),
+                            contentPadding = editActionPadding,
+                        ) { Text("Cancelar") }
+                        Button(
+                            onClick = {
+                                val previousMessage = state.message
+                                state = state.saveEdit(validate)
+                                if (state.message != null && state.message != previousMessage) {
+                                    haptics.perform(QuickEntryHaptics.Action.ValidationRejected)
+                                }
+                            },
+                            modifier = Modifier.heightIn(min = 48.dp),
+                            contentPadding = editActionPadding,
+                        ) { Text("Guardar") }
                     }
                 }
             }
@@ -397,7 +407,16 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
     }
     if (state.exitRequested) AlertDialog(
         onDismissRequest = { state = state.copy(exitRequested = false) },
-        title = { Text(if (catalog == null) "Salir de la demostración" else "¿Descartar cambios?") }, text = { Text("Se descartarán los movimientos provisionales y los cambios de la cápsula activa.") },
+        title = { Text(if (catalog == null) "Salir de la demostración" else "¿Descartar cambios?") },
+        text = {
+            Text(
+                if (editing != null && state.dirty) {
+                    "Se descartarán los movimientos provisionales, los cambios de la edición y el borrador del movimiento nuevo."
+                } else {
+                    "Se descartarán los movimientos provisionales y los cambios de la cápsula activa."
+                }
+            )
+        },
         confirmButton = { TextButton(onClick = onClose) { Text("Descartar y salir") } },
         dismissButton = { TextButton(onClick = { state = state.copy(exitRequested = false) }) { Text("Continuar") } },
     )

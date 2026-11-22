@@ -82,7 +82,7 @@ class CatalogPreviewFlowTest {
         waitFor("Agregar otro").performClick()
         waitFor(hasContentDescription("Editar movimiento")).performClick()
         categoryControl("Transporte local").assertIsDisplayed()
-        waitFor("Guardar cambios").performClick()
+        waitFor("Guardar").performClick()
         compose.onNodeWithContentDescription("Egreso, cambiar a ingreso").performClick()
         compose.onNodeWithContentDescription("Monto").performTextInput("8")
         compose.onNodeWithContentDescription("Detalle (opcional)").performTextInput("Reembolso de prueba")
@@ -121,6 +121,67 @@ class CatalogPreviewFlowTest {
             assertEquals(category.uuid, income.categoryUuid)
             assertTrue(data.movements.all { it.subcategoryUuid == null })
         }
+    }
+
+    @Test
+    fun restoresSuspendedDraftAfterRecreationCancelAndSave() {
+        withSession { session ->
+            for (name in listOf("Servicios de prueba", "Materiales de prueba")) {
+                session.categories.createCategory(Category(
+                    name = name, scope = CategoryScope.BOTH, reportGroup = ReportGroup.OTHER,
+                ))
+            }
+        }
+        launch()
+        waitFor("+ Agregar").performClick()
+        val amount = compose.onNodeWithContentDescription("Monto")
+        val detail = compose.onNodeWithContentDescription("Detalle (opcional)")
+        amount.performTextInput("800")
+        categoryControl("Categoría").performTouchInput { click() }
+        waitFor(hasText("Servicios de prueba") and hasClickAction()).performClick()
+        waitFor("Agregar otro").performClick()
+
+        compose.onNodeWithContentDescription("Egreso, cambiar a ingreso").performClick()
+        compose.onNodeWithContentDescription("Córdobas, cambiar a dólares").performClick()
+        amount.performTextInput("250.")
+        detail.performTextInput("Compra de materiales")
+        categoryControl("Categoría").performTouchInput { click() }
+        waitFor(hasText("Materiales de prueba") and hasClickAction()).performClick()
+        waitFor(hasContentDescription("Editar movimiento")).performClick()
+        amount.assertTextEquals("800").performTextReplacement("900")
+        categoryControl("Servicios de prueba").assertExists()
+
+        checkNotNull(activity).recreate()
+        waitFor("Editando movimiento")
+        amount.assertTextEquals("900")
+        waitFor("Salir").performClick()
+        waitFor("¿Descartar cambios?")
+        waitFor(hasText("borrador del movimiento nuevo", substring = true))
+        waitFor("Continuar").performClick()
+        amount.assertTextEquals("900")
+        waitFor("Cancelar").performClick()
+        amount.assertTextEquals("250.")
+        detail.assertTextEquals("Compra de materiales")
+        categoryControl("Materiales de prueba").assertExists()
+        waitFor("− C\$ 800")
+
+        waitFor(hasContentDescription("Editar movimiento")).performClick()
+        amount.performTextReplacement("950")
+        waitFor("Guardar").performClick()
+        amount.assertTextEquals("250.")
+        detail.assertTextEquals("Compra de materiales")
+        categoryControl("Materiales de prueba").assertExists()
+        compose.onNodeWithContentDescription("Ingreso, cambiar a egreso").assertExists()
+        compose.onNodeWithContentDescription("Dólares, cambiar a córdobas").assertExists()
+        waitFor("− C\$ 950")
+        assertTrue(withSession { it.snapshot().movements.isEmpty() })
+
+        waitFor(hasContentDescription("Editar movimiento")).performClick()
+        waitFor("Salir").performClick()
+        waitFor("Descartar y salir").performClick()
+        waitFor("+ Agregar")
+        compose.onNodeWithText("Registro con cápsulas").assertDoesNotExist()
+        assertTrue(withSession { it.snapshot().movements.isEmpty() })
     }
 
     @Test

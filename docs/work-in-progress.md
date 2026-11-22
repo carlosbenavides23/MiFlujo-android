@@ -616,3 +616,23 @@ El PDF anterior pasó el verificador final. El raster de Poppler confirma el pun
   selección, cierre al tocar fuera y creación conservando el borrador. Se instaló
   la variante aislada. La valoración visual y de ergonomía queda para la revisión
   manual del usuario.
+
+### Suspensión de borrador al editar un pendiente
+
+- En `ux/category-editor`, Quick Entry conserva el borrador nuevo en el estado
+  guardable del formulario. Al editar se carga una copia del pendiente. **Guardar**
+  actualiza solo esa entrada por UUID y **Cancelar** descarta sus cambios. Ambas
+  acciones recuperan el borrador con el importe textual y el UUID de categoría.
+  **Confirmar** sigue guardando el lote en una transacción.
+- **Salir** mantiene la confirmación de descarte. Si hay un borrador suspendido,
+  el aviso lo incluye. **Continuar** conserva los dos borradores y la cola.
+- **Salir**, **Cancelar** y **Guardar** comparten una fila adaptable de Material 3.
+  Los botones tienen un alto mínimo de 48 dp y pueden pasar a otra línea si el
+  ancho o el tamaño del texto lo exige.
+- Pasaron `git diff --check`, la compilación de `catalogPreview`, los 15 casos
+  de `QuickEntryStateTest` y dos recorridos Compose focalizados en el POCO X7 Pro.
+  Se probó la recreación de la actividad con una edición activa, la recuperación
+  tras cancelar o guardar y la confirmación del lote. El APK normal se actualizó
+  por ADB con `install -r`. Se comprobó la conservación del archivo de la base
+  experimental y la coincidencia de los metadatos de la app de producción.
+  Queda pendiente la revisión visual manual de la fila de acciones.

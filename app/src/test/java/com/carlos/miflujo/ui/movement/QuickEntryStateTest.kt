@@ -18,6 +18,15 @@ class QuickEntryStateTest {
         detail = "Luz", date = LocalDate.of(2026, 11, 1),
         category = MovementCategory.FIXED_COST, subcategory = MovementSubcategory.ELECTRICITY,
     )
+    private val partialDraft = draft.copy(
+        type = MovementType.INCOME,
+        amount = "250.",
+        detail = "Compra de materiales",
+        date = LocalDate.of(2026, 11, 3),
+        category = null,
+        subcategory = null,
+        catalogCategoryUuid = "3f77a22b-d81d-44cc-9f5a-b228650d64ad",
+    )
 
     private fun queued() = QuickEntryState().update(draft).add()
 
@@ -77,31 +86,38 @@ class QuickEntryStateTest {
     }
 
     @Test fun `cancel edit restores new capture and leaves original untouched`() {
-        val original = queued()
+        val original = queued().update(partialDraft)
         val state = original.edit(original.pending.single().id).update(draft.copy(detail = "Cambio")).cancelEdit()
         assertEquals(original.pending, state.pending)
-        assertEquals(original.active, state.active)
-        assertFalse(state.dirty)
+        assertEquals(partialDraft, state.active)
+        assertTrue(state.dirty)
         assertNull(state.editingId)
     }
 
-    @Test fun `dirty new capture blocks editing without losing its fields`() {
-        val state = queued().let { it.update(it.active.copy(detail = "Sin resolver")) }
-        val blocked = state.edit(state.pending.single().id)
-        assertNull(blocked.editingId)
-        assertEquals(state.active, blocked.active)
-        assertEquals(state.pending, blocked.pending)
-        assertNotNull(blocked.message)
+    @Test fun `saving a pending edit restores partial capture and updates only the selected UUID`() {
+        val original = queued().update(draft.copy(detail = "Otro pendiente")).add().update(partialDraft)
+        val first = original.pending.first()
+        val editing = original.edit(first.id)
+        assertEquals(first.draft, editing.active)
+        assertEquals(original.pending, editing.pending)
+        val corrected = first.draft.copy(amount = "50")
+        val saved = editing.update(corrected).saveEdit()
+        assertEquals(listOf(first.copy(draft = corrected), original.pending.last()), saved.pending)
+        assertEquals(partialDraft, saved.active)
+        assertTrue(saved.dirty)
+        assertNull(saved.editingId)
     }
 
     @Test fun `editing is exclusive and add cannot insert the edited capsule`() {
-        val state = queued().update(draft).add()
+        val state = queued().update(draft).add().update(partialDraft)
         val editing = state.edit(state.pending.first().id)
         val blocked = editing.edit(state.pending.last().id)
         assertEquals(editing.editingId, blocked.editingId)
         assertEquals(editing.active, blocked.active)
         assertNotNull(blocked.message)
         assertEquals(editing.pending, editing.add().pending)
+        assertNull(editing.confirm().confirmedCount)
+        assertEquals(partialDraft, blocked.cancelEdit().active)
     }
 
     @Test fun `deletion requires confirmation and preserves identity of other entries`() {
@@ -115,7 +131,7 @@ class QuickEntryStateTest {
     }
 
     @Test fun `deleting edited item discards only that edit and restores capture`() {
-        val original = queued().update(draft).add()
+        val original = queued().update(draft).add().update(partialDraft)
         val id = original.pending.first().id
         val deleted = original.edit(id).update(draft.copy(amount = "99")).requestDelete(id).deleteRequested()
         assertEquals(listOf(original.pending.last()), deleted.pending)
@@ -155,10 +171,14 @@ class QuickEntryStateTest {
     }
 
     @Test fun `saveable state round trip preserves queue active edit and identities`() {
-        val initial = queued().let { it.edit(it.pending.single().id) }.update(draft.copy(detail = "Cambio"))
+        val initial = queued().update(partialDraft).let { it.edit(it.pending.single().id) }
+            .update(draft.copy(detail = "Cambio")).requestExit()
         val bytes = ByteArrayOutputStream().also { output -> ObjectOutputStream(output).use { it.writeObject(initial) } }.toByteArray()
         val restored = ObjectInputStream(ByteArrayInputStream(bytes)).use { it.readObject() as QuickEntryState }
         assertEquals(initial, restored)
-        assertEquals(initial.pending, restored.cancelEdit().pending)
+        val continued = restored.copy(exitRequested = false)
+        assertEquals(initial.pending, continued.cancelEdit().pending)
+        assertEquals(partialDraft, continued.cancelEdit().active)
+        assertEquals(partialDraft, continued.saveEdit().active)
     }
 }
