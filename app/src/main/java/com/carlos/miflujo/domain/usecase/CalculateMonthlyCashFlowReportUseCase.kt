@@ -14,18 +14,22 @@ class CalculateMonthlyCashFlowReportUseCase {
 
     operator fun invoke(
         movements: List<Movement>,
-        month: YearMonth
+        month: YearMonth,
+        uncategorizedMovementUuids: Set<String> = emptySet(),
     ): MonthlyCashFlowReport {
         val monthlyMovements = movements.filter { YearMonth.from(it.date) == month }
 
         return MonthlyCashFlowReport(
             month = month,
-            cordoba = monthlyMovements.summaryFor(Currency.CORDOBA),
-            dollar = monthlyMovements.summaryFor(Currency.DOLLAR)
+            cordoba = monthlyMovements.summaryFor(Currency.CORDOBA, uncategorizedMovementUuids),
+            dollar = monthlyMovements.summaryFor(Currency.DOLLAR, uncategorizedMovementUuids),
         )
     }
 
-    private fun List<Movement>.summaryFor(currency: Currency): CurrencySummary {
+    private fun List<Movement>.summaryFor(
+        currency: Currency,
+        uncategorizedMovementUuids: Set<String>,
+    ): CurrencySummary {
         val currencyMovements = filter { it.currency == currency }
         val incomeMinor = currencyMovements
             .filter { it.type == MovementType.INCOME }
@@ -37,19 +41,24 @@ class CalculateMonthlyCashFlowReportUseCase {
             currency = currency,
             totalIncomeMinor = incomeMinor,
             totalExpenseMinor = expenseMinor,
-            expenseBreakdown = expenseMovements.toExpenseBreakdown()
+            expenseBreakdown = expenseMovements.toExpenseBreakdown(uncategorizedMovementUuids)
         )
     }
 
-    private fun List<Movement>.toExpenseBreakdown(): ExpenseBreakdown {
+    private fun List<Movement>.toExpenseBreakdown(uncategorizedMovementUuids: Set<String>): ExpenseBreakdown {
         var fixedCostMinor = 0L
         var maintenanceMinor = 0L
         var otherMinor = 0L
+        var uncategorizedMinor = 0L
         var waterMinor = 0L
         var electricityMinor = 0L
         var internetMinor = 0L
 
         for (movement in this) {
+            if (movement.uuid in uncategorizedMovementUuids) {
+                uncategorizedMinor += movement.amountMinor
+                continue
+            }
             when (movement.category) {
                 MovementCategory.FIXED_COST -> {
                     fixedCostMinor += movement.amountMinor
@@ -73,7 +82,8 @@ class CalculateMonthlyCashFlowReportUseCase {
             otherMinor = otherMinor,
             waterMinor = waterMinor,
             electricityMinor = electricityMinor,
-            internetMinor = internetMinor
+            internetMinor = internetMinor,
+            uncategorizedMinor = uncategorizedMinor,
         )
     }
 }

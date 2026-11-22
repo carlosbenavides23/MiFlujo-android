@@ -37,11 +37,7 @@ internal fun CatalogPreviewMovementDialog(
                 )
             },
             validate = { draft ->
-                when {
-                    (parseAmountMinorOrNull(draft.amount) ?: 0) <= 0 -> "Ingresá un monto positivo válido."
-                    draft.type == MovementType.EXPENSE && draft.catalogCategoryUuid == null -> "Elegí una categoría."
-                    else -> null
-                }
+                if ((parseAmountMinorOrNull(draft.amount) ?: 0) <= 0) "Ingresá un monto positivo válido." else null
             },
             categoryLabel = { byUuid[it]?.visibleName() ?: "Sin categoría" },
             categoryIcon = { uuid, modifier, background ->

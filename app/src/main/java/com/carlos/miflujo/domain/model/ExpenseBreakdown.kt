@@ -6,5 +6,6 @@ data class ExpenseBreakdown(
     val otherMinor: Long = 0,
     val waterMinor: Long = 0,
     val electricityMinor: Long = 0,
-    val internetMinor: Long = 0
+    val internetMinor: Long = 0,
+    val uncategorizedMinor: Long = 0,
 )

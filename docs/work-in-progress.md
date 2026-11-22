@@ -652,3 +652,16 @@ El PDF anterior pasó el verificador final. El raster de Poppler confirma el pun
   `catalogPreview`. La actualización por ADB en el POCO X7 Pro conservó la
   base experimental y los metadatos de producción. Queda pendiente la revisión
   visual directa en claro y oscuro.
+
+### Categoría opcional en Quick Entry
+
+- [La vista integrada](customizable-categories.md#vista-integrada-del-catálogo)
+  acepta ingresos y egresos sin categoría en el borrador, la cola y la edición.
+  La referencia nula se guarda con el esquema Room existente y los importes
+  siguen contando en los totales. El desglose muestra los egresos sin clasificar
+  en **Sin categoría**.
+- Pasaron 20 pruebas JVM de Quick Entry y cálculo mensual y dos recorridos
+  Compose en el POCO X7 Pro. Cubrieron el lote mixto, la edición con y sin
+  asignación de categoría, los totales y el historial archivado. Pasaron
+  `git diff --check` y la compilación de `catalogPreview`. El APK normal se
+  actualizó con `adb install -r` y conservó la base experimental.

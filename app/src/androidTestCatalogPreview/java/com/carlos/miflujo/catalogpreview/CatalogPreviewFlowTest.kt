@@ -124,6 +124,96 @@ class CatalogPreviewFlowTest {
     }
 
     @Test
+    fun savesMixedQueueReportsUncategorizedAmountsAndAssignsCategoryLater() {
+        val category = withSession { session ->
+            session.categories.createCategory(Category(
+                name = "Compras de prueba", scope = CategoryScope.BOTH, reportGroup = ReportGroup.OTHER,
+            )).value
+        }
+        launch()
+        waitFor("+ Agregar").performClick()
+        val amount = compose.onNodeWithContentDescription("Monto")
+        val detail = compose.onNodeWithContentDescription("Detalle (opcional)")
+        val categoryOption = hasText(category.name) and hasClickAction() and
+            hasAnyAncestor(hasTestTag("category-picker-list"))
+
+        compose.onNodeWithContentDescription("Egreso, cambiar a ingreso").performClick()
+        amount.performTextInput("100")
+        detail.performTextInput("Ingreso libre")
+        waitFor("Agregar otro").performClick()
+
+        compose.onNodeWithContentDescription("Ingreso, cambiar a egreso").performClick()
+        amount.performTextInput("25")
+        detail.performTextInput("Egreso libre")
+        waitFor("Agregar otro").performClick()
+        assertTrue(withSession { it.snapshot().movements.isEmpty() })
+
+        amount.performTextInput("10")
+        detail.performTextInput("Egreso clasificado")
+        categoryControl("Categoría").performTouchInput { click() }
+        waitFor(categoryOption).performClick()
+        waitFor("Confirmar").performClick()
+        compose.waitUntil(8_000) {
+            compose.onAllNodesWithText("Registro con cápsulas").fetchSemanticsNodes().isEmpty()
+        }
+
+        val original = withSession { session ->
+            val saved = session.snapshot()
+            val income = saved.movements.single { it.detail == "Ingreso libre" }
+            val expense = saved.movements.single { it.detail == "Egreso libre" }
+            assertEquals(3, saved.movements.size)
+            assertEquals(MovementType.INCOME, income.type)
+            assertNull(income.categoryUuid)
+            assertEquals(MovementType.EXPENSE, expense.type)
+            assertNull(expense.categoryUuid)
+            assertEquals(category.uuid, saved.movements.single { it.detail == "Egreso clasificado" }.categoryUuid)
+            assertFalse(saved.categories.any { it.name == "Sin categoría" })
+            expense
+        }
+
+        waitFor(hasText("Reporte") and hasClickAction()).performClick()
+        waitFor("+ C\$ 100.00")
+        waitFor("- C\$ 35.00")
+        waitFor("+ C\$ 65.00")
+        waitFor(hasText("Sin categoría") and hasAnySibling(hasText("C\$ 25.00")))
+            .performScrollTo().assertIsDisplayed()
+        waitFor(hasText("Otros") and hasAnySibling(hasText("C\$ 10.00")))
+        waitFor(hasText("· Sin categoría", substring = true) and hasText("Egreso", substring = true))
+            .performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("null", ignoreCase = true).assertDoesNotExist()
+
+        openMovement("Egreso libre")
+        dialogButton("Sin categoría").assertIsDisplayed()
+        waitFor("Editar").performClick()
+        categoryControl("Categoría").assertExists()
+        detail.performTextReplacement("Egreso libre editado")
+        waitFor("Guardar cambios").performClick()
+        compose.waitUntil(8_000) {
+            compose.onAllNodesWithText("Editar movimiento").fetchSemanticsNodes().isEmpty()
+        }
+        waitFor("Egreso libre editado")
+        withSession { session ->
+            val edited = checkNotNull(session.movements.find(original.uuid))
+            assertEquals("Egreso libre editado", edited.draft.detail)
+            assertNull(edited.draft.selection.categoryUuid)
+        }
+
+        openMovement("Egreso libre editado")
+        waitFor("Editar").performClick()
+        categoryControl("Categoría").performTouchInput { click() }
+        waitFor(categoryOption).performClick()
+        waitFor("Guardar cambios").performClick()
+        compose.waitUntil(8_000) {
+            compose.onAllNodesWithText("Editar movimiento").fetchSemanticsNodes().isEmpty()
+        }
+        withSession { session ->
+            val edited = checkNotNull(session.movements.find(original.uuid))
+            assertEquals(category.uuid, edited.draft.selection.categoryUuid)
+            assertEquals(2500L, edited.draft.amountMinor)
+        }
+    }
+
+    @Test
     fun restoresSuspendedDraftAfterRecreationCancelAndSave() {
         withSession { session ->
             for (name in listOf("Servicios de prueba", "Materiales de prueba")) {

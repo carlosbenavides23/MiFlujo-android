@@ -86,6 +86,9 @@ internal fun CatalogPreviewApp(model: CatalogPreviewModel) {
     val labels = remember(snapshot, categories) {
         snapshot?.movements.orEmpty().associate { it.uuid to (categories[it.categoryUuid]?.visibleName() ?: "Sin categoría") }
     }
+    val uncategorizedMovementUuids = remember(snapshot) {
+        snapshot?.movements.orEmpty().filter { it.categoryUuid == null }.mapTo(mutableSetOf()) { it.uuid }
+    }
     val currentMonth = YearMonth.now()
     val calculate = remember { CalculateMonthlyCashFlowReportUseCase() }
 
@@ -120,7 +123,7 @@ internal fun CatalogPreviewApp(model: CatalogPreviewModel) {
             MainDestination.Home -> HomeScreen(
                 HomeUiState(
                     currentMonth,
-                    calculate(movements, currentMonth),
+                    calculate(movements, currentMonth, uncategorizedMovementUuids),
                     movements.filter { YearMonth.from(it.date) == currentMonth }.take(3),
                 ),
                 CloudSyncHomeIndicatorState.Hidden, categoryLabels = labels,
@@ -153,7 +156,7 @@ internal fun CatalogPreviewApp(model: CatalogPreviewModel) {
                 onOpenEditor = { editUuid = it.uuid },
             )
             MainDestination.Report -> ReportScreen(
-                ReportUiState(reportMonth, calculate(movements, reportMonth),
+                ReportUiState(reportMonth, calculate(movements, reportMonth, uncategorizedMovementUuids),
                     movements.filter { YearMonth.from(it.date) == reportMonth }),
                 onPreviousMonth = { reportMonth = reportMonth.minusMonths(1) },
                 onNextMonth = { reportMonth = reportMonth.plusMonths(1) },

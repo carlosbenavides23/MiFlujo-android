@@ -807,11 +807,12 @@ contable conserva la fecha original de registro.
 **+ Agregar** abre la cápsula. **Agregar otro** mantiene una cola provisional
 y **Confirmar** guarda el lote en una transacción. El editor persistido se abre
 desde **Movimientos → Detalle del movimiento → Editar**. Si se mantiene la categoría
-original, conserva la referencia histórica. Las altas de egresos requieren una
-categoría, los ingresos pueden quedar sin categoría y se prescinde de subcategorías
-en la interfaz. El historial y la búsqueda muestran el nombre guardado de la
-categoría. En el Reporte, las categorías nuevas cuentan como ingreso cuando el
-movimiento es ingreso, y como **Otros** cuando es egreso. Las categorías de ámbito
+original, conserva la referencia histórica. La categoría es opcional para ingresos
+y egresos. El movimiento sin categoría conserva una referencia nula y se le puede
+asignar una categoría al editar. El historial y la búsqueda muestran el nombre de
+la categoría o **Sin categoría**. El Reporte incluye esos movimientos en los
+totales y muestra los egresos sin clasificar en **Sin categoría**. Las categorías
+nuevas cuentan como **Otros** cuando el movimiento es un egreso. Las categorías de ámbito
 limitado de versiones anteriores mantienen su disponibilidad y su grupo original.
 
 La instalación normal de prueba usa `com.carlos.miflujo.catalogpreview` y la

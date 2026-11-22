@@ -326,6 +326,12 @@ private fun ExpenseDetailCurrencySection(
                 label = "Otros",
                 value = breakdown.otherMinor.formatVisibleMoney(currencySymbol),
             )
+            if (breakdown.uncategorizedMinor != 0L) {
+                BreakdownLine(
+                    label = "Sin categoría",
+                    value = breakdown.uncategorizedMinor.formatVisibleMoney(currencySymbol),
+                )
+            }
         }
         if (showSubcategories) {
             HorizontalDivider()
@@ -574,6 +580,7 @@ private fun ExpenseBreakdown.isZero(): Boolean {
     return fixedCostMinor == 0L &&
         maintenanceMinor == 0L &&
         otherMinor == 0L &&
+        uncategorizedMinor == 0L &&
         waterMinor == 0L &&
         electricityMinor == 0L &&
         internetMinor == 0L
