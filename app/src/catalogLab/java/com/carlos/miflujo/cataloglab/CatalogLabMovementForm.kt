@@ -43,12 +43,9 @@ internal fun CatalogLabMovementForm(
     var entry by rememberSaveable { mutableStateOf(CatalogMovementEntry.from(previous)) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     var creatingCategory by rememberSaveable { mutableStateOf(false) }
-    val (type, currency, amount, date, detail, categoryUuid, subcategoryUuid) = entry
-    val selection = CatalogMovementSelection(categoryUuid, subcategoryUuid)
-    val parent = catalog.categories.firstOrNull { it.uuid == selection.categoryUuid }
-    val child = catalog.subcategories.firstOrNull { it.uuid == selection.subcategoryUuid }
-    val parents = catalog.categories.filter { !it.archived && it.scope.supports(type) }
-    val children = catalog.subcategories.filter { it.categoryUuid == parent?.uuid && !it.archived }
+    val (type, currency, amount, date, detail, categoryUuid) = entry
+    val category = catalog.categories.firstOrNull { it.uuid == categoryUuid }
+    val categories = catalog.categories.filter { !it.archived && it.scope.supports(type) }
 
     Dialog(onDismissRequest = { if (!saving) onDismiss() }) {
         Surface(shape = MaterialTheme.shapes.large) {
@@ -73,26 +70,12 @@ internal fun CatalogLabMovementForm(
                 }
                 OutlinedTextField(date, { entry = entry.copy(date = it) }, label = { Text("Fecha (AAAA-MM-DD)") }, singleLine = true)
                 CatalogMenu(
-                    label = parent?.let { if (it.archived) "${it.name} (archivada)" else it.name } ?: "Sin categoría",
-                    icon = parent?.iconKey, emptyLabel = "Sin categoría", iconColor = parent?.iconColor,
-                    options = parents.map { CatalogMenuItem(it.uuid, it.name, it.iconKey, it.iconColor) },
+                    label = category?.let { if (it.archived) "${it.name} (archivada)" else it.name } ?: "Sin categoría",
+                    icon = category?.iconKey, iconColor = category?.iconColor,
+                    options = categories.map { CatalogMenuItem(it.uuid, it.name, it.iconKey, it.iconColor) },
                     select = { entry = entry.selectCategory(it) },
                     onCreate = { creatingCategory = true },
                 )
-                if (parent != null && !parent.archived) {
-                    CatalogMenu(
-                        child?.let { if (it.archived) "${it.name} (archivada)" else it.name } ?: "Sin subcategoría",
-                        child?.iconKey, "Sin subcategoría", children.map { CatalogMenuItem(it.uuid, it.name, it.iconKey, it.iconColor) },
-                        { entry = entry.copy(subcategoryUuid = it) },
-                        iconColor = child?.iconColor,
-                    )
-                } else if (child != null) {
-                    Row {
-                        CatalogIcon(child.iconKey, color = child.iconColor)
-                        Spacer(Modifier.width(8.dp))
-                        Text(child.name)
-                    }
-                }
                 OutlinedTextField(detail, { entry = entry.copy(detail = it) }, label = { Text("Detalle") })
                 (error ?: saveError)?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
@@ -108,7 +91,7 @@ internal fun CatalogLabMovementForm(
                         if (minor != null && day != null) {
                             val savedDetail = if (previous != null && detail == previous.detail.orEmpty()) previous.detail
                             else detail.takeIf { it.isNotBlank() }
-                            onSave(CatalogMovementDraft(type, minor, currency, day, selection, savedDetail))
+                            onSave(CatalogMovementDraft(type, minor, currency, day, entry.selectionFor(previous?.selection), savedDetail))
                         }
                     }) { Text("Guardar") }
                 }
@@ -135,10 +118,9 @@ private data class CatalogMenuItem(val uuid: String, val name: String, val icon:
 private fun CatalogMenu(
     label: String,
     icon: String?,
-    emptyLabel: String,
     options: List<CatalogMenuItem>,
     select: (String?) -> Unit,
-    onCreate: (() -> Unit)? = null,
+    onCreate: () -> Unit,
     iconColor: CatalogIconColor? = null,
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -149,8 +131,8 @@ private fun CatalogMenu(
             Text(label)
         }
         DropdownMenu(expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(text = { Text(emptyLabel) }, onClick = { expanded = false; select(null) })
-            if (onCreate != null) DropdownMenuItem(
+            DropdownMenuItem(text = { Text("Sin categoría") }, onClick = { expanded = false; select(null) })
+            DropdownMenuItem(
                 text = { Text("Crear nueva categoría") }, onClick = { expanded = false; onCreate() },
             )
             options.forEach { option ->
@@ -169,10 +151,12 @@ internal data class CatalogMovementEntry(
     val date: String,
     val detail: String,
     val categoryUuid: String?,
-    val subcategoryUuid: String?,
 ) : Serializable {
     fun selectCategory(uuid: String?): CatalogMovementEntry =
-        if (uuid == categoryUuid) this else copy(categoryUuid = uuid, subcategoryUuid = null)
+        copy(categoryUuid = uuid)
+
+    fun selectionFor(previous: CatalogMovementSelection?): CatalogMovementSelection =
+        previous?.takeIf { it.categoryUuid == categoryUuid } ?: CatalogMovementSelection(categoryUuid)
 
     companion object {
         fun from(draft: CatalogMovementDraft?) = CatalogMovementEntry(
@@ -182,7 +166,6 @@ internal data class CatalogMovementEntry(
             date = (draft?.date ?: LocalDate.now()).toString(),
             detail = draft?.detail.orEmpty(),
             categoryUuid = draft?.selection?.categoryUuid,
-            subcategoryUuid = draft?.selection?.subcategoryUuid,
         )
     }
 }

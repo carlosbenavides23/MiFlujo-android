@@ -111,7 +111,13 @@ internal fun CatalogLabScreen(model: CatalogLabModel) {
 
     val data = snapshot
     val reportResult = remember(data, month, reportTab) {
-        if (reportTab && data != null) runCatching { session.report(data, month) } else null
+        if (reportTab && data != null) runCatching {
+            val reportData = data.copy(
+                subcategories = emptyList(),
+                movements = data.movements.map { it.copy(subcategoryUuid = null) },
+            )
+            session.report(reportData, month)
+        } else null
     }
     val report = reportResult?.getOrNull()
     val controlsEnabled = !busy && export == null && pdf == null
@@ -128,7 +134,7 @@ internal fun CatalogLabScreen(model: CatalogLabModel) {
                 Column(Modifier.padding(padding).padding(16.dp)) {
                     TextButton(onClick = { settings = false }) { Text("Volver") }
                     Text("Configuración", style = MaterialTheme.typography.headlineSmall)
-                    TextButton(onClick = { manageCatalog = true }) { Text("Categorías y subcategorías") }
+                    TextButton(onClick = { manageCatalog = true }) { Text("Categorías") }
                 }
             }
             else -> LazyColumn(
@@ -195,34 +201,24 @@ internal fun CatalogLabScreen(model: CatalogLabModel) {
 
             if (!reportTab && data != null) {
                 item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Button(enabled = controlsEnabled, onClick = {
-                            model.editingMovement = null
-                            editingUuid = null
-                            formOwner = session.accountUid
-                            formOpen = true
-                        }) { Text("Nuevo") }
-                        TextButton(enabled = controlsEnabled, onClick = { perform {
-                            session.addExampleCatalog()
-                            refresh()
-                        } }) { Text("Agregar categoría de prueba") }
-                    }
+                    Button(enabled = controlsEnabled, onClick = {
+                        model.editingMovement = null
+                        editingUuid = null
+                        formOwner = session.accountUid
+                        formOpen = true
+                    }) { Text("Nuevo") }
                     if (data.movements.isEmpty()) Text("Sin movimientos.")
                 }
                 items(data.movements.sortedByDescending { it.date }, key = { it.uuid }) { row ->
                     val category = data.categories.firstOrNull { it.uuid == row.categoryUuid }
-                    val child = data.subcategories.firstOrNull { it.uuid == row.subcategoryUuid }
                     ListItem(
                         headlineContent = { Text(row.amountMinor.formatVisibleMoney(row.currency.reportSymbol())) },
                         supportingContent = { Text(listOfNotNull(
                             row.date.toString(), if (row.type == MovementType.INCOME) "Ingreso" else "Egreso",
-                            category?.name ?: "Sin categoría", child?.name, row.detail,
+                            category?.name ?: "Sin categoría", row.detail,
                         ).joinToString(" · ")) },
                         leadingContent = if (category != null) ({
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                CatalogIcon(category.iconKey, color = category.iconColor)
-                                if (child != null) CatalogIcon(child.iconKey, color = child.iconColor)
-                            }
+                            CatalogIcon(category.iconKey, color = category.iconColor)
                         }) else null,
                         trailingContent = {
                             Column {

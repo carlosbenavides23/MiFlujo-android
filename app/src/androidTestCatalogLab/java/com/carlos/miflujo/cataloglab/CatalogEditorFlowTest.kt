@@ -1,6 +1,8 @@
 package com.carlos.miflujo.cataloglab
 
 import android.app.Application
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -15,9 +17,12 @@ import com.carlos.miflujo.domain.category.CatalogIconColor
 import com.carlos.miflujo.domain.category.CategoryScope
 import com.carlos.miflujo.domain.category.ReportGroup
 import com.carlos.miflujo.domain.category.Subcategory
+import com.carlos.miflujo.domain.model.CatalogMovementDraft
+import com.carlos.miflujo.domain.model.CatalogMovementSelection
 import com.carlos.miflujo.domain.model.Currency
 import com.carlos.miflujo.domain.model.MovementType
 import java.time.LocalDate
+import java.util.UUID
 import com.carlos.miflujo.ui.backup.CatalogBackupJson
 import com.carlos.miflujo.ui.theme.MiFlujoTheme
 import kotlinx.coroutines.runBlocking
@@ -32,20 +37,31 @@ import org.junit.runner.RunWith
 class CatalogEditorFlowTest {
     @get:Rule val compose = createComposeRule()
     private lateinit var db: CatalogMovementDatabase
-    private lateinit var model: CatalogLabModel
+    private lateinit var app: Application
+    private val databaseName = "catalog-editor-test-${UUID.randomUUID()}.db"
+    private val currentModel = mutableStateOf<CatalogLabModel?>(null)
+    private val model get() = checkNotNull(currentModel.value)
     private val restoration = StateRestorationTester(compose)
 
     @Before
     fun setup() {
-        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as Application
+        app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as Application
         check(app.packageName == "com.carlos.miflujo.cataloglab.uitest")
-        db = Room.inMemoryDatabaseBuilder(app, CatalogMovementDatabase::class.java)
-            .addCallback(CatalogMovementDatabase.initializer).build()
-        model = CatalogLabModel(app, db)
-        restoration.setContent { MiFlujoTheme { CatalogLabScreen(model) } }
+        openDatabase()
+        restoration.setContent { MiFlujoTheme { key(model) { CatalogLabScreen(model) } } }
     }
 
-    @After fun close() { db.close() }
+    private fun openDatabase() {
+        db = Room.databaseBuilder(app, CatalogMovementDatabase::class.java, databaseName)
+            .addCallback(CatalogMovementDatabase.initializer).build()
+        currentModel.value = CatalogLabModel(app, db)
+    }
+
+    @After
+    fun close() {
+        db.close()
+        app.deleteDatabase(databaseName)
+    }
 
     @Test
     fun createsCategoryFromMovementAndPreservesDraft() {
@@ -69,6 +85,7 @@ class CatalogEditorFlowTest {
         compose.onNodeWithContentDescription("Violeta").performScrollTo().assertIsSelected()
         saveForm("Guardar categoría")
         waitFor("Trabajo")
+        assertSingleLevel()
         waitFor("Guardar").performClick()
         waitFor("US$ 123.45")
         val snapshot = runBlocking { model.session.snapshot() }
@@ -78,6 +95,7 @@ class CatalogEditorFlowTest {
         assertEquals(CatalogIconColor.VIOLET, category.iconColor)
         assertEquals(ReportGroup.OTHER, category.reportGroup)
         assertEquals(category.uuid, movement.categoryUuid)
+        assertNull(movement.subcategoryUuid)
         assertEquals(12345L, movement.amountMinor)
         assertEquals(Currency.DOLLAR, movement.currency)
         assertEquals("Pago de prueba", movement.detail)
@@ -94,28 +112,31 @@ class CatalogEditorFlowTest {
             assertEquals(category.iconColor, decoded.iconColor)
             assertEquals(category.uuid, model.session.snapshot().movements.single().categoryUuid)
         }
+
+        waitForEnabled("Nuevo").performClick()
+        compose.onNodeWithContentDescription("Monto").performTextInput("2")
+        compose.onNodeWithText("Sin categoría").performClick()
+        waitFor("Trabajo").performClick()
+        assertSingleLevel()
+        saveForm("Guardar")
+        waitFor("C$ 2.00")
+        val next = runBlocking { model.session.snapshot() }.movements.single { it.uuid != movement.uuid }
+        assertEquals(category.uuid, next.categoryUuid)
+        assertNull(next.subcategoryUuid)
     }
 
     @Test
-    fun managesCategoryAndSubcategoryIncludingArchiveAndRestore() {
+    fun managesCategoryIncludingArchiveAndRestore() {
         waitFor("Configuración").performClick()
-        compose.onNodeWithText("Categorías y subcategorías").performClick()
+        compose.onNodeWithText("Categorías").performClick()
         waitFor("Nueva categoría").performClick()
         saveCategoryWithIcon("Trabajo", "hogar", "Casa")
         waitFor("Trabajo").performClick()
-        waitFor("Nueva subcategoría").performClick()
-        field("Nombre").performTextInput("Servicios")
-        selectColor("Menta")
-        saveForm("Guardar subcategoría")
-        waitFor("Servicios")
-        val old = runBlocking { model.session.snapshot() }
-        val category = old.categories.single { it.name == "Trabajo" }
-        val child = old.subcategories.single { it.name == "Servicios" }
-        assertEquals(category.uuid, child.categoryUuid)
+        assertSingleLevel()
+        val category = runBlocking { model.session.snapshot() }.categories.single { it.name == "Trabajo" }
         assertEquals(CatalogIconColor.MINT, category.iconColor)
-        assertEquals(category.iconColor, child.iconColor)
 
-        compose.onAllNodesWithText("Editar")[0].performClick()
+        waitFor("Editar").performClick()
         colorSection("Menta", expanded = false).performScrollTo().performClick()
         compose.onNodeWithContentDescription("Menta").performScrollTo().assertIsSelected()
         selectColor("Azul")
@@ -124,26 +145,13 @@ class CatalogEditorFlowTest {
         compose.onNodeWithContentDescription("Azul").performScrollTo().assertIsSelected()
         saveForm("Guardar categoría")
         waitFor("Trabajo remoto")
-        compose.onAllNodesWithText("Editar")[1].performClick()
-        colorSection("Menta", expanded = false).performScrollTo().performClick()
-        compose.onNodeWithContentDescription("Menta").performScrollTo().assertIsSelected()
+        waitFor("Editar").performClick()
+        colorSection("Azul", expanded = false).performScrollTo().performClick()
         compose.onNodeWithText("Usar color predeterminado").performScrollTo().performClick().assertIsSelected()
         colorSection("Predeterminado", expanded = true).assertExists()
-        field("Nombre").performScrollTo().performTextReplacement("Conexión")
-        chooseIcon("internet", "Internet")
-        saveForm("Guardar subcategoría")
-        waitFor("Conexión")
+        saveForm("Guardar categoría")
 
-        compose.onAllNodesWithText("Archivar")[1].performClick()
-        compose.onAllNodesWithText("Archivar").filter(hasAnyAncestor(isDialog())).onFirst().performClick()
-        waitForEnabled("Archivadas").performClick()
-        waitFor("Conexión")
-        compose.onNodeWithText("Restaurar").performClick()
-        compose.onAllNodesWithText("Restaurar").filter(hasAnyAncestor(isDialog())).onFirst().performClick()
-        waitForEnabled("Activas").performClick()
-        waitFor("Conexión")
-
-        compose.onAllNodesWithText("Archivar")[0].performClick()
+        waitForEnabled("Archivar").performClick()
         compose.onAllNodesWithText("Archivar").filter(hasAnyAncestor(isDialog())).onFirst().performClick()
         waitForEnabled("Archivadas").performClick()
         waitFor("Trabajo remoto (archivada)")
@@ -152,14 +160,9 @@ class CatalogEditorFlowTest {
         waitForEnabled("Activas").performClick()
         waitFor("Trabajo remoto")
         val current = runBlocking { model.session.snapshot() }
-        assertEquals(category.copy(name = "Trabajo remoto", iconKey = "directions_car", iconColor = CatalogIconColor.BLUE, revision = current.categories.single { it.uuid == category.uuid }.revision),
-            current.categories.single { it.uuid == category.uuid })
-        val updated = current.subcategories.single { it.uuid == child.uuid }
-        assertEquals("Conexión", updated.name)
-        assertEquals("internet", updated.iconKey)
-        assertNull(updated.iconColor)
-        assertEquals(category.uuid, updated.categoryUuid)
-        assertFalse(updated.archived)
+        val updated = current.categories.single { it.uuid == category.uuid }
+        assertEquals(category.copy(name = "Trabajo remoto", iconKey = "directions_car",
+            iconColor = null, revision = updated.revision), updated)
     }
 
     @Test
@@ -171,7 +174,7 @@ class CatalogEditorFlowTest {
         }
         compose.onNodeWithText("Actualizar").performClick()
         waitFor("Configuración").performClick()
-        compose.onNodeWithText("Categorías y subcategorías").performClick()
+        compose.onNodeWithText("Categorías").performClick()
         waitFor("Reparaciones").performClick()
         waitFor("Editar").performClick()
         compose.onNodeWithText("Grupo del reporte", substring = true).assertDoesNotExist()
@@ -195,57 +198,63 @@ class CatalogEditorFlowTest {
     }
 
     @Test
-    fun selectsChildAndKeepsArchivedClassificationDuringHistoricalEdit() {
-        val (cat, child) = runBlocking {
+    fun editsHistoricalMovementAndReopensItsCategoryOnlyHistoryAndReport() {
+        val before = runBlocking {
             val repo = model.session.categories
-            val cat = repo.createCategory(Category(
+            val category = repo.createCategory(Category(
                 name = "Gastos varios", scope = CategoryScope.EXPENSE, reportGroup = ReportGroup.OTHER,
                 iconKey = "home", iconColor = CatalogIconColor.ORANGE,
             ))
-            val child = repo.createSubcategory(Subcategory(categoryId = cat.value.id, name = "Gasolina", iconKey = "directions_car", iconColor = CatalogIconColor.ORANGE))
-            repo.createCategory(Category(
-                name = cat.value.name, scope = CategoryScope.INCOME, reportGroup = ReportGroup.INCOME,
+            val child = repo.createSubcategory(Subcategory(
+                categoryId = category.value.id, name = "Gasolina",
+                iconKey = "directions_car", iconColor = CatalogIconColor.ORANGE,
             ))
-            cat to child
-        }
-        compose.onNodeWithText("Actualizar").performClick()
-        waitFor("Nuevo").performClick()
-        compose.onNodeWithContentDescription("Monto").performTextInput("5.12")
-        compose.onNodeWithText("Sin categoría").performClick()
-        compose.onNodeWithText("Gastos varios").performClick()
-        compose.onNodeWithText("Sin subcategoría").performClick()
-        compose.onNodeWithText("Gasolina").performClick()
-        compose.onNodeWithText("Guardar").performClick()
-        waitFor("C$ 5.12")
-        runBlocking {
-            val repo = model.session.categories
+            model.session.movements.create(CatalogMovementDraft(
+                MovementType.EXPENSE, 512, Currency.CORDOBA, LocalDate.now(),
+                CatalogMovementSelection(category.value.uuid, child.value.uuid),
+            ))
             repo.updateSubcategory(child.value.edited(archived = true), child.revision)
-            repo.updateCategory(cat.value.edited(archived = true), cat.revision)
+            repo.updateCategory(category.value.edited(archived = true), category.revision)
+            model.session.snapshot()
         }
         compose.onNodeWithText("Actualizar").performClick()
         waitFor("Editar").performClick()
         waitFor("Gastos varios (archivada)")
-        waitFor("Gasolina")
+        assertSingleLevel()
         field("Detalle").performTextInput("Recibo histórico")
-        compose.onNodeWithText("Guardar").performClick()
+        saveForm("Guardar")
+        waitFor("Recibo histórico", substring = true)
+
+        compose.runOnIdle {
+            db.close()
+            openDatabase()
+        }
         waitFor("C$ 5.12")
-        val snapshot = runBlocking { model.session.snapshot() }
-        val movement = snapshot.movements.single()
-        assertEquals(cat.value.uuid, movement.categoryUuid)
-        assertEquals(child.value.uuid, movement.subcategoryUuid)
-        assertEquals("Recibo histórico", movement.detail)
-        assertEquals(CatalogIconColor.ORANGE, snapshot.categories.single { it.uuid == cat.value.uuid }.iconColor)
-        assertEquals(CatalogIconColor.ORANGE, snapshot.subcategories.single { it.uuid == child.value.uuid }.iconColor)
-        val report = model.session.report(snapshot, java.time.YearMonth.from(movement.date))
-        assertEquals(512L, report.cordoba.totalExpenseMinor)
-        assertEquals(0L, report.dollar.totalExpenseMinor)
+        compose.onNodeWithText("Gastos varios", substring = true).assertExists()
+        compose.onNodeWithText("Recibo histórico", substring = true).assertExists()
+        assertSingleLevel()
+        val reopened = runBlocking { CatalogBackupJson.parse(model.session.exportJson()) }
+        assertEquals(before.categories, reopened.categories)
+        assertEquals(before.subcategories, reopened.subcategories)
+        val movement = reopened.movements.single()
+        assertEquals(before.movements.single().copy(detail = "Recibo histórico", updatedAt = movement.updatedAt), movement)
+
+        compose.onNodeWithText("Reporte mensual").performClick()
+        compose.onNodeWithText("Egresos C$ 5.12").assertExists()
+        compose.onNodeWithText("Gastos varios (archivada)").assertExists()
+        assertSingleLevel()
+    }
+
+    private fun assertSingleLevel() {
+        compose.onNode(hasText("subcategoría", substring = true, ignoreCase = true)).assertDoesNotExist()
+        compose.onNodeWithText("Gasolina", substring = true).assertDoesNotExist()
     }
 
     private fun field(label: String) = compose.onNode(hasText(label) and hasSetTextAction())
 
-    private fun waitFor(text: String): SemanticsNodeInteraction {
-        compose.waitUntil(8_000) { compose.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty() }
-        return compose.onNodeWithText(text)
+    private fun waitFor(text: String, substring: Boolean = false): SemanticsNodeInteraction {
+        compose.waitUntil(8_000) { compose.onAllNodesWithText(text, substring = substring).fetchSemanticsNodes().isNotEmpty() }
+        return compose.onNodeWithText(text, substring = substring)
     }
 
     private fun waitForEnabled(text: String): SemanticsNodeInteraction {

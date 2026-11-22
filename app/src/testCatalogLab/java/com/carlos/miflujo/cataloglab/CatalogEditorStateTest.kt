@@ -36,7 +36,7 @@ class CatalogEditorStateTest {
     }
 
     @Test
-    fun contextualSelectionChangesOnlyClassificationAndClearsOldChild() {
+    fun retainsHistoricalSelectionOnlyWhenSavingTheOriginalCategory() {
         val old = "180312b9-407e-417d-8e13-911bef27eca0"
         val new = "540a53f2-caed-4c3d-963e-072f5a26046e"
         val child = "fffa35d3-c9fd-41d6-ba9f-e455d3a8145a"
@@ -48,8 +48,11 @@ class CatalogEditorStateTest {
         assertEquals("123.45", entry.amount)
         assertEquals("2026-11-21", entry.date)
         assertEquals("Recibo", entry.detail)
-        assertEquals(entry, entry.selectCategory(old))
-        assertEquals(entry.copy(categoryUuid = new, subcategoryUuid = null), entry.selectCategory(new))
+        assertEquals(draft.selection, entry.selectionFor(draft.selection))
+        assertEquals(CatalogMovementSelection(new), entry.selectCategory(new).selectionFor(draft.selection))
+        assertEquals(CatalogMovementSelection(), entry.selectCategory(null).selectionFor(draft.selection))
+        assertEquals(draft.selection, entry.selectCategory(new).selectCategory(old).selectionFor(draft.selection))
+        assertEquals(CatalogMovementSelection(old), CatalogMovementEntry.from(null).selectCategory(old).selectionFor(null))
     }
 
     @Test

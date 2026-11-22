@@ -491,7 +491,7 @@ El PDF anterior pasó el verificador final. El raster de Poppler confirma el pun
 ## Editor funcional de categorías y subcategorías
 
 - `ux/category-editor` parte de `origin/dev` en `8e57378`. El editor y el selector de
-  iconos funcionan en [catalogLab](customizable-categories.md#gestión-de-categorías-y-subcategorías)
+  iconos funcionan en [catalogLab](customizable-categories.md#gestión-de-categorías)
   con el repositorio experimental existente. Configuración abre la lista activa o
   archivada. El formulario de movimientos conserva el borrador al crear una categoría
   y mantiene la clasificación histórica cuando corresponde.
@@ -533,3 +533,24 @@ El PDF anterior pasó el verificador final. El raster de Poppler confirma el pun
   `CatalogEditorFlowTest` en el POCO X7 Pro con los paquetes aislados. Se ensamblaron
   debug, catalogLab y los APK de pruebas. Queda pendiente la revisión manual del
   diseño en pantallas pequeñas, con fuente ampliada y con TalkBack.
+
+### Catálogo de un nivel
+
+- En [catalogLab](customizable-categories.md#gestión-de-categorías), el catálogo, el selector
+  de movimientos, el historial y el reporte muestran categorías. Los importes históricos se
+  agrupan por categoría en el reporte mensual y su PDF. Se conserva el editor con 50 iconos,
+  diez colores opcionales y el control plegado por defecto.
+- Las altas desde el formulario guardan la categoría elegida con referencia de subcategoría
+  vacía. La edición conserva el UUID histórico siempre que se guarde la categoría original.
+  Se mantienen los registros, relaciones y contratos de Room, JSON y Cloud Sync.
+- Antes de integrar con la aplicación principal, revisar la validación y los flujos de captura
+  y edición que aún exigen subcategoría en costos fijos. La activación también conserva los
+  [bloqueos de integración de 6D](customizable-categories.md#integración-funcional-experimental-iteración-6d).
+- Pasaron 348 pruebas JVM de debug, 352 de catalogLab, 22 comprobaciones Python y
+  47 pruebas instrumentadas en el POCO X7 Pro. Gradle ensambló debug, catalogLab y
+  los APK instrumentados. Las cuatro de Compose usaron bases temporales
+  con datos ficticios y verificaron gestión, iconos, color, alta con categoría y
+  edición histórica con reapertura de Room, historial, reporte y respaldo JSON.
+  La primera corrida incluyó `ExampleInstrumentedTest`, que exige el ID de
+  producción. Se excluyó en la repetición con el paquete aislado. Se omitieron
+  dos casos que requieren Firebase Emulator.

@@ -687,16 +687,15 @@ contiene únicamente datos ficticios. El cliente configura Auth y Firestore Emul
 para `demo-miflujo-catalog` con las dos direcciones locales ya admitidas.
 
 1. En Android Studio, seleccionar `catalogLab` en **Build Variants** y ejecutar la app
-   de pruebas. En la base local, **Agregar categoría de prueba** crea una categoría
-   y una subcategoría ficticias con iconos. **Nuevo** y **Editar** reutilizan los controles
-   de cápsulas y el lector de montos. El selector usa UUID, permite ambas referencias
-   vacías y conserva una selección archivada histórica al editarla. Room valida ámbito
-   y parentesco al guardar.
+   de pruebas. En la base local, **Configuración → Categorías** permite crear una ficha
+   de prueba. **Nuevo** y **Editar** reutilizan los controles de cápsulas y el lector de
+   montos. El selector usa UUID, permite guardar sin categoría y conserva la referencia
+   histórica si se mantiene la categoría original. Room valida ámbito y parentesco al guardar.
 2. **Reporte mensual** calcula C$ y US$ por separado a partir de una lectura
    transaccional del catálogo y los movimientos visibles. Reutiliza el desglose flexible
-   y el generador de PDF. **Exportar JSON** usa el mismo modelo portable v3 en ambas
-   particiones. **Restaurar JSON** valida v1/v2/v3, pide confirmación y repite las
-   comprobaciones de sincronización en la transacción de 6B. La partición de cuenta
+   y el generador de PDF con agrupación por categoría. **Exportar JSON** usa el modelo
+   portable v4 en ambas particiones. **Restaurar JSON** valida v1–v4, pide confirmación
+   y repite las comprobaciones de sincronización en la transacción de 6B. La partición de cuenta
    ofrece exportación y reportes y carece de acceso al almacén de restauración.
 3. Preparar la cuenta ficticia con la [configuración de emuladores de 6C](#prueba-android-con-firebase-emulator-en-avd-o-por-usb).
    Elegir **Emulador por USB** o **Emulador en AVD**. La pantalla abre la partición del
@@ -728,20 +727,23 @@ datos ficticios. Un fallo conserva el UID congelado. Ante una migración local f
 Room conserva la v3 por rollback. Falta el flujo de recuperación para el usuario y verificar
 apertura, restauración y corte en instalaciones aisladas de Android antes de activar.
 
-## Gestión de categorías y subcategorías
+## Gestión de categorías
 
-En la variante aislada `catalogLab`, abrir **Configuración → Categorías y subcategorías**.
-La lista expandible muestra fichas activas y archivadas. Se pueden crear, renombrar, cambiar
-el icono, archivar tras confirmación y restaurar. Si el padre está archivado, la interfaz pide
-restaurarlo primero para reactivar una subcategoría. Los nombres iguales son válidos y el UUID
-distingue cada ficha. El tipo y el grupo de reporte se eligen al crear una categoría y quedan
-fijos, igual que la relación padre-hijo.
+En la variante aislada `catalogLab`, **Configuración → Categorías** muestra fichas activas y
+archivadas. Se pueden crear, editar el nombre y el icono, asignar un color opcional, archivar
+tras confirmación y restaurar. El tipo de movimiento se configura al crear la categoría y queda
+fijo con su grupo de reporte. Los nombres iguales son válidos y el UUID distingue cada ficha.
 
-En **Nuevo** y **Editar movimiento**, el selector ofrece fichas activas compatibles con el tipo,
-subcategorías de su padre y la opción sin categoría. **Crear nueva categoría** conserva el importe,
-moneda, fecha y detalle del borrador y selecciona la ficha recién guardada. Una clasificación
-histórica archivada sigue visible con su nombre e icono. El repositorio decide si se conserva
-o se cambia al guardar.
+En **Nuevo** y **Editar movimiento**, el selector ofrece categorías activas compatibles con el
+tipo y la opción **Sin categoría**. **Crear nueva categoría** conserva el importe, moneda, fecha
+y detalle del borrador y selecciona la ficha recién guardada. Una categoría histórica archivada
+sigue visible en la edición. Si se guarda el movimiento en su categoría original, se conserva
+su referencia histórica a la subcategoría. Si se elige explícitamente otra categoría o se quita
+la clasificación, se guarda la nueva selección con una referencia de subcategoría vacía.
+
+El historial, el reporte mensual y su PDF muestran la categoría. El reporte agrupa los importes
+históricos bajo su categoría mediante una copia en memoria. Room, los respaldos JSON y la
+sincronización conservan sus referencias y contratos.
 
 El selector incluye 50 [Material Symbols Rounded](https://developers.google.com/fonts/docs/material_symbols)
 como VectorDrawables, con búsqueda en español y nueve grupos. Los nombres de categorías son
@@ -750,8 +752,8 @@ protocolo experimental. Un identificador desconocido se muestra como el icono ge
 se conserva al editar el nombre. La licencia y la revisión de origen están en los assets
 de la variante.
 
-Las pruebas Compose usan Room en memoria y se habilitan con `-PcatalogLabUiTests=true`.
-Con esa propiedad, los APK de prueba usan el paquete separado
+Las pruebas Compose usan una base Room temporal por prueba y se habilitan con
+`-PcatalogLabUiTests=true`. Con esa propiedad, los APK de prueba usan el paquete separado
 `com.carlos.miflujo.cataloglab.uitest` y su APK instrumentado. El flujo normal de
 `catalogLab` y la app principal conservan sus paquetes y sus bases.
 
