@@ -84,7 +84,7 @@ internal class QuickEntryCatalog(
     val categoryLabel: (String?) -> String,
     val categoryIcon: @Composable (String?, Modifier, Color) -> Unit,
     val categoryPicker: @Composable (
-        expanded: Boolean, type: MovementType, selectedUuid: String?,
+        expanded: Boolean, motion: CategoryPickerMotion, type: MovementType, selectedUuid: String?,
         onDismiss: () -> Unit, select: (String?) -> Unit, create: () -> Unit,
     ) -> Unit,
     val categoryEditor: @Composable (onCreated: (String) -> Unit, onDismiss: () -> Unit) -> Unit,
@@ -292,17 +292,18 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                                 CapsuleMenuControl(icon = Icons.Default.CalendarToday, label = "Fecha", text = if (active.date == LocalDate.now()) "Hoy" else active.date.formatVisibleDate(), modifier = Modifier.weight(1f), onClick = { DatePickerDialog(context, { _, y, m, d -> state = state.update(active.copy(date = LocalDate.of(y, m + 1, d))) }, active.date.year, active.date.monthValue - 1, active.date.dayOfMonth).show() })
                                 if (catalog != null) {
                                     Box(Modifier.weight(1f).onGloballyPositioned { categoryMenu.anchor = it.boundsInWindow() }) {
+                                        val motion = rememberCategoryPickerMotion(categoryMenu.expanded)
                                         CapsuleMenuControl(
                                             label = "Categoría",
                                             text = active.catalogCategoryUuid?.let(catalog.categoryLabel) ?: "Categoría",
-                                            modifier = Modifier.fillMaxWidth(),
+                                            modifier = Modifier.fillMaxWidth().then(motion.buttonReaction()),
                                             onClick = { categoryMenu.expanded = !categoryMenu.expanded },
                                             announceLabelOnly = true,
                                         ) { iconModifier ->
                                             catalog.categoryIcon(active.catalogCategoryUuid, iconModifier, activeSurface)
                                         }
                                         catalog.categoryPicker(
-                                            categoryMenu.expanded, active.type, active.catalogCategoryUuid,
+                                            categoryMenu.expanded, motion, active.type, active.catalogCategoryUuid,
                                             { categoryMenu.expanded = false },
                                             { uuid ->
                                                 state = state.update(state.active.copy(catalogCategoryUuid = uuid))

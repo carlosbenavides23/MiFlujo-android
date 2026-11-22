@@ -3,12 +3,8 @@ package com.carlos.miflujo.cataloglab
 import android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
 import android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
-import androidx.compose.animation.core.MutableTransitionState
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.rememberTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -18,7 +14,11 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -33,6 +33,8 @@ import androidx.compose.ui.window.PopupProperties
 import com.carlos.miflujo.domain.backup.BackupCategory
 import com.carlos.miflujo.domain.model.CatalogMovementSelection
 import com.carlos.miflujo.domain.model.MovementType
+import com.carlos.miflujo.ui.movement.CategoryPickerMotion
+import com.carlos.miflujo.ui.movement.rememberCategoryPickerMotion
 
 internal fun CatalogMovementSelection?.withCategory(uuid: String?): CatalogMovementSelection =
     this?.takeIf { it.categoryUuid == uuid } ?: CatalogMovementSelection(uuid)
@@ -50,19 +52,9 @@ internal fun CatalogCategoryPicker(
     onSelect: (String?) -> Unit,
     onCreate: () -> Unit,
     expanded: Boolean = true,
+    motion: CategoryPickerMotion = rememberCategoryPickerMotion(expanded),
 ) {
-    val visibility = remember { MutableTransitionState(false) }
-    visibility.targetState = expanded
-    val transition = rememberTransition(visibility, label = "CategoryPicker")
-    val progress by transition.animateFloat(
-        transitionSpec = {
-            if (targetState) tween(230, easing = LinearOutSlowInEasing)
-            else tween(170, easing = FastOutLinearInEasing)
-        },
-        label = "Unfold",
-    ) { visible -> if (visible) 1f else 0f }
-
-    if (visibility.isIdle && !visibility.currentState) return
+    if (!motion.isVisible) return
 
     // Keep the order from opening, but use live metadata and eligibility.
     val openingOrder = remember(type) { categories.map { it.uuid } }
@@ -72,12 +64,17 @@ internal fun CatalogCategoryPicker(
         val originalIds = openingOrder.toHashSet()
         original + available.values.filterNot { it.uuid in originalIds }
     }
+    // Keep the outgoing rows in place if the chosen label wraps when its check appears.
+    var previousSelection by remember { mutableStateOf(selectedUuid) }
+    SideEffect { if (expanded) previousSelection = selectedUuid }
+    val visibleSelection = if (expanded) selectedUuid else previousSelection
+
     val density = LocalDensity.current
     val gap = with(density) { 4.dp.roundToPx() }
     val margin = with(density) { 8.dp.roundToPx() }
     val maxHeight = with(density) { 260.dp.roundToPx() }
     var availableHeight by remember { mutableIntStateOf(maxHeight) }
-    var opensAbove by remember { mutableStateOf(false) }
+    var origin by remember { mutableStateOf(CategoryPickerOrigin()) }
     val provider = remember(gap, margin, maxHeight) {
         object : PopupPositionProvider {
             override fun calculatePosition(
@@ -89,15 +86,22 @@ internal fun CatalogCategoryPicker(
                 val above = (anchorBounds.top - gap - margin).coerceAtLeast(0)
                 val below = (windowSize.height - anchorBounds.bottom - gap - margin).coerceAtLeast(0)
                 val openAbove = above >= minOf(maxHeight, below)
-                opensAbove = openAbove
                 availableHeight = minOf(maxHeight, if (openAbove) above else below)
                 val wantedX = if (layoutDirection == LayoutDirection.Ltr) {
                     anchorBounds.right - popupContentSize.width
                 } else anchorBounds.left
                 val maxX = (windowSize.width - popupContentSize.width).coerceAtLeast(0)
                 val x = wantedX.coerceIn(minOf(margin, maxX), (maxX - margin).coerceAtLeast(minOf(margin, maxX)))
-                val wantedY = if (openAbove) anchorBounds.top - gap - popupContentSize.height else anchorBounds.bottom + gap
-                return IntOffset(x, wantedY.coerceIn(0, (windowSize.height - popupContentSize.height).coerceAtLeast(0)))
+                // The popup includes the gap so the reveal can reach the actual control edge.
+                val wantedY = if (openAbove) anchorBounds.top - popupContentSize.height else anchorBounds.bottom
+                val y = wantedY.coerceIn(0, (windowSize.height - popupContentSize.height).coerceAtLeast(0))
+                val anchorCenterX = anchorBounds.left + anchorBounds.width / 2f
+                origin = CategoryPickerOrigin(
+                    above = openAbove,
+                    x = anchorCenterX - x,
+                    y = (if (openAbove) anchorBounds.top else anchorBounds.bottom).toFloat() - y,
+                )
+                return IntOffset(x, y)
             }
         }
     }
@@ -118,19 +122,17 @@ internal fun CatalogCategoryPicker(
         },
     ) {
         val background = MaterialTheme.colorScheme.surfaceContainer
+        val spacing = with(density) { gap.toDp() }
         Surface(
             Modifier
-                .width(236.dp)
-                .heightIn(max = with(density) { availableHeight.toDp() })
                 .semantics { if (!expanded) hideFromAccessibility() }
-                .graphicsLayer {
-                    val fraction = progress
-                    val above = opensAbove
-                    transformOrigin = TransformOrigin(0.5f, if (above) 1f else 0f)
-                    scaleY = 0.88f + 0.12f * fraction
-                    translationY = (if (above) -gap else gap) * (1f - fraction)
-                    alpha = fraction
-                },
+                .categoryPickerReveal(motion, spacing) { origin }
+                .padding(
+                    top = if (origin.above) 0.dp else spacing,
+                    bottom = if (origin.above) spacing else 0.dp,
+                )
+                .width(236.dp)
+                .heightIn(max = with(density) { availableHeight.toDp() }),
             shape = MaterialTheme.shapes.medium,
             color = background,
             shadowElevation = 4.dp,
@@ -139,13 +141,13 @@ internal fun CatalogCategoryPicker(
                 if (options.isNotEmpty() || allowUncategorized) {
                     LazyColumn(Modifier.weight(1f, fill = false).testTag("category-picker-list")) {
                         items(options, key = { it.uuid }) { category ->
-                            CategoryPickerRow(category, selectedUuid == category.uuid, background) {
+                            CategoryPickerRow(category, visibleSelection == category.uuid, background) {
                                 if (expanded) onSelect(category.uuid)
                             }
                         }
                         if (allowUncategorized) {
                             item(key = "uncategorized") {
-                                CategoryPickerRow(null, selectedUuid == null, background) {
+                                CategoryPickerRow(null, visibleSelection == null, background) {
                                     if (expanded) onSelect(null)
                                 }
                             }
@@ -164,6 +166,49 @@ internal fun CatalogCategoryPicker(
                     ),
                 )
             }
+        }
+    }
+}
+
+private data class CategoryPickerOrigin(
+    val above: Boolean = false,
+    val x: Float = 0f,
+    val y: Float = 0f,
+)
+
+private val revealEasing = CubicBezierEasing(0.23f, 0.05f, 0.28f, 1f)
+
+private fun Modifier.categoryPickerReveal(
+    motion: CategoryPickerMotion,
+    gap: Dp,
+    origin: () -> CategoryPickerOrigin,
+): Modifier = graphicsLayer {
+    alpha = (2.2f * revealEasing.transform(motion.progress)).coerceAtMost(1f)
+}.drawWithCache {
+    val outline = Path()
+    val travel = gap.toPx()
+    val maxRadius = 12.dp.toPx()
+
+    onDrawWithContent {
+        val progress = motion.progress
+        if (progress >= 1f) {
+            drawContent()
+        } else if (progress > 0f) {
+            // Expand the visible area from the measured anchor without scaling the rows.
+            val anchor = origin()
+            val x = anchor.x.coerceIn(0f, size.width)
+            val y = anchor.y.coerceIn(0f, size.height)
+            val rise = revealEasing.transform(progress)
+            val spread = LinearOutSlowInEasing.transform(rise)
+            val left = x * (1f - spread)
+            val right = x + (size.width - x) * spread
+            val top = y * (1f - rise)
+            val bottom = y + (size.height - y) * rise
+            val radius = minOf(maxRadius, (right - left) / 2f, (bottom - top) / 2f)
+            outline.reset()
+            outline.addRoundRect(RoundRect(left, top, right, bottom, radius, radius))
+            val lift = travel * (1f - rise) * if (anchor.above) 1f else -1f
+            clipPath(outline) { translate(top = lift) { this@onDrawWithContent.drawContent() } }
         }
     }
 }

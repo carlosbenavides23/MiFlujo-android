@@ -30,6 +30,7 @@ import com.carlos.miflujo.ui.movement.CurrencyMorph
 import com.carlos.miflujo.ui.movement.MovementSymbol
 import com.carlos.miflujo.ui.movement.formatAmountInput
 import com.carlos.miflujo.ui.movement.parseAmountMinorOrNull
+import com.carlos.miflujo.ui.movement.rememberCategoryPickerMotion
 import java.time.LocalDate
 import java.time.format.DateTimeParseException
 
@@ -97,10 +98,11 @@ internal fun CatalogLabMovementForm(
                 }
                 OutlinedTextField(date, { entry = entry.copy(date = it) }, label = { Text("Fecha (AAAA-MM-DD)") }, singleLine = true)
                 Box(Modifier.fillMaxWidth().onGloballyPositioned { menu.anchor = it.boundsInWindow() }) {
+                    val motion = rememberCategoryPickerMotion(menu.expanded)
                     CapsuleMenuControl(
                         label = "Categoría",
                         text = category?.visibleName() ?: "Categoría",
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().then(motion.buttonReaction()),
                         onClick = { menu.expanded = !menu.expanded },
                         announceLabelOnly = true,
                     ) {
@@ -108,7 +110,7 @@ internal fun CatalogLabMovementForm(
                     }
                     CatalogCategoryPicker(
                         categoriesByUsage, type, categoryUuid, allowUncategorized = true,
-                        expanded = menu.expanded,
+                        expanded = menu.expanded, motion = motion,
                         onDismiss = { menu.expanded = false },
                         onSelect = {
                             entry = entry.selectCategory(it)
