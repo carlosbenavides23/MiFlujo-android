@@ -169,6 +169,8 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                 snapshotFlow { targetBounds }.filterNotNull().first()
             }
             if (measured != null) {
+                // The dialog can grow and recenter before the transfer starts.
+                sourceBounds?.let { transfer = flight.copy(source = it) }
                 transferReady = true
                 progress.animateTo(1f, spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow))
             }
@@ -193,7 +195,7 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
         },
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        Surface(modifier = Modifier.fillMaxSize()
+        Surface(modifier = Modifier.fillMaxWidth()
                 .onGloballyPositioned { selectorHostBounds = it.boundsInWindow() }
                 .pointerInput(categoryMenu, subcategoryMenu, saving) {
                     awaitPointerEventScope {
@@ -214,13 +216,14 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                     }
                 }
                 .padding(12.dp).imePadding(), shape = RoundedCornerShape(28.dp)) {
-            Box(Modifier.fillMaxSize().onGloballyPositioned { hostBounds = it.boundsInWindow() }) {
-            Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(Modifier.fillMaxWidth().onGloballyPositioned { hostBounds = it.boundsInWindow() }) {
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(if (editingStored) "Editar movimiento" else "Registro con cápsulas", style = MaterialTheme.typography.titleLarge)
                 if (catalog == null) Text("Demostración: nada se guarda. Use datos ficticios.", style = MaterialTheme.typography.bodySmall)
                 if (debuggable && showMorphInspector) CurrencyMorphInspector(onClose = { showMorphInspector = false })
-                LazyColumn(
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                if (pending.isNotEmpty()) LazyColumn(
+                    // Measure the fixed controls first. A short queue can return any unused height.
+                    modifier = Modifier.weight(1f, fill = false).fillMaxWidth(),
                     state = listState,
                     verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.Bottom),
                 ) {
@@ -260,7 +263,15 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                         }
                     }
                 }
-                Surface(shape = RoundedCornerShape(24.dp), color = activeSurface, contentColor = colors.onSurface, modifier = Modifier.fillMaxWidth().onGloballyPositioned { sourceBounds = it.boundsInWindow() }) {
+                Surface(
+                    shape = RoundedCornerShape(24.dp),
+                    color = activeSurface,
+                    contentColor = colors.onSurface,
+                    modifier = Modifier.fillMaxWidth().onGloballyPositioned {
+                        val bounds = it.boundsInWindow()
+                        sourceBounds = Rect(bounds.left, bounds.top, bounds.right, bounds.top + minOf(bounds.height, sourceHeight))
+                    },
+                ) {
                     Column(Modifier.padding(horizontal = 8.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         if (editing != null) Text(
                             "Editando movimiento",
@@ -369,9 +380,7 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                                 haptics.perform(QuickEntryHaptics.Action.Added)
                                 targetBounds = null
                                 transferReady = false
-                                transfer = sourceBounds?.let { bounds ->
-                                    PendingTransfer(state.pending.last(), Rect(bounds.left, bounds.top, bounds.right, bounds.top + minOf(bounds.height, sourceHeight)))
-                                }
+                                transfer = sourceBounds?.let { PendingTransfer(state.pending.last(), it) }
                             } else if (state.message != null && state.message != previousMessage) {
                                 haptics.perform(QuickEntryHaptics.Action.ValidationRejected)
                             }
@@ -419,7 +428,9 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
             val host = hostBounds
             val target = targetBounds
             if (flight != null && host != null && target != null && transferReady) {
-                TransferOverlay(flight, target, host, progress, activeSurface, catalog?.categoryLabel?.invoke(flight.entry.draft.catalogCategoryUuid))
+                Box(Modifier.matchParentSize()) {
+                    TransferOverlay(flight, target, host, progress, activeSurface, catalog?.categoryLabel?.invoke(flight.entry.draft.catalogCategoryUuid))
+                }
             }
             }
         }

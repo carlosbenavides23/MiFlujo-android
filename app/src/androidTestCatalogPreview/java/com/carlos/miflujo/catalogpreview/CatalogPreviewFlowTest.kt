@@ -215,10 +215,11 @@ class CatalogPreviewFlowTest {
     }
 
     @Test
-    fun pendingCardsStackAboveCapsuleAndScrollOnlyWhenTheyOverflow() {
+    fun dialogGrowsWithPendingCardsAndOnlyTheQueueScrollsAtTheLimit() {
         launch()
         waitFor("+ Agregar").performClick()
         compose.onNodeWithText("Los movimientos pendientes aparecerán aquí.").assertDoesNotExist()
+        val title = compose.onNodeWithText("Registro con cápsulas")
         val amount = compose.onNodeWithContentDescription("Monto")
         val actions = compose.onNodeWithText("Agregar otro")
         val queue = compose.onNode(
@@ -230,19 +231,21 @@ class CatalogPreviewFlowTest {
             actions.performClick()
         }
         fun cardTop(number: Int) = waitFor("− C\$ $number").fetchSemanticsNode().boundsInRoot.top
+        fun contentHeight() = actions.fetchSemanticsNode().boundsInRoot.bottom -
+            title.fetchSemanticsNode().boundsInRoot.top
 
-        assertEquals(0f, scrollExtent(), 0f)
+        queue.assertDoesNotExist()
+        val emptyHeight = contentHeight()
         addPending(101)
-        val initialTop = cardTop(101)
-        val queueBottom = queue.fetchSemanticsNode().boundsInRoot.bottom
-        val capsuleTop = amount.fetchSemanticsNode().boundsInRoot.top
-        val actionsTop = actions.fetchSemanticsNode().boundsInRoot.top
+        waitFor("− C\$ 101").assertIsDisplayed()
+        val oneCardHeight = contentHeight()
+        assertTrue(oneCardHeight > emptyHeight)
         assertEquals(0f, scrollExtent(), 0f)
 
         addPending(102)
-        assertTrue(cardTop(101) < initialTop)
-        assertEquals(initialTop, cardTop(102), 1f)
-        assertEquals(queueBottom, queue.fetchSemanticsNode().boundsInRoot.bottom, 1f)
+        assertTrue(cardTop(101) < cardTop(102))
+        assertTrue(cardTop(102) < amount.fetchSemanticsNode().boundsInRoot.top)
+        assertTrue(contentHeight() > oneCardHeight)
         assertEquals(0f, scrollExtent(), 0f)
 
         var newest = 102
@@ -252,10 +255,15 @@ class CatalogPreviewFlowTest {
             if (scrollExtent() > 0f) break
         }
         assertTrue(scrollExtent() > 0f)
-        val newestCard = compose.onAllNodesWithText("− C\$ $newest")
+        val maximumHeight = contentHeight()
+        val capsuleTop = amount.fetchSemanticsNode().boundsInRoot.top
+        val actionsTop = actions.fetchSemanticsNode().boundsInRoot.top
+        addPending(newest + 1)
+        val newestCard = compose.onAllNodesWithText("− C\$ ${newest + 1}")
         compose.waitUntil(8_000) {
             newestCard.fetchSemanticsNodes().any { it.boundsInRoot.height > 0f }
         }
+        assertEquals(maximumHeight, contentHeight(), 1f)
         queue.performScrollToIndex(0)
         waitFor("− C\$ 101").assertIsDisplayed()
         assertEquals(capsuleTop, amount.fetchSemanticsNode().boundsInRoot.top, 1f)

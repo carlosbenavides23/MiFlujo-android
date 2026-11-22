@@ -680,3 +680,19 @@ El PDF anterior pasó el verificador final. El raster de Poppler confirma el pun
   capturas de la cola vacía, una y dos tarjetas, desbordamiento, edición,
   cancelación, guardado y teclado visible. La actualización por ADB conservó
   la base experimental.
+
+### Altura dinámica del diálogo de Quick Entry
+
+- Los contenedores del diálogo conservan su ancho y pasan a medir la altura
+  del contenido. La cola se compone cuando hay pendientes. Recibe como límite
+  el espacio disponible después de medir el título, la cápsula y las acciones.
+  El límite de la ventana se ajusta al teclado y solo la cola se desplaza
+  cuando su contenido lo supera.
+- La transferencia usa la posición de la cápsula después de que el diálogo
+  crece. El overlay se mide aparte del contenido, por lo que el tamaño
+  del diálogo depende del formulario y de la lista.
+- Pasaron la revisión estática, `git diff --check`, la compilación de
+  `catalogPreview` y los recorridos Compose de altura y edición en el POCO
+  X7 Pro. Se revisaron capturas con la cola vacía, una, dos y varias tarjetas,
+  con desbordamiento, con teclado visible y en edición. La actualización por
+  ADB conservó la base experimental.
