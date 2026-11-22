@@ -12,6 +12,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -211,6 +212,57 @@ class CatalogPreviewFlowTest {
             assertEquals(category.uuid, edited.draft.selection.categoryUuid)
             assertEquals(2500L, edited.draft.amountMinor)
         }
+    }
+
+    @Test
+    fun pendingCardsStackAboveCapsuleAndScrollOnlyWhenTheyOverflow() {
+        launch()
+        waitFor("+ Agregar").performClick()
+        compose.onNodeWithText("Los movimientos pendientes aparecerán aquí.").assertDoesNotExist()
+        val amount = compose.onNodeWithContentDescription("Monto")
+        val actions = compose.onNodeWithText("Agregar otro")
+        val queue = compose.onNode(
+            SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange) and hasAnyAncestor(isDialog())
+        )
+        fun scrollExtent() = queue.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].maxValue()
+        fun addPending(number: Int) {
+            amount.performTextInput(number.toString())
+            actions.performClick()
+        }
+        fun cardTop(number: Int) = waitFor("− C\$ $number").fetchSemanticsNode().boundsInRoot.top
+
+        assertEquals(0f, scrollExtent(), 0f)
+        addPending(101)
+        val initialTop = cardTop(101)
+        val queueBottom = queue.fetchSemanticsNode().boundsInRoot.bottom
+        val capsuleTop = amount.fetchSemanticsNode().boundsInRoot.top
+        val actionsTop = actions.fetchSemanticsNode().boundsInRoot.top
+        assertEquals(0f, scrollExtent(), 0f)
+
+        addPending(102)
+        assertTrue(cardTop(101) < initialTop)
+        assertEquals(initialTop, cardTop(102), 1f)
+        assertEquals(queueBottom, queue.fetchSemanticsNode().boundsInRoot.bottom, 1f)
+        assertEquals(0f, scrollExtent(), 0f)
+
+        var newest = 102
+        for (number in 103..124) {
+            addPending(number)
+            newest = number
+            if (scrollExtent() > 0f) break
+        }
+        assertTrue(scrollExtent() > 0f)
+        val newestCard = compose.onAllNodesWithText("− C\$ $newest")
+        compose.waitUntil(8_000) {
+            newestCard.fetchSemanticsNodes().any { it.boundsInRoot.height > 0f }
+        }
+        queue.performScrollToIndex(0)
+        waitFor("− C\$ 101").assertIsDisplayed()
+        assertEquals(capsuleTop, amount.fetchSemanticsNode().boundsInRoot.top, 1f)
+        assertEquals(actionsTop, actions.fetchSemanticsNode().boundsInRoot.top, 1f)
+        amount.performTouchInput { click() }
+        amount.assertIsDisplayed()
+        actions.assertIsDisplayed()
     }
 
     @Test

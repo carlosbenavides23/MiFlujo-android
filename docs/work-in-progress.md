@@ -665,3 +665,18 @@ El PDF anterior pasó el verificador final. El raster de Poppler confirma el pun
   asignación de categoría, los totales y el historial archivado. Pasaron
   `git diff --check` y la compilación de `catalogPreview`. El APK normal se
   actualizó con `adb install -r` y conservó la base experimental.
+
+### Cola de Quick Entry junto a la cápsula
+
+- La lista usa el espacio entre el título y la cápsula. Mientras hay espacio
+  libre, las tarjetas se alinean abajo. La más reciente queda junto a la
+  cápsula y las anteriores suben en su orden de registro. El desplazamiento
+  aparece al desbordar la lista y deja el formulario y las acciones fuera.
+- Se retiró el mensaje de la cola vacía. La transferencia conserva el destino
+  medido de la tarjeta, el desplazamiento para revelarla y la animación
+  existente. El overlay requiere un destino con límites visibles.
+- Pasaron la revisión estática, `git diff --check`, la compilación de
+  `catalogPreview` y dos recorridos Compose en el POCO X7 Pro. Se revisaron
+  capturas de la cola vacía, una y dos tarjetas, desbordamiento, edición,
+  cancelación, guardado y teclado visible. La actualización por ADB conservó
+  la base experimental.

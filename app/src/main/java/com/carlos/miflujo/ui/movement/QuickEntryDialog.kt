@@ -159,6 +159,7 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
             }
             if (laidOut == null) return@LaunchedEffect
             val layout = listState.layoutInfo
+            if (layout.viewportEndOffset <= layout.viewportStartOffset) return@LaunchedEffect
             val item = layout.visibleItemsInfo.find { it.key == flight.entry.id }
             if (item == null || item.offset < layout.viewportStartOffset || item.offset + item.size > layout.viewportEndOffset) {
                 listState.animateScrollToItem(index)
@@ -218,8 +219,11 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                 Text(if (editingStored) "Editar movimiento" else "Registro con cápsulas", style = MaterialTheme.typography.titleLarge)
                 if (catalog == null) Text("Demostración: nada se guarda. Use datos ficticios.", style = MaterialTheme.typography.bodySmall)
                 if (debuggable && showMorphInspector) CurrencyMorphInspector(onClose = { showMorphInspector = false })
-                LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (pending.isEmpty() && !editingStored) item { Text("Los movimientos pendientes aparecerán aquí.") }
+                LazyColumn(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    state = listState,
+                    verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.Bottom),
+                ) {
                     items(pending, key = { it.id }) { entry ->
                         val draft = entry.draft
                         val isEditing = editing == entry.id
@@ -238,7 +242,9 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                             border = BorderStroke(1.dp, borderColor),
                             modifier = Modifier.fillMaxWidth()
                                 .animateItem(fadeInSpec = null, placementSpec = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow), fadeOutSpec = tween(150))
-                                .onGloballyPositioned { if (transferId == entry.id) targetBounds = it.boundsInWindow() }
+                                .onGloballyPositioned {
+                                    if (transferId == entry.id) targetBounds = it.boundsInWindow().takeUnless { bounds -> bounds.isEmpty }
+                                }
                                 .graphicsLayer { alpha = if (transferId == entry.id) 0f else 1f },
                         ) {
                             PendingSummary(draft, catalogLabel = catalog?.categoryLabel?.invoke(draft.catalogCategoryUuid)) {
@@ -411,8 +417,9 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
             }
             val flight = transfer
             val host = hostBounds
-            if (flight != null && host != null && transferReady) {
-                TransferOverlay(flight, targetBounds ?: flight.source, host, progress, activeSurface, catalog?.categoryLabel?.invoke(flight.entry.draft.catalogCategoryUuid))
+            val target = targetBounds
+            if (flight != null && host != null && target != null && transferReady) {
+                TransferOverlay(flight, target, host, progress, activeSurface, catalog?.categoryLabel?.invoke(flight.entry.draft.catalogCategoryUuid))
             }
             }
         }
