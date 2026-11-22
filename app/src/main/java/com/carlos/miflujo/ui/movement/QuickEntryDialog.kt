@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -136,7 +137,7 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
     var transfer by remember { mutableStateOf<PendingTransfer?>(null) }
     var sourceBounds by remember { mutableStateOf<Rect?>(null) }
     var targetBounds by remember { mutableStateOf<Rect?>(null) }
-    var hostBounds by remember { mutableStateOf<Rect?>(null) }
+    var transferHost by remember { mutableStateOf<LayoutCoordinates?>(null) }
     var selectorHostBounds by remember { mutableStateOf<Rect?>(null) }
     var transferReady by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
@@ -193,7 +194,8 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
         onDismissRequest = {
             if (catalog != null && categoryMenu.expanded) categoryMenu.expanded = false else close()
         },
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+        // Compose applies the IME and system bar insets once, even as this dialog grows.
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
         Surface(modifier = Modifier.fillMaxWidth()
                 .onGloballyPositioned { selectorHostBounds = it.boundsInWindow() }
@@ -215,8 +217,8 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                         }
                     }
                 }
-                .padding(12.dp).imePadding(), shape = RoundedCornerShape(28.dp)) {
-            Box(Modifier.fillMaxWidth().onGloballyPositioned { hostBounds = it.boundsInWindow() }) {
+                .padding(12.dp).safeDrawingPadding(), shape = RoundedCornerShape(28.dp)) {
+            Box(Modifier.fillMaxWidth().onGloballyPositioned { transferHost = it }) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(if (editingStored) "Editar movimiento" else "Registro con cápsulas", style = MaterialTheme.typography.titleLarge)
                 if (catalog == null) Text("Demostración: nada se guarda. Use datos ficticios.", style = MaterialTheme.typography.bodySmall)
@@ -246,7 +248,10 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                             modifier = Modifier.fillMaxWidth()
                                 .animateItem(fadeInSpec = null, placementSpec = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow), fadeOutSpec = tween(150))
                                 .onGloballyPositioned {
-                                    if (transferId == entry.id) targetBounds = it.boundsInWindow().takeUnless { bounds -> bounds.isEmpty }
+                                    if (transferId == entry.id) {
+                                        targetBounds = transferHost?.localBoundingBoxOf(it)
+                                            ?.takeUnless { bounds -> bounds.isEmpty }
+                                    }
                                 }
                                 .graphicsLayer { alpha = if (transferId == entry.id) 0f else 1f },
                         ) {
@@ -268,8 +273,9 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                     color = activeSurface,
                     contentColor = colors.onSurface,
                     modifier = Modifier.fillMaxWidth().onGloballyPositioned {
-                        val bounds = it.boundsInWindow()
-                        sourceBounds = Rect(bounds.left, bounds.top, bounds.right, bounds.top + minOf(bounds.height, sourceHeight))
+                        sourceBounds = transferHost?.localBoundingBoxOf(it)?.let { bounds ->
+                            Rect(bounds.left, bounds.top, bounds.right, bounds.top + minOf(bounds.height, sourceHeight))
+                        }
                     },
                 ) {
                     Column(Modifier.padding(horizontal = 8.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -425,11 +431,10 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                 }
             }
             val flight = transfer
-            val host = hostBounds
             val target = targetBounds
-            if (flight != null && host != null && target != null && transferReady) {
+            if (flight != null && target != null && transferReady) {
                 Box(Modifier.matchParentSize()) {
-                    TransferOverlay(flight, target, host, progress, activeSurface, catalog?.categoryLabel?.invoke(flight.entry.draft.catalogCategoryUuid))
+                    TransferOverlay(flight, target, progress, activeSurface, catalog?.categoryLabel?.invoke(flight.entry.draft.catalogCategoryUuid))
                 }
             }
             }
@@ -511,12 +516,12 @@ private data class PendingTransfer(val entry: PendingEntry, val source: Rect)
 private val PendingActionSize = 48.dp
 
 @Composable
-private fun TransferOverlay(flight: PendingTransfer, target: Rect, host: Rect, progress: Animatable<Float, androidx.compose.animation.core.AnimationVector1D>, sourceColor: androidx.compose.ui.graphics.Color, catalogLabel: String?) {
+private fun TransferOverlay(flight: PendingTransfer, target: Rect, progress: Animatable<Float, androidx.compose.animation.core.AnimationVector1D>, sourceColor: androidx.compose.ui.graphics.Color, catalogLabel: String?) {
     val density = LocalDensity.current
     val draft = flight.entry.draft
     Surface(
         modifier = Modifier
-            .offset { IntOffset((target.left - host.left).roundToInt(), (target.top - host.top).roundToInt()) }
+            .offset { IntOffset(target.left.roundToInt(), target.top.roundToInt()) }
             .size(with(density) { target.width.toDp() }, with(density) { target.height.toDp() })
             .graphicsLayer {
                 val t = progress.value

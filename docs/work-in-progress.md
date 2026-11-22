@@ -696,3 +696,19 @@ El PDF anterior pasó el verificador final. El raster de Poppler confirma el pun
   X7 Pro. Se revisaron capturas con la cola vacía, una, dos y varias tarjetas,
   con desbordamiento, con teclado visible y en edición. La actualización por
   ADB conservó la base experimental.
+
+### Estabilidad de la transferencia con el teclado visible
+
+- En el POCO X7 Pro, al insertar la tercera tarjeta con el teclado de texto
+  abierto, los límites visibles del destino alternaban entre 200 y 88 px
+  mientras la tarjeta seguía midiendo 200 px. La ventana y la cápsula se
+  recolocaban durante la transferencia. Con el teclado cerrado, la tercera
+  inserción seguía ampliando el diálogo.
+- El diálogo aplica los insets del sistema con `safeDrawingPadding` y mide
+  el origen y el destino en el sistema de coordenadas de la capa animada.
+  En tres repeticiones con el teclado abierto, la tercera tarjeta se reveló
+  mediante scroll y mantuvo su altura visible durante toda la transferencia.
+- Se verificaron las primeras cuatro inserciones, el límite de la cola y la
+  edición con restauración del borrador. Pasaron `git diff --check` y la
+  compilación de `catalogPreview`. La actualización en el POCO conservó la
+  base experimental.
