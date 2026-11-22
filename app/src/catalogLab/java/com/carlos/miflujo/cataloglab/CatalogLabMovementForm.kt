@@ -9,6 +9,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -16,6 +21,8 @@ import com.carlos.miflujo.domain.backup.CatalogBackup
 import com.carlos.miflujo.domain.category.CategoryRepository
 import java.io.Serializable
 import com.carlos.miflujo.domain.model.*
+import com.carlos.miflujo.ui.movement.CapsuleMenuControl
+import com.carlos.miflujo.ui.movement.SelectorMenuState
 import com.carlos.miflujo.ui.movement.CapsuleToggle
 import com.carlos.miflujo.ui.movement.CapsuleToggleColors
 import com.carlos.miflujo.ui.movement.CompactEntryField
@@ -40,14 +47,36 @@ internal fun CatalogLabMovementForm(
     val previous = existing?.draft
     var entry by rememberSaveable { mutableStateOf(CatalogMovementEntry.from(previous)) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
-    var pickingCategory by rememberSaveable { mutableStateOf(false) }
+    val menu = remember { SelectorMenuState() }
+    var dialogCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    val categoriesByUsage = remember(catalog.categories, catalog.movements) { catalog.categoriesByRecentUsage() }
     var creatingCategory by rememberSaveable { mutableStateOf(false) }
     val (type, currency, amount, date, detail, categoryUuid) = entry
     val category = catalog.categories.firstOrNull { it.uuid == categoryUuid }
 
-    Dialog(onDismissRequest = { if (!saving) onDismiss() }) {
+    Dialog(onDismissRequest = {
+        if (menu.expanded) menu.expanded = false else if (!saving) onDismiss()
+    }) {
         Surface(shape = MaterialTheme.shapes.large) {
-            Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                Modifier
+                    .onGloballyPositioned { dialogCoordinates = it }
+                    .pointerInput(menu) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                val event = awaitPointerEvent(PointerEventPass.Initial)
+                                val down = event.changes.firstOrNull { it.pressed && !it.previousPressed }
+                                val coordinates = dialogCoordinates
+                                if (down != null && coordinates?.isAttached == true) {
+                                    menu.dismissOutside(coordinates.localToWindow(down.position))
+                                }
+                            }
+                        }
+                    }
+                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 Text(if (existing == null) "Nuevo movimiento" else "Editar movimiento", style = MaterialTheme.typography.titleLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                     CompactEntryField(amount, { entry = entry.copy(amount = it) }, "Monto", Modifier.weight(1f), KeyboardType.Decimal)
@@ -67,7 +96,29 @@ internal fun CatalogLabMovementForm(
                     ) { MovementSymbol(it) }
                 }
                 OutlinedTextField(date, { entry = entry.copy(date = it) }, label = { Text("Fecha (AAAA-MM-DD)") }, singleLine = true)
-                CatalogCategoryControl(category, Modifier.fillMaxWidth()) { pickingCategory = true }
+                Box(Modifier.fillMaxWidth().onGloballyPositioned { menu.anchor = it.boundsInWindow() }) {
+                    CapsuleMenuControl(
+                        label = "Categoría",
+                        text = category?.visibleName() ?: "Categoría",
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { menu.expanded = !menu.expanded },
+                        announceLabelOnly = true,
+                    ) {
+                        CatalogIcon(category?.iconKey, it, color = category?.iconColor)
+                    }
+                    if (menu.expanded) CatalogCategoryPicker(
+                        categoriesByUsage, type, categoryUuid, allowUncategorized = true,
+                        onDismiss = { menu.expanded = false },
+                        onSelect = {
+                            entry = entry.selectCategory(it)
+                            menu.expanded = false
+                        },
+                        onCreate = {
+                            menu.expanded = false
+                            creatingCategory = true
+                        },
+                    )
+                }
                 OutlinedTextField(detail, { entry = entry.copy(detail = it) }, label = { Text("Detalle") })
                 (error ?: saveError)?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
@@ -90,12 +141,6 @@ internal fun CatalogLabMovementForm(
             }
         }
     }
-    if (pickingCategory) CatalogCategoryPicker(
-        catalog.categories, type, categoryUuid, allowUncategorized = true,
-        onDismiss = { pickingCategory = false },
-        onSelect = { entry = entry.selectCategory(it); pickingCategory = false },
-        onCreate = { pickingCategory = false; creatingCategory = true },
-    )
     if (creatingCategory) CatalogItemEditor(
         title = "Nueva categoría",
         saveLabel = "Guardar categoría",

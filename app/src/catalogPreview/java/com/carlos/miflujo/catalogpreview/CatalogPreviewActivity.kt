@@ -10,13 +10,17 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.room.Room
 import androidx.room.withTransaction
+import com.carlos.miflujo.cataloglab.categoriesByRecentUsage
 import com.carlos.miflujo.data.cataloglab.CatalogLabSession
 import com.carlos.miflujo.data.movementcatalog.CatalogMovementDatabase
+import com.carlos.miflujo.domain.backup.BackupCategory
 import com.carlos.miflujo.domain.backup.CatalogBackup
 import com.carlos.miflujo.domain.model.CatalogMovement
 import com.carlos.miflujo.domain.model.CatalogMovementDraft
 import com.carlos.miflujo.ui.theme.MiFlujoTheme
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
@@ -34,6 +38,11 @@ class CatalogPreviewActivity : ComponentActivity() {
     }
 }
 
+internal data class CatalogPreviewSnapshot(
+    val catalog: CatalogBackup,
+    val categoriesByUsage: List<BackupCategory>,
+)
+
 internal class CatalogPreviewModel(application: Application) : AndroidViewModel(application) {
     private val database = Room.databaseBuilder(
         application, CatalogMovementDatabase::class.java, "catalog-preview.db",
@@ -44,9 +53,11 @@ internal class CatalogPreviewModel(application: Application) : AndroidViewModel(
     private val refreshes = MutableStateFlow(0)
     val snapshot = database.invalidationTracker.createFlow("movements", "categories", "subcategories")
         .combine(refreshes) { _, _ -> Unit }
-        .map<_, Result<CatalogBackup>?> {
+        .map<_, Result<CatalogPreviewSnapshot>?> {
             try {
-                Result.success(session.snapshot())
+                val catalog = session.snapshot()
+                val categoriesByUsage = withContext(Dispatchers.Default) { catalog.categoriesByRecentUsage() }
+                Result.success(CatalogPreviewSnapshot(catalog, categoriesByUsage))
             } catch (cancel: CancellationException) {
                 throw cancel
             } catch (error: Exception) {

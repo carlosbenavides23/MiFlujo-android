@@ -45,7 +45,8 @@ import kotlinx.coroutines.launch
 @Composable
 internal fun CatalogPreviewApp(model: CatalogPreviewModel) {
     val result by model.snapshot.collectAsState()
-    val snapshot = result?.getOrNull()
+    val data = result?.getOrNull()
+    val snapshot = data?.catalog
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
     var destination by rememberSaveable { mutableStateOf(MainDestination.Home) }
@@ -163,9 +164,9 @@ internal fun CatalogPreviewApp(model: CatalogPreviewModel) {
     }
 
     val original = editing?.takeIf { it.uuid == editUuid }
-    if (snapshot != null && (showAdd || original != null)) key(original?.uuid) {
+    if (data != null && (showAdd || original != null)) key(original?.uuid) {
         CatalogPreviewMovementDialog(
-            snapshot.categories, original, model,
+            data.categoriesByUsage, original, model,
             onClose = { showAdd = false; editUuid = null },
         )
     }

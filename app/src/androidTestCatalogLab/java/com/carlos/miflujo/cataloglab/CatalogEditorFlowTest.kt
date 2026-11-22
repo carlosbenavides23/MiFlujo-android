@@ -69,7 +69,7 @@ class CatalogEditorFlowTest {
         compose.onNodeWithContentDescription("Monto").performTextInput("123.45")
         field("Detalle").performTextInput("Pago de prueba")
         compose.onNodeWithContentDescription("Córdobas, cambiar a dólares").performClick()
-        compose.onNodeWithContentDescription("Categoría: Elegir categoría").performClick()
+        compose.onNodeWithContentDescription("Categoría: Categoría").performClick()
         compose.onNodeWithText("Crear nueva categoría").performClick()
         field("Nombre").performTextInput("Trabajo")
         restoration.emulateSavedInstanceStateRestore()
@@ -115,7 +115,7 @@ class CatalogEditorFlowTest {
 
         waitForEnabled("Nuevo").performClick()
         compose.onNodeWithContentDescription("Monto").performTextInput("2")
-        compose.onNodeWithContentDescription("Categoría: Elegir categoría").performClick()
+        compose.onNodeWithContentDescription("Categoría: Categoría").performClick()
         waitFor("Trabajo").performClick()
         assertSingleLevel()
         saveForm("Guardar")

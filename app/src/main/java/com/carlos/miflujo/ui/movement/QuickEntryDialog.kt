@@ -82,7 +82,7 @@ internal class QuickEntryCatalog(
     val initialDraft: QuickEntryDraft?,
     val validate: (QuickEntryDraft) -> String?,
     val categoryLabel: (String?) -> String,
-    val categoryControl: @Composable (String?, Modifier, onClick: () -> Unit) -> Unit,
+    val categoryIcon: @Composable (String?, Modifier, Color) -> Unit,
     val categoryPicker: @Composable (
         MovementType, String?, onDismiss: () -> Unit, select: (String?) -> Unit, create: () -> Unit,
     ) -> Unit,
@@ -97,7 +97,6 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
     val focus = LocalFocusManager.current
     var activeId by rememberSaveable { mutableStateOf(UUID.randomUUID().toString()) }
     var saving by remember { mutableStateOf(false) }
-    var pickingCategory by rememberSaveable { mutableStateOf(false) }
     var creatingCategory by rememberSaveable { mutableStateOf(false) }
     val validate = catalog?.validate ?: QuickEntryDraft::validationMessage
     val editingStored = catalog?.initialDraft != null
@@ -180,7 +179,12 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
         if (saving) return
         if (state.hasWork) state = state.requestExit() else onClose()
     }
-    Dialog(onDismissRequest = { close() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    Dialog(
+        onDismissRequest = {
+            if (catalog != null && categoryMenu.expanded) categoryMenu.expanded = false else close()
+        },
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
         Surface(modifier = Modifier.fillMaxSize()
                 .onGloballyPositioned { selectorHostBounds = it.boundsInWindow() }
                 .pointerInput(categoryMenu, subcategoryMenu, saving) {
@@ -286,8 +290,28 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                                 val context = LocalContext.current
                                 CapsuleMenuControl(icon = Icons.Default.CalendarToday, label = "Fecha", text = if (active.date == LocalDate.now()) "Hoy" else active.date.formatVisibleDate(), modifier = Modifier.weight(1f), onClick = { DatePickerDialog(context, { _, y, m, d -> state = state.update(active.copy(date = LocalDate.of(y, m + 1, d))) }, active.date.year, active.date.monthValue - 1, active.date.dayOfMonth).show() })
                                 if (catalog != null) {
-                                    catalog.categoryControl(active.catalogCategoryUuid, Modifier.weight(1f)) {
-                                        pickingCategory = true
+                                    Box(Modifier.weight(1f).onGloballyPositioned { categoryMenu.anchor = it.boundsInWindow() }) {
+                                        CapsuleMenuControl(
+                                            label = "Categoría",
+                                            text = active.catalogCategoryUuid?.let(catalog.categoryLabel) ?: "Categoría",
+                                            modifier = Modifier.fillMaxWidth(),
+                                            onClick = { categoryMenu.expanded = !categoryMenu.expanded },
+                                            announceLabelOnly = true,
+                                        ) { iconModifier ->
+                                            catalog.categoryIcon(active.catalogCategoryUuid, iconModifier, activeSurface)
+                                        }
+                                        if (categoryMenu.expanded) catalog.categoryPicker(
+                                            active.type, active.catalogCategoryUuid,
+                                            { categoryMenu.expanded = false },
+                                            { uuid ->
+                                                state = state.update(state.active.copy(catalogCategoryUuid = uuid))
+                                                categoryMenu.expanded = false
+                                            },
+                                            {
+                                                categoryMenu.expanded = false
+                                                creatingCategory = true
+                                            },
+                                        )
                                     }
                                 } else if (active.type == MovementType.EXPENSE) {
                                     CategoryMenu(active.category, categoryMenu, Modifier.weight(1f)) {
@@ -360,20 +384,6 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
             }
             }
         }
-    }
-    if (catalog != null && pickingCategory) {
-        catalog.categoryPicker(
-            active.type, active.catalogCategoryUuid,
-            { pickingCategory = false },
-            { uuid ->
-                state = state.update(state.active.copy(catalogCategoryUuid = uuid))
-                pickingCategory = false
-            },
-            {
-                pickingCategory = false
-                creatingCategory = true
-            },
-        )
     }
     if (catalog != null && creatingCategory) {
         catalog.categoryEditor({ uuid ->
@@ -579,14 +589,27 @@ private fun CapsuleMenuControl(icon: ImageVector, label: String, text: String, m
 }
 
 @Composable
-private fun CapsuleMenuControl(label: String, text: String, modifier: Modifier = Modifier, onClick: () -> Unit, icon: @Composable (Modifier) -> Unit) {
+internal fun CapsuleMenuControl(
+    label: String,
+    text: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+    announceLabelOnly: Boolean = false,
+    icon: @Composable (Modifier) -> Unit,
+) {
     Row(
         modifier = modifier.heightIn(min = 48.dp).clickable(role = Role.Button, onClick = onClick).semantics { contentDescription = "$label: $text" }.padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         icon(Modifier.size(14.dp))
         Spacer(Modifier.width(4.dp))
-        Text(text, modifier = Modifier.weight(1f, fill = false), style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(
+            text,
+            modifier = Modifier.weight(1f, fill = false).then(
+                if (announceLabelOnly) Modifier.clearAndSetSemantics {} else Modifier,
+            ),
+            style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        )
         Spacer(Modifier.width(2.dp))
         Icon(Icons.Default.ExpandMore, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurface)
     }
@@ -594,7 +617,7 @@ private fun CapsuleMenuControl(label: String, text: String, modifier: Modifier =
 
 // Outside taps are handled in the dialog, excluding the anchor. A non-focusable
 // popup otherwise dismisses on DOWN before the anchor receives its own click.
-private class SelectorMenuState {
+internal class SelectorMenuState {
     var expanded by mutableStateOf(false)
     var anchor: Rect? = null
 

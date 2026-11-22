@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -18,7 +19,8 @@ import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.room.Room
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.carlos.miflujo.cataloglab.CatalogCategoryControl
+import com.carlos.miflujo.cataloglab.CatalogIcon
+import com.carlos.miflujo.ui.movement.CapsuleMenuControl
 import com.carlos.miflujo.cataloglab.CatalogCategoryPicker
 import com.carlos.miflujo.domain.backup.backup
 import com.carlos.miflujo.ui.theme.MiFlujoTheme
@@ -84,7 +86,7 @@ class CatalogPreviewFlowTest {
         compose.onNodeWithContentDescription("Egreso, cambiar a ingreso").performClick()
         compose.onNodeWithContentDescription("Monto").performTextInput("8")
         compose.onNodeWithContentDescription("Detalle (opcional)").performTextInput("Reembolso de prueba")
-        categoryControl("Elegir categoría").performTouchInput { click() }
+        categoryControl("Categoría").performTouchInput { click() }
         waitFor(hasText("Transporte local") and hasClickAction()).performClick()
         waitFor("Confirmar").performClick()
         waitFor("Viaje de prueba")
@@ -162,11 +164,11 @@ class CatalogPreviewFlowTest {
         compose.onNodeWithContentDescription("Volver").performClick()
 
         waitFor("+ Agregar").performClick()
-        categoryControl("Elegir categoría").performTouchInput { click() }
+        categoryControl("Categoría").performTouchInput { click() }
         waitFor("Crear nueva categoría")
         compose.onNodeWithText("Servicios de prueba").assertDoesNotExist()
         compose.onNodeWithText("Servicios de prueba (archivada)").assertDoesNotExist()
-        waitFor(hasContentDescription("Cerrar selector de categorías")).performClick()
+        categoryControl("Categoría").performTouchInput { click() }
         waitFor("Salir").performClick()
 
         openMovement("Cuenta anterior")
@@ -203,47 +205,56 @@ class CatalogPreviewFlowTest {
     }
 
     @Test
-    fun searchesScrollableCatalogAndKeepsSelectionWhenClosing() {
+    fun opensRankedCatalogScrollsAndCreatesWithoutLosingDraft() {
         withSession { session ->
-            repeat(80) { index ->
+            val categories = (0 until 80).map { index ->
                 session.categories.createCategory(Category(
                     name = "Comercio ${index.toString().padStart(2, '0')}",
                     scope = CategoryScope.BOTH, reportGroup = ReportGroup.OTHER,
+                )).value
+            }
+            repeat(2) {
+                session.movements.create(CatalogMovementDraft(
+                    MovementType.EXPENSE, 100L, Currency.CORDOBA, LocalDate.now(),
+                    CatalogMovementSelection(categories.last().uuid),
                 ))
             }
-            session.categories.createCategory(Category(
-                name = "Solo ingresos", scope = CategoryScope.INCOME, reportGroup = ReportGroup.INCOME,
-            ))
         }
+
         launch()
         waitFor("+ Agregar").performClick()
-        categoryControl("Elegir categoría").performClick()
+        compose.onNodeWithContentDescription("Monto").performTextInput("12.50")
+        compose.onNodeWithContentDescription("Detalle (opcional)").performTextInput("Borrador de prueba")
+        categoryControl("Categoría").performTouchInput { click() }
+        waitFor("Comercio 79").assertIsDisplayed()
         waitFor("Crear nueva categoría").assertIsDisplayed()
 
-        val search = field("Buscar categorías")
-        search.performTextInput("cOMERcio 07")
-        val match = waitFor("Comercio 07")
-        match.assertIsDisplayed()
-        compose.onNodeWithText("Comercio 08").assertDoesNotExist()
-        match.performClick()
-        categoryControl("Comercio 07").assertIsDisplayed()
-
-        categoryControl("Comercio 07").performClick()
-        search.performTextInput("Solo ingresos")
-        waitFor("No se encontraron categorías.").assertIsDisplayed()
-        search.performTextClearance()
-        search.performImeAction()
         val list = compose.onNodeWithTag("category-picker-list")
-        list.performScrollToNode(hasText("Comercio 79"))
-        waitFor("Comercio 79").assertIsDisplayed()
-        list.performScrollToNode(hasText("Comercio 07"))
-        waitFor("Comercio 07").assertIsSelected()
-        waitFor(hasContentDescription("Cerrar selector de categorías")).performClick()
-        compose.waitUntil(8_000) {
-            compose.onAllNodesWithContentDescription("Cerrar selector de categorías").fetchSemanticsNodes().isEmpty()
-        }
+        list.performScrollToNode(hasText("Comercio 76"))
+        waitFor("Comercio 76").assertIsDisplayed().performClick()
+        categoryControl("Comercio 76").assertIsDisplayed()
+
+        categoryControl("Comercio 76").performTouchInput { click() }
+        list.performScrollToNode(hasText("Comercio 76"))
+        waitFor("Comercio 76").assertIsSelected()
+        waitFor("Registro con cápsulas").performTouchInput { click() }
         compose.onNodeWithText("Crear nueva categoría").assertDoesNotExist()
-        categoryControl("Comercio 07").assertIsDisplayed()
+        categoryControl("Comercio 76").assertIsDisplayed()
+
+        createFromCapsule("Comercio nuevo")
+        waitFor("Confirmar").performClick()
+        waitFor("Borrador de prueba")
+        activity?.close()
+        activity = null
+        withSession { session ->
+            val snapshot = session.snapshot()
+            val category = snapshot.categories.single { it.name == "Comercio nuevo" }
+            val saved = snapshot.movements.single { it.detail == "Borrador de prueba" }
+            assertEquals(1250L, saved.amountMinor)
+            assertEquals(category.uuid, saved.categoryUuid)
+            assertEquals(LocalDate.now(), saved.date)
+            assertEquals(Currency.CORDOBA, saved.currency)
+        }
     }
 
     @Test
@@ -266,12 +277,19 @@ class CatalogPreviewFlowTest {
                     ) {
                         MiFlujoTheme(darkTheme = dark) {
                             var picking by remember { mutableStateOf(false) }
-                            CatalogCategoryControl(category, Modifier.width(148.dp)) { picking = true }
-                            if (picking) CatalogCategoryPicker(
-                                listOf(category), MovementType.EXPENSE, category.uuid,
-                                allowUncategorized = false, onDismiss = { picking = false },
-                                onSelect = { picking = false }, onCreate = { picking = false },
-                            )
+                            Box(Modifier.width(148.dp)) {
+                                CapsuleMenuControl(
+                                    label = "Categoría",
+                                    text = category.name,
+                                    onClick = { picking = !picking },
+                                    announceLabelOnly = true,
+                                ) { CatalogIcon(category.iconKey, it, color = category.iconColor) }
+                                if (picking) CatalogCategoryPicker(
+                                    listOf(category), MovementType.EXPENSE, category.uuid,
+                                    allowUncategorized = false, onDismiss = { picking = false },
+                                    onSelect = { picking = false }, onCreate = { picking = false },
+                                )
+                            }
                         }
                     }
                 }
@@ -279,7 +297,7 @@ class CatalogPreviewFlowTest {
             categoryControl(label).assertIsDisplayed().performClick()
             waitFor("Crear nueva categoría").assertIsDisplayed()
             waitFor(label).assertIsDisplayed().assertIsSelected()
-            waitFor(hasContentDescription("Cerrar selector de categorías")).performClick()
+            waitFor(label).performClick()
             categoryControl(label).assertIsDisplayed()
         }
     }

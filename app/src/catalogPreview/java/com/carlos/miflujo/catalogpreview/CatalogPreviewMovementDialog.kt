@@ -1,7 +1,7 @@
 package com.carlos.miflujo.catalogpreview
 
 import androidx.compose.runtime.Composable
-import com.carlos.miflujo.cataloglab.CatalogCategoryControl
+import com.carlos.miflujo.cataloglab.CatalogIcon
 import com.carlos.miflujo.cataloglab.CatalogCategoryPicker
 import com.carlos.miflujo.cataloglab.CatalogItemEditor
 import com.carlos.miflujo.cataloglab.CatalogItemInput
@@ -44,8 +44,9 @@ internal fun CatalogPreviewMovementDialog(
                 }
             },
             categoryLabel = { byUuid[it]?.visibleName() ?: "Sin categoría" },
-            categoryControl = { uuid, modifier, onClick ->
-                CatalogCategoryControl(byUuid[uuid], modifier, onClick)
+            categoryIcon = { uuid, modifier, background ->
+                val category = byUuid[uuid]
+                CatalogIcon(category?.iconKey, modifier, color = category?.iconColor, background = background)
             },
             categoryPicker = { type, uuid, dismiss, select, create ->
                 CatalogCategoryPicker(

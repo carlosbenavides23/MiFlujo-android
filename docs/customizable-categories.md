@@ -785,16 +785,24 @@ forma explícita. Los pendientes locales se conservan mientras el protocolo no c
 
 `catalogPreview` ejecuta la estructura de navegación, Ajustes, Inicio, Movimientos
 y Reporte de MiFlujo con un almacén local de prueba. Comparte con `catalogLab` el
-administrador, el editor, el selector, los 50 iconos y la paleta en
-`app/src/catalogUi`. El control redondeado de la cápsula muestra **Elegir categoría**
-o el nombre elegido, con el icono y su color. Los nombres largos se limitan a dos
-líneas visibles y el control anuncia el nombre completo.
+administrador, el editor, el selector contextual, los 50 iconos y la paleta en
+`app/src/catalogUi`. Categoría reutiliza el tamaño y la tipografía del control
+de fecha, con el icono tintado y el nombre en una línea. Las etiquetas
+de accesibilidad conservan el nombre completo.
 
-La hoja de Material 3 presenta **+ Crear nueva categoría** antes del buscador y del
-listado desplazable. La búsqueda filtra por nombre sin distinguir mayúsculas y
-minúsculas. La lista muestra las categorías activas compatibles con el tipo de
-movimiento e indica la selección actual. Al elegir, la hoja se cierra. La creación
-contextual conserva el borrador y selecciona la nueva ficha al guardarla.
+El selector flotante se ancla al control y aprovecha el espacio encima cuando
+abre cerca del borde inferior. Tiene una altura máxima de 260 dp, una lista
+con desplazamiento propio y la acción **Crear nueva categoría** separada al pie.
+Muestra todas las categorías activas compatibles, sin buscador ni cambio de
+pantalla. Tocar fuera, elegir una ficha o pulsar Atrás cierra el selector.
+
+El orden usa la instantánea local existente. Cuenta los movimientos persistidos
+visibles de los últimos 90 días por UUID de categoría y por su fecha original de
+registro. Incluye ambas monedas y tipos. Desempata por uso más reciente, orden del
+catálogo, nombre y UUID. Las fichas sin uso quedan disponibles. El orden de las
+fichas ya visibles se conserva mientras el selector está abierto. Los descartes
+y la cola provisional quedan fuera del conteo. Editar detalle, importe o fecha
+contable conserva la fecha original de registro.
 
 **+ Agregar** abre la cápsula. **Agregar otro** mantiene una cola provisional
 y **Confirmar** guarda el lote en una transacción. El editor persistido se abre
@@ -822,10 +830,11 @@ adb -d install -r app/build/outputs/apk/catalogPreview/app-catalogPreview.apk
 ```
 
 Abrir **MiFlujo · Vista de catálogo**. En **Ajustes → Categorías**, crear fichas y
-probar icono, color, archivo y restauración. Abrir **+ Agregar**, alternar ingreso
-y egreso y buscar la misma categoría nueva en ambos tipos. Probar Atrás, el
-botón de cierre y la creación contextual con un monto y detalle ya escritos. Registrar, cerrar y reabrir la app. Desde **Movimientos**, abrir el
-detalle y editar el movimiento. Para probar una referencia archivada, archivar
+probar icono, color, archivo y restauración. Abrir **+ Agregar** y elegir categorías
+en ambos tipos. Con varias fichas, comprobar el orden después de guardar movimientos,
+desplazarse hasta una ficha sin uso y probar los cierres al tocar fuera y con Atrás.
+Para probar la creación contextual, escribir monto y detalle primero. Registrar,
+cerrar y reabrir la app. Desde **Movimientos**, abrir el detalle y editar el movimiento. Para probar una referencia archivada, archivar
 su categoría y volver al detalle. La edición debe mostrarla y las altas deben
 omitirla en el selector.
 

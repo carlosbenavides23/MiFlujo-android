@@ -601,3 +601,18 @@ El PDF anterior pasó el verificador final. El raster de Poppler confirma el pun
 - Se actualizó y se abrió el APK normal de **MiFlujo · Vista de catálogo** en
   el POCO. Quedan pendientes la revisión visual directa de la hoja, Atrás del
   sistema y TalkBack. El dispositivo rechazó los eventos remotos de teclado y toque.
+
+### Selector contextual de Quick Entry
+
+- [catalogPreview](customizable-categories.md#vista-integrada-del-catálogo) vuelve al
+  control compacto junto a la fecha y usa una lista flotante anclada de hasta 260 dp.
+  La acción de crear queda al pie. Selector y ordenación se reutilizan en catalogLab.
+- El orden cuenta movimientos persistidos visibles registrados en los últimos 90 días.
+  La frecuencia y la última fecha original de registro determinan la prioridad. Los
+  empates se resuelven de forma estable y todas las fichas activas compatibles se
+  pueden alcanzar desplazando la lista. El cálculo reutiliza la instantánea de Room.
+- Compilaron catalogPreview y catalogLab. Pasaron dos pruebas JVM de ordenación
+  y el único caso instrumentado de catalogPreview en el POCO, con 80 fichas,
+  selección, cierre al tocar fuera y creación conservando el borrador. Se instaló
+  la variante aislada. La valoración visual y de ergonomía queda para la revisión
+  manual del usuario.
