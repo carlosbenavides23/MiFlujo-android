@@ -579,3 +579,26 @@ El PDF anterior pasó el verificador final. El raster de Poppler confirma el pun
   actividad de inicio y su UID independiente. El APK de la vista carece de
   permiso de Internet y de inicialización predeterminada de Firebase. Los
   metadatos de la instalación de producción coincidieron antes y después.
+
+### Hoja de selección y categorías para ambos tipos
+
+- En [la vista integrada](customizable-categories.md#vista-integrada-del-catálogo),
+  el control redondeado conserva su lugar junto a la fecha. Muestra **Elegir categoría**
+  o la ficha elegida. La hoja Material 3 comparte buscador, listado desplazable y
+  acción tonal de creación entre las variantes experimentales.
+- El editor compartido guarda las fichas nuevas como `BOTH` con grupo `OTHER`.
+  Los ingresos se contabilizan como ingresos. Los egresos de fichas nuevas se
+  agrupan en Otros. Los ámbitos, grupos y UUID históricos se conservan.
+- Se mantienen los borradores y la confirmación transaccional de la cola. Se
+  conservan los esquemas y los contratos de respaldo y sincronización.
+- Se ensamblaron `debug`, `catalogLab`, `catalogPreview` y los APK instrumentados
+  de ambas variantes experimentales. Pasaron 348 pruebas JVM de debug, 352 de
+  catalogLab, 348 de catalogPreview y 24 comprobaciones Python.
+- El POCO confirmó tres recorridos Compose de catalogPreview, incluida la caja
+  estrecha con texto al 180 % en ambos temas. El cuarto verificó búsqueda y
+  desplazamiento en un catálogo de 80 fichas, y se detuvo al intentar inyectar
+  Atrás por una restricción de Android. La repetición con cierre accesible
+  quedó bloqueada al instalar el APK de pruebas.
+- Se actualizó y se abrió el APK normal de **MiFlujo · Vista de catálogo** en
+  el POCO. La revisión visual directa de la hoja y la comprobación con TalkBack
+  quedan pendientes.

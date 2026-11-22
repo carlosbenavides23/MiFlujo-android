@@ -1,15 +1,14 @@
 package com.carlos.miflujo.catalogpreview
 
 import androidx.compose.runtime.Composable
-import com.carlos.miflujo.cataloglab.CatalogCategoryOptions
-import com.carlos.miflujo.cataloglab.CatalogIcon
+import com.carlos.miflujo.cataloglab.CatalogCategoryControl
+import com.carlos.miflujo.cataloglab.CatalogCategoryPicker
 import com.carlos.miflujo.cataloglab.CatalogItemEditor
 import com.carlos.miflujo.cataloglab.CatalogItemInput
 import com.carlos.miflujo.cataloglab.createFromEditor
 import com.carlos.miflujo.cataloglab.visibleName
 import com.carlos.miflujo.cataloglab.withCategory
 import com.carlos.miflujo.domain.backup.BackupCategory
-import com.carlos.miflujo.domain.category.CategoryScope
 import com.carlos.miflujo.domain.model.CatalogMovement
 import com.carlos.miflujo.domain.model.CatalogMovementDraft
 import com.carlos.miflujo.domain.model.MovementType
@@ -44,25 +43,21 @@ internal fun CatalogPreviewMovementDialog(
                     else -> null
                 }
             },
-            categoryLabel = { byUuid[it]?.visibleName() ?: "Categoría" },
-            categoryIcon = { uuid, modifier, background ->
-                val category = byUuid[uuid]
-                CatalogIcon(category?.iconKey, modifier, color = category?.iconColor, background = background)
+            categoryLabel = { byUuid[it]?.visibleName() ?: "Sin categoría" },
+            categoryControl = { uuid, modifier, onClick ->
+                CatalogCategoryControl(byUuid[uuid], modifier, onClick)
             },
-            categoryOptions = { type, select, create ->
-                CatalogCategoryOptions(
-                    categories, type, allowUncategorized = type == MovementType.INCOME,
-                    onSelect = select, onCreate = create,
+            categoryPicker = { type, uuid, dismiss, select, create ->
+                CatalogCategoryPicker(
+                    categories, type, uuid, allowUncategorized = type == MovementType.INCOME,
+                    onDismiss = dismiss, onSelect = select, onCreate = create,
                 )
             },
-            categoryEditor = { type, onCreated, dismiss ->
-                val scope = if (type == MovementType.INCOME) CategoryScope.INCOME else CategoryScope.EXPENSE
+            categoryEditor = { onCreated, dismiss ->
                 CatalogItemEditor(
                     title = "Nueva categoría",
-                    initial = CatalogItemInput(scope = scope),
+                    initial = CatalogItemInput(),
                     saveLabel = "Guardar categoría",
-                    allowScope = true,
-                    scopeOptions = listOf(scope, CategoryScope.BOTH),
                     onDismiss = dismiss,
                     save = { input, uuid -> model.categories.createFromEditor(input, uuid) },
                     onSaved = onCreated,

@@ -107,10 +107,9 @@ internal fun CatalogManagement(
         if (creating || category != null) {
             CatalogItemEditor(
                 title = if (creating) "Nueva categoría" else "Editar categoría",
-                initial = category?.let { CatalogItemInput(it.name, it.iconKey, it.scope, it.iconColor) }
+                initial = category?.let { CatalogItemInput(it.name, it.iconKey, it.iconColor) }
                     ?: CatalogItemInput(),
                 saveLabel = "Guardar categoría",
-                allowScope = creating,
                 onDismiss = { editorOpen = false },
                 save = { input, uuid ->
                     if (category == null) repository.createFromEditor(input, uuid)

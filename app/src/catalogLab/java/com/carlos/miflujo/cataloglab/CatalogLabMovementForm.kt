@@ -12,11 +12,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import com.carlos.miflujo.domain.backup.BackupCategory
 import com.carlos.miflujo.domain.backup.CatalogBackup
-import com.carlos.miflujo.domain.category.CatalogIconColor
 import com.carlos.miflujo.domain.category.CategoryRepository
-import com.carlos.miflujo.domain.category.CategoryScope
 import java.io.Serializable
 import com.carlos.miflujo.domain.model.*
 import com.carlos.miflujo.ui.movement.CapsuleToggle
@@ -43,6 +40,7 @@ internal fun CatalogLabMovementForm(
     val previous = existing?.draft
     var entry by rememberSaveable { mutableStateOf(CatalogMovementEntry.from(previous)) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
+    var pickingCategory by rememberSaveable { mutableStateOf(false) }
     var creatingCategory by rememberSaveable { mutableStateOf(false) }
     val (type, currency, amount, date, detail, categoryUuid) = entry
     val category = catalog.categories.firstOrNull { it.uuid == categoryUuid }
@@ -69,13 +67,7 @@ internal fun CatalogLabMovementForm(
                     ) { MovementSymbol(it) }
                 }
                 OutlinedTextField(date, { entry = entry.copy(date = it) }, label = { Text("Fecha (AAAA-MM-DD)") }, singleLine = true)
-                CatalogMenu(
-                    label = category?.visibleName() ?: "Sin categoría",
-                    icon = category?.iconKey, iconColor = category?.iconColor,
-                    categories = catalog.categories, type = type,
-                    select = { entry = entry.selectCategory(it) },
-                    onCreate = { creatingCategory = true },
-                )
+                CatalogCategoryControl(category, Modifier.fillMaxWidth()) { pickingCategory = true }
                 OutlinedTextField(detail, { entry = entry.copy(detail = it) }, label = { Text("Detalle") })
                 (error ?: saveError)?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
@@ -98,10 +90,16 @@ internal fun CatalogLabMovementForm(
             }
         }
     }
+    if (pickingCategory) CatalogCategoryPicker(
+        catalog.categories, type, categoryUuid, allowUncategorized = true,
+        onDismiss = { pickingCategory = false },
+        onSelect = { entry = entry.selectCategory(it); pickingCategory = false },
+        onCreate = { pickingCategory = false; creatingCategory = true },
+    )
     if (creatingCategory) CatalogItemEditor(
         title = "Nueva categoría",
         saveLabel = "Guardar categoría",
-        initial = CatalogItemInput(scope = if (type == MovementType.INCOME) CategoryScope.INCOME else CategoryScope.EXPENSE),
+        initial = CatalogItemInput(),
         onDismiss = { creatingCategory = false },
         save = { input, uuid -> repository.createFromEditor(input, uuid) },
         onSaved = { uuid ->
@@ -110,33 +108,6 @@ internal fun CatalogLabMovementForm(
             onCatalogChanged()
         },
     )
-}
-
-@Composable
-private fun CatalogMenu(
-    label: String,
-    icon: String?,
-    categories: List<BackupCategory>,
-    type: MovementType,
-    select: (String?) -> Unit,
-    onCreate: () -> Unit,
-    iconColor: CatalogIconColor? = null,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        OutlinedButton(onClick = { expanded = true }) {
-            CatalogIcon(icon, color = iconColor)
-            Spacer(Modifier.width(6.dp))
-            Text(label)
-        }
-        DropdownMenu(expanded, onDismissRequest = { expanded = false }) {
-            CatalogCategoryOptions(
-                categories, type, allowUncategorized = true,
-                onSelect = { expanded = false; select(it) },
-                onCreate = { expanded = false; onCreate() },
-            )
-        }
-    }
 }
 
 

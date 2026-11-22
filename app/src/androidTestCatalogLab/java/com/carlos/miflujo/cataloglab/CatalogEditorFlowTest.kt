@@ -69,7 +69,7 @@ class CatalogEditorFlowTest {
         compose.onNodeWithContentDescription("Monto").performTextInput("123.45")
         field("Detalle").performTextInput("Pago de prueba")
         compose.onNodeWithContentDescription("Córdobas, cambiar a dólares").performClick()
-        compose.onNodeWithText("Sin categoría").performClick()
+        compose.onNodeWithContentDescription("Categoría: Elegir categoría").performClick()
         compose.onNodeWithText("Crear nueva categoría").performClick()
         field("Nombre").performTextInput("Trabajo")
         restoration.emulateSavedInstanceStateRestore()
@@ -84,7 +84,7 @@ class CatalogEditorFlowTest {
         colorSection("Violeta", expanded = false).performScrollTo().performClick()
         compose.onNodeWithContentDescription("Violeta").performScrollTo().assertIsSelected()
         saveForm("Guardar categoría")
-        waitFor("Trabajo")
+        waitForCategory("Trabajo").assertExists()
         assertSingleLevel()
         waitFor("Guardar").performClick()
         waitFor("US$ 123.45")
@@ -115,7 +115,7 @@ class CatalogEditorFlowTest {
 
         waitForEnabled("Nuevo").performClick()
         compose.onNodeWithContentDescription("Monto").performTextInput("2")
-        compose.onNodeWithText("Sin categoría").performClick()
+        compose.onNodeWithContentDescription("Categoría: Elegir categoría").performClick()
         waitFor("Trabajo").performClick()
         assertSingleLevel()
         saveForm("Guardar")
@@ -166,7 +166,7 @@ class CatalogEditorFlowTest {
     }
 
     @Test
-    fun keepsExistingReportGroupAndDefaultsNewIncomeCategory() {
+    fun keepsExistingScopeAndReportGroupAndCreatesCategoriesForBothTypes() {
         val existing = runBlocking {
             model.session.categories.createCategory(Category(
                 name = "Reparaciones", scope = CategoryScope.EXPENSE, reportGroup = ReportGroup.MAINTENANCE,
@@ -184,17 +184,18 @@ class CatalogEditorFlowTest {
 
         waitFor("Nueva categoría").performClick()
         field("Nombre").performTextInput("Bonos")
-        compose.onNodeWithText("Tipo de movimiento · Egresos").performScrollTo().performClick()
-        compose.onNodeWithText("Ingresos").performClick()
+        compose.onNodeWithText("Tipo de movimiento", substring = true).assertDoesNotExist()
         compose.onNodeWithText("Grupo del reporte", substring = true).assertDoesNotExist()
         saveForm("Guardar categoría")
         waitFor("Bonos")
 
         val snapshot = runBlocking { model.session.snapshot() }
-        assertEquals(ReportGroup.MAINTENANCE, snapshot.categories.single { it.uuid == existing.value.uuid }.reportGroup)
+        val historical = snapshot.categories.single { it.uuid == existing.value.uuid }
+        assertEquals(CategoryScope.EXPENSE, historical.scope)
+        assertEquals(ReportGroup.MAINTENANCE, historical.reportGroup)
         val created = snapshot.categories.single { it.name == "Bonos" }
-        assertEquals(CategoryScope.INCOME, created.scope)
-        assertEquals(ReportGroup.INCOME, created.reportGroup)
+        assertEquals(CategoryScope.BOTH, created.scope)
+        assertEquals(ReportGroup.OTHER, created.reportGroup)
     }
 
     @Test
@@ -219,7 +220,7 @@ class CatalogEditorFlowTest {
         }
         compose.onNodeWithText("Actualizar").performClick()
         waitFor("Editar").performClick()
-        waitFor("Gastos varios (archivada)")
+        waitForCategory("Gastos varios (archivada)").assertExists()
         assertSingleLevel()
         field("Detalle").performTextInput("Recibo histórico")
         saveForm("Guardar")
@@ -251,6 +252,14 @@ class CatalogEditorFlowTest {
     }
 
     private fun field(label: String) = compose.onNode(hasText(label) and hasSetTextAction())
+
+    private fun waitForCategory(label: String): SemanticsNodeInteraction {
+        val description = "Categoría: $label"
+        compose.waitUntil(8_000) {
+            compose.onAllNodesWithContentDescription(description).fetchSemanticsNodes().isNotEmpty()
+        }
+        return compose.onNodeWithContentDescription(description)
+    }
 
     private fun waitFor(text: String, substring: Boolean = false): SemanticsNodeInteraction {
         compose.waitUntil(8_000) { compose.onAllNodesWithText(text, substring = substring).fetchSemanticsNodes().isNotEmpty() }

@@ -731,8 +731,10 @@ apertura, restauración y corte en instalaciones aisladas de Android antes de ac
 
 En la variante aislada `catalogLab`, **Configuración → Categorías** muestra fichas activas y
 archivadas. Se pueden crear, editar el nombre y el icono, asignar un color opcional, archivar
-tras confirmación y restaurar. El tipo de movimiento se configura al crear la categoría y queda
-fijo con su grupo de reporte. Los nombres iguales son válidos y el UUID distingue cada ficha.
+tras confirmación y restaurar. El editor muestra nombre, icono y color opcional. Las fichas
+nuevas se crean con ámbito `BOTH` y grupo de reporte `OTHER`. El ámbito, grupo y UUID de
+las fichas existentes se conservan al editarlas. Los nombres iguales son válidos y el UUID
+distingue cada ficha.
 
 En **Nuevo** y **Editar movimiento**, el selector ofrece categorías activas compatibles con el
 tipo y la opción **Sin categoría**. **Crear nueva categoría** conserva el importe, moneda, fecha
@@ -783,10 +785,16 @@ forma explícita. Los pendientes locales se conservan mientras el protocolo no c
 
 `catalogPreview` ejecuta la estructura de navegación, Ajustes, Inicio, Movimientos
 y Reporte de MiFlujo con un almacén local de prueba. Comparte con `catalogLab` el
-administrador, el editor, las opciones del selector, los 50 iconos y la paleta en
-`app/src/catalogUi`. El selector ocupa el control de categoría de la cápsula y
-filtra por tipo y estado. Crear una categoría desde ese control admite el tipo
-del borrador o ambos tipos y selecciona la categoría al guardarla.
+administrador, el editor, el selector, los 50 iconos y la paleta en
+`app/src/catalogUi`. El control redondeado de la cápsula muestra **Elegir categoría**
+o el nombre elegido, con el icono y su color. Los nombres largos se limitan a dos
+líneas visibles y el control anuncia el nombre completo.
+
+La hoja de Material 3 presenta **+ Crear nueva categoría** antes del buscador y del
+listado desplazable. La búsqueda filtra por nombre sin distinguir mayúsculas y
+minúsculas. La lista muestra las categorías activas compatibles con el tipo de
+movimiento e indica la selección actual. Al elegir, la hoja se cierra. La creación
+contextual conserva el borrador y selecciona la nueva ficha al guardarla.
 
 **+ Agregar** abre la cápsula. **Agregar otro** mantiene una cola provisional
 y **Confirmar** guarda el lote en una transacción. El editor persistido se abre
@@ -794,8 +802,9 @@ desde **Movimientos → Detalle del movimiento → Editar**. Si se mantiene la c
 original, conserva la referencia histórica. Las altas de egresos requieren una
 categoría, los ingresos pueden quedar sin categoría y se prescinde de subcategorías
 en la interfaz. El historial y la búsqueda muestran el nombre guardado de la
-categoría. El Reporte conserva sus grupos de totales y utiliza estos nombres para
-mostrar los movimientos.
+categoría. En el Reporte, las categorías nuevas cuentan como ingreso cuando el
+movimiento es ingreso, y como **Otros** cuando es egreso. Las categorías de ámbito
+limitado de versiones anteriores mantienen su disponibilidad y su grupo original.
 
 La instalación normal de prueba usa `com.carlos.miflujo.catalogpreview` y la
 base `catalog-preview.db`, creada desde cero con la Room candidata. La base
@@ -812,10 +821,10 @@ La vista integrada omite respaldo, restauración, exportación PDF y Cloud Sync.
 adb -d install -r app/build/outputs/apk/catalogPreview/app-catalogPreview.apk
 ```
 
-Abrir **MiFlujo · Vista de catálogo**. En **Ajustes → Categorías**, crear fichas
-de distinto tipo y probar icono, color, archivo y restauración. Abrir **+ Agregar**,
-alternar ingreso y egreso, elegir una categoría y crear otra con un monto y detalle
-ya escritos. Registrar, cerrar y reabrir la app. Desde **Movimientos**, abrir el
+Abrir **MiFlujo · Vista de catálogo**. En **Ajustes → Categorías**, crear fichas y
+probar icono, color, archivo y restauración. Abrir **+ Agregar**, alternar ingreso
+y egreso y buscar la misma categoría nueva en ambos tipos. Probar Atrás, el
+botón de cierre y la creación contextual con un monto y detalle ya escritos. Registrar, cerrar y reabrir la app. Desde **Movimientos**, abrir el
 detalle y editar el movimiento. Para probar una referencia archivada, archivar
 su categoría y volver al detalle. La edición debe mostrarla y las altas deben
 omitirla en el selector.

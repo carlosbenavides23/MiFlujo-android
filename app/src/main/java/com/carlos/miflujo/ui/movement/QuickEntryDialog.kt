@@ -82,9 +82,11 @@ internal class QuickEntryCatalog(
     val initialDraft: QuickEntryDraft?,
     val validate: (QuickEntryDraft) -> String?,
     val categoryLabel: (String?) -> String,
-    val categoryIcon: @Composable (String?, Modifier, Color) -> Unit,
-    val categoryOptions: @Composable (MovementType, select: (String?) -> Unit, create: () -> Unit) -> Unit,
-    val categoryEditor: @Composable (MovementType, onCreated: (String) -> Unit, onDismiss: () -> Unit) -> Unit,
+    val categoryControl: @Composable (String?, Modifier, onClick: () -> Unit) -> Unit,
+    val categoryPicker: @Composable (
+        MovementType, String?, onDismiss: () -> Unit, select: (String?) -> Unit, create: () -> Unit,
+    ) -> Unit,
+    val categoryEditor: @Composable (onCreated: (String) -> Unit, onDismiss: () -> Unit) -> Unit,
     val onSave: suspend (List<PendingEntry>) -> Unit,
 )
 
@@ -95,6 +97,7 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
     val focus = LocalFocusManager.current
     var activeId by rememberSaveable { mutableStateOf(UUID.randomUUID().toString()) }
     var saving by remember { mutableStateOf(false) }
+    var pickingCategory by rememberSaveable { mutableStateOf(false) }
     var creatingCategory by rememberSaveable { mutableStateOf(false) }
     val validate = catalog?.validate ?: QuickEntryDraft::validationMessage
     val editingStored = catalog?.initialDraft != null
@@ -283,23 +286,8 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                                 val context = LocalContext.current
                                 CapsuleMenuControl(icon = Icons.Default.CalendarToday, label = "Fecha", text = if (active.date == LocalDate.now()) "Hoy" else active.date.formatVisibleDate(), modifier = Modifier.weight(1f), onClick = { DatePickerDialog(context, { _, y, m, d -> state = state.update(active.copy(date = LocalDate.of(y, m + 1, d))) }, active.date.year, active.date.monthValue - 1, active.date.dayOfMonth).show() })
                                 if (catalog != null) {
-                                    CategoryPopup(categoryMenu, Modifier.weight(1f), anchor = { toggle ->
-                                        CapsuleMenuControl(
-                                            label = "Categoría",
-                                            text = catalog.categoryLabel(active.catalogCategoryUuid),
-                                            modifier = Modifier.fillMaxWidth(),
-                                            onClick = toggle,
-                                        ) { iconModifier ->
-                                            catalog.categoryIcon(active.catalogCategoryUuid, iconModifier, activeSurface)
-                                        }
-                                    }) {
-                                        catalog.categoryOptions(active.type, { uuid ->
-                                            state = state.update(state.active.copy(catalogCategoryUuid = uuid))
-                                            categoryMenu.expanded = false
-                                        }, {
-                                            categoryMenu.expanded = false
-                                            creatingCategory = true
-                                        })
+                                    catalog.categoryControl(active.catalogCategoryUuid, Modifier.weight(1f)) {
+                                        pickingCategory = true
                                     }
                                 } else if (active.type == MovementType.EXPENSE) {
                                     CategoryMenu(active.category, categoryMenu, Modifier.weight(1f)) {
@@ -373,8 +361,22 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
             }
         }
     }
+    if (catalog != null && pickingCategory) {
+        catalog.categoryPicker(
+            active.type, active.catalogCategoryUuid,
+            { pickingCategory = false },
+            { uuid ->
+                state = state.update(state.active.copy(catalogCategoryUuid = uuid))
+                pickingCategory = false
+            },
+            {
+                pickingCategory = false
+                creatingCategory = true
+            },
+        )
+    }
     if (catalog != null && creatingCategory) {
-        catalog.categoryEditor(state.active.type, { uuid ->
+        catalog.categoryEditor({ uuid ->
             state = state.update(state.active.copy(catalogCategoryUuid = uuid))
             creatingCategory = false
         }, { creatingCategory = false })

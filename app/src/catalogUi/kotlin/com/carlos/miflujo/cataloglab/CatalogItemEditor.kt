@@ -6,6 +6,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -22,7 +23,6 @@ import kotlinx.coroutines.launch
 internal data class CatalogItemInput(
     val name: String = "",
     val iconKey: String = DEFAULT_CATALOG_ICON,
-    val scope: CategoryScope = CategoryScope.EXPENSE,
     val iconColor: CatalogIconColor? = null,
 )
 
@@ -33,8 +33,10 @@ internal fun catalogNameError(name: String): String? = when {
 }
 
 internal suspend fun CategoryRepository.createFromEditor(input: CatalogItemInput, uuid: String): String {
-    val reportGroup = if (input.scope == CategoryScope.INCOME) ReportGroup.INCOME else ReportGroup.OTHER
-    val value = Category(uuid = uuid, name = input.name, scope = input.scope, reportGroup = reportGroup, iconKey = input.iconKey, iconColor = input.iconColor)
+    val value = Category(
+        uuid = uuid, name = input.name, scope = CategoryScope.BOTH,
+        reportGroup = ReportGroup.OTHER, iconKey = input.iconKey, iconColor = input.iconColor,
+    )
     val previous = category(uuid)
     if (previous == null) return createCategory(value).value.uuid
     check(previous.value.copy(id = 0) == value)
@@ -46,8 +48,6 @@ internal fun CatalogItemEditor(
     title: String,
     initial: CatalogItemInput,
     saveLabel: String,
-    allowScope: Boolean = false,
-    scopeOptions: List<CategoryScope> = CategoryScope.entries,
     onDismiss: () -> Unit,
     save: suspend (CatalogItemInput, String) -> String,
     onSaved: (String) -> Unit,
@@ -55,7 +55,6 @@ internal fun CatalogItemEditor(
     var name by rememberSaveable { mutableStateOf(initial.name) }
     var icon by rememberSaveable { mutableStateOf(initial.iconKey) }
     var iconColor by rememberSaveable { mutableStateOf(initial.iconColor) }
-    var scope by rememberSaveable { mutableStateOf(initial.scope) }
     var showIcons by rememberSaveable { mutableStateOf(false) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     val newUuid = rememberSaveable { newCatalogUuid() }
@@ -72,9 +71,6 @@ internal fun CatalogItemEditor(
                     name, { name = it; error = null }, Modifier.fillMaxWidth(), enabled = !busy,
                     label = { Text("Nombre") }, singleLine = true,
                 )
-                if (allowScope) {
-                    EditorChoice("Tipo de movimiento", scope, scopeOptions, { it.editorLabel() }, !busy) { scope = it }
-                }
                 OutlinedButton(enabled = !busy, onClick = { showIcons = true }) {
                     CatalogIcon(icon, color = iconColor)
                     Spacer(Modifier.width(8.dp))
@@ -83,7 +79,10 @@ internal fun CatalogItemEditor(
                 CatalogIconColorPicker(iconColor, enabled = !busy) { iconColor = it }
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                FlowRow(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                ) {
                     TextButton(onDismiss, enabled = !busy) { Text("Cancelar") }
                     Button(enabled = !busy, onClick = {
                         val unchangedName = name == initial.name && name.isNotBlank()
@@ -95,7 +94,6 @@ internal fun CatalogItemEditor(
                                     val input = CatalogItemInput(
                                         name = if (unchangedName) name else name.trim(),
                                         iconKey = icon,
-                                        scope = scope,
                                         iconColor = iconColor,
                                     )
                                     save(input, newUuid)
@@ -118,31 +116,5 @@ internal fun CatalogItemEditor(
     if (showIcons) CatalogIconPicker(icon, { showIcons = false }) {
         icon = it
         showIcons = false
-    }
-}
-
-private fun CategoryScope.editorLabel() = when (this) {
-    CategoryScope.INCOME -> "Ingresos"
-    CategoryScope.EXPENSE -> "Egresos"
-    CategoryScope.BOTH -> "Ingresos y egresos"
-}
-
-@Composable
-private fun <T> EditorChoice(
-    label: String,
-    value: T,
-    choices: List<T>,
-    text: (T) -> String,
-    enabled: Boolean,
-    onSelect: (T) -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        OutlinedButton(enabled = enabled, onClick = { expanded = true }) { Text("$label · ${text(value)}") }
-        DropdownMenu(expanded, onDismissRequest = { expanded = false }) {
-            choices.forEach { option ->
-                DropdownMenuItem(text = { Text(text(option)) }, onClick = { expanded = false; onSelect(option) })
-            }
-        }
     }
 }
