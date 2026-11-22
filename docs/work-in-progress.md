@@ -594,11 +594,10 @@ El PDF anterior pasó el verificador final. El raster de Poppler confirma el pun
 - Se ensamblaron `debug`, `catalogLab`, `catalogPreview` y los APK instrumentados
   de ambas variantes experimentales. Pasaron 348 pruebas JVM de debug, 352 de
   catalogLab, 348 de catalogPreview y 24 comprobaciones Python.
-- El POCO confirmó tres recorridos Compose de catalogPreview, incluida la caja
-  estrecha con texto al 180 % en ambos temas. El cuarto verificó búsqueda y
-  desplazamiento en un catálogo de 80 fichas, y se detuvo al intentar inyectar
-  Atrás por una restricción de Android. La repetición con cierre accesible
-  quedó bloqueada al instalar el APK de pruebas.
+- En el POCO X7 Pro pasaron los cuatro recorridos Compose de catalogPreview y los
+  cuatro de catalogLab. Se probó la búsqueda y el desplazamiento con 80 fichas,
+  el cierre desde el control accesible, la captura y edición con persistencia,
+  y el control estrecho con texto al 180 % en ambos temas.
 - Se actualizó y se abrió el APK normal de **MiFlujo · Vista de catálogo** en
-  el POCO. La revisión visual directa de la hoja y la comprobación con TalkBack
-  quedan pendientes.
+  el POCO. Quedan pendientes la revisión visual directa de la hoja, Atrás del
+  sistema y TalkBack. El dispositivo rechazó los eventos remotos de teclado y toque.
