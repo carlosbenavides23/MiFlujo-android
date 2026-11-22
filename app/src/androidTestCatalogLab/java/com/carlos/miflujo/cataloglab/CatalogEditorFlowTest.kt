@@ -58,7 +58,15 @@ class CatalogEditorFlowTest {
         field("Nombre").performTextInput("Trabajo")
         restoration.emulateSavedInstanceStateRestore()
         chooseIcon("automovil", "Automóvil")
+        colorSection("Predeterminado", expanded = false).assertExists()
+        compose.onNodeWithText("Usar color predeterminado").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Violeta").assertDoesNotExist()
         selectColor("Violeta")
+        colorSection("Violeta", expanded = true).performScrollTo().performClick()
+        colorSection("Violeta", expanded = false).assertExists()
+        compose.onNodeWithContentDescription("Violeta").assertDoesNotExist()
+        colorSection("Violeta", expanded = false).performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Violeta").performScrollTo().assertIsSelected()
         saveForm("Guardar categoría")
         waitFor("Trabajo")
         waitFor("Guardar").performClick()
@@ -68,6 +76,7 @@ class CatalogEditorFlowTest {
         val movement = snapshot.movements.single()
         assertEquals("directions_car", category.iconKey)
         assertEquals(CatalogIconColor.VIOLET, category.iconColor)
+        assertEquals(ReportGroup.OTHER, category.reportGroup)
         assertEquals(category.uuid, movement.categoryUuid)
         assertEquals(12345L, movement.amountMinor)
         assertEquals(Currency.DOLLAR, movement.currency)
@@ -107,6 +116,7 @@ class CatalogEditorFlowTest {
         assertEquals(category.iconColor, child.iconColor)
 
         compose.onAllNodesWithText("Editar")[0].performClick()
+        colorSection("Menta", expanded = false).performScrollTo().performClick()
         compose.onNodeWithContentDescription("Menta").performScrollTo().assertIsSelected()
         selectColor("Azul")
         field("Nombre").performScrollTo().performTextReplacement("Trabajo remoto")
@@ -115,8 +125,10 @@ class CatalogEditorFlowTest {
         saveForm("Guardar categoría")
         waitFor("Trabajo remoto")
         compose.onAllNodesWithText("Editar")[1].performClick()
+        colorSection("Menta", expanded = false).performScrollTo().performClick()
         compose.onNodeWithContentDescription("Menta").performScrollTo().assertIsSelected()
         compose.onNodeWithText("Usar color predeterminado").performScrollTo().performClick().assertIsSelected()
+        colorSection("Predeterminado", expanded = true).assertExists()
         field("Nombre").performScrollTo().performTextReplacement("Conexión")
         chooseIcon("internet", "Internet")
         saveForm("Guardar subcategoría")
@@ -148,6 +160,38 @@ class CatalogEditorFlowTest {
         assertNull(updated.iconColor)
         assertEquals(category.uuid, updated.categoryUuid)
         assertFalse(updated.archived)
+    }
+
+    @Test
+    fun keepsExistingReportGroupAndDefaultsNewIncomeCategory() {
+        val existing = runBlocking {
+            model.session.categories.createCategory(Category(
+                name = "Reparaciones", scope = CategoryScope.EXPENSE, reportGroup = ReportGroup.MAINTENANCE,
+            ))
+        }
+        compose.onNodeWithText("Actualizar").performClick()
+        waitFor("Configuración").performClick()
+        compose.onNodeWithText("Categorías y subcategorías").performClick()
+        waitFor("Reparaciones").performClick()
+        waitFor("Editar").performClick()
+        compose.onNodeWithText("Grupo del reporte", substring = true).assertDoesNotExist()
+        field("Nombre").performTextReplacement("Reparaciones del hogar")
+        saveForm("Guardar categoría")
+        waitFor("Reparaciones del hogar")
+
+        waitFor("Nueva categoría").performClick()
+        field("Nombre").performTextInput("Bonos")
+        compose.onNodeWithText("Tipo de movimiento · Egresos").performScrollTo().performClick()
+        compose.onNodeWithText("Ingresos").performClick()
+        compose.onNodeWithText("Grupo del reporte", substring = true).assertDoesNotExist()
+        saveForm("Guardar categoría")
+        waitFor("Bonos")
+
+        val snapshot = runBlocking { model.session.snapshot() }
+        assertEquals(ReportGroup.MAINTENANCE, snapshot.categories.single { it.uuid == existing.value.uuid }.reportGroup)
+        val created = snapshot.categories.single { it.name == "Bonos" }
+        assertEquals(CategoryScope.INCOME, created.scope)
+        assertEquals(ReportGroup.INCOME, created.reportGroup)
     }
 
     @Test
@@ -218,8 +262,16 @@ class CatalogEditorFlowTest {
     }
 
     private fun selectColor(label: String) {
+        val collapsed = hasText("Color del icono") and hasStateDescription("Contraído")
+        if (compose.onAllNodes(collapsed).fetchSemanticsNodes().isNotEmpty()) {
+            compose.onNode(collapsed).performScrollTo().performClick()
+        }
         compose.onNodeWithContentDescription(label).performScrollTo().performClick().assertIsSelected()
     }
+
+    private fun colorSection(summary: String, expanded: Boolean) = compose.onNode(
+        hasText("Color del icono") and hasText(summary) and hasStateDescription(if (expanded) "Expandido" else "Contraído"),
+    )
 
     private fun saveForm(label: String) {
         compose.onNodeWithText(label).performScrollTo().performClick()

@@ -119,7 +119,6 @@ internal fun CatalogLabMovementForm(
         title = "Nueva categoría",
         saveLabel = "Guardar categoría",
         initial = CatalogItemInput(scope = if (type == MovementType.INCOME) CategoryScope.INCOME else CategoryScope.EXPENSE),
-        allowGroup = true,
         onDismiss = { creatingCategory = false },
         save = { input, uuid -> repository.createFromEditor(input, uuid) },
         onSaved = { uuid ->

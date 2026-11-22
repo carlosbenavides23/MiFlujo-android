@@ -129,7 +129,7 @@ internal fun CatalogManagement(
         val parent = snapshot.categories.firstOrNull { it.uuid == editorId }
         val child = snapshot.subcategories.firstOrNull { it.uuid == editorId }
         val initial = when (kind) {
-            EditKind.EDIT_PARENT -> parent?.let { CatalogItemInput(it.name, it.iconKey, it.scope, it.reportGroup, it.iconColor) }
+            EditKind.EDIT_PARENT -> parent?.let { CatalogItemInput(it.name, it.iconKey, it.scope, it.iconColor) }
             EditKind.EDIT_CHILD -> child?.let { CatalogItemInput(it.name, it.iconKey, iconColor = it.iconColor) }
             EditKind.CREATE_PARENT -> CatalogItemInput()
             EditKind.CREATE_CHILD -> CatalogItemInput().takeIf { parent != null && !parent.archived }

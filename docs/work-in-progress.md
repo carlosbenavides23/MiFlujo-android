@@ -519,3 +519,17 @@ El PDF anterior pasó el verificador final. El raster de Poppler confirma el pun
   **7 pruebas de Firestore Emulator** y **31 instrumentadas en el POCO X7 Pro**. Se
   ensambló catalogLab. El POCO ejecutó la suite en los paquetes aislados de pruebas.
   Las reglas y formatos de producción conservan su configuración vigente.
+
+### Pulido del formulario de categorías
+
+- En `catalogLab`, «Color del icono» empieza plegado y muestra el color actual o
+  «Predeterminado». Al desplegarlo están disponibles la cuadrícula de diez muestras
+  y el control para volver al color del tema. El formulario conserva el color al
+  plegar la sección y se puede desplazar con la paleta abierta.
+- Se retiró «Grupo del reporte». La edición conserva el grupo guardado y las
+  nuevas categorías se crean en Ingresos si son exclusivas de ingreso, o en Otros
+  si admiten egresos. Los cálculos y la agrupación de los reportes siguen vigentes.
+- Pasaron 348 pruebas JVM de debug, 352 de catalogLab y las cuatro pruebas de
+  `CatalogEditorFlowTest` en el POCO X7 Pro con los paquetes aislados. Se ensamblaron
+  debug, catalogLab y los APK de pruebas. Queda pendiente la revisión manual del
+  diseño en pantallas pequeñas, con fuente ampliada y con TalkBack.

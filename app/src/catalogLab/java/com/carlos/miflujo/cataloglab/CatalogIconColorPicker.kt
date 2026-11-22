@@ -1,23 +1,35 @@
 package com.carlos.miflujo.cataloglab
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import com.carlos.miflujo.domain.category.CatalogIconColor
 
@@ -63,10 +75,45 @@ internal fun CatalogIconColorPicker(
     enabled: Boolean,
     onSelect: (CatalogIconColor?) -> Unit,
 ) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val summary = color?.let { iconSwatches.getValue(it).label } ?: "Predeterminado"
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                .clickable(enabled = enabled, role = Role.Button) { expanded = !expanded }
+                .semantics { stateDescription = if (expanded) "Expandido" else "Contraído" }
+                .padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Color del icono", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    summary,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Icon(Icons.Default.ExpandMore, null, Modifier.rotate(if (expanded) 180f else 0f))
+        }
+        AnimatedVisibility(
+            visible = expanded,
+            enter = expandVertically(tween(180), expandFrom = Alignment.Top),
+            exit = shrinkVertically(tween(150), shrinkTowards = Alignment.Top),
+        ) {
+            CatalogIconColorOptions(color, enabled, onSelect)
+        }
+    }
+}
+
+@Composable
+private fun CatalogIconColorOptions(
+    color: CatalogIconColor?,
+    enabled: Boolean,
+    onSelect: (CatalogIconColor?) -> Unit,
+) {
     val colors = MaterialTheme.colorScheme
     Column(Modifier.fillMaxWidth().selectableGroup()) {
-        Text("Color del icono", style = MaterialTheme.typography.titleSmall)
-        Text("Opcional", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
         Row(
             Modifier.fillMaxWidth().heightIn(min = 48.dp)
                 .selectable(color == null, enabled = enabled, role = Role.RadioButton) { onSelect(null) },

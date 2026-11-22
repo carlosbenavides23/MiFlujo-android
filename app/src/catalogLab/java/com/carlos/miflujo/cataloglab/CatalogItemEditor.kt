@@ -23,7 +23,6 @@ internal data class CatalogItemInput(
     val name: String = "",
     val iconKey: String = DEFAULT_CATALOG_ICON,
     val scope: CategoryScope = CategoryScope.EXPENSE,
-    val group: ReportGroup = ReportGroup.OTHER,
     val iconColor: CatalogIconColor? = null,
 )
 
@@ -34,7 +33,8 @@ internal fun catalogNameError(name: String): String? = when {
 }
 
 internal suspend fun CategoryRepository.createFromEditor(input: CatalogItemInput, uuid: String): String {
-    val value = Category(uuid = uuid, name = input.name, scope = input.scope, reportGroup = input.group, iconKey = input.iconKey, iconColor = input.iconColor)
+    val reportGroup = if (input.scope == CategoryScope.INCOME) ReportGroup.INCOME else ReportGroup.OTHER
+    val value = Category(uuid = uuid, name = input.name, scope = input.scope, reportGroup = reportGroup, iconKey = input.iconKey, iconColor = input.iconColor)
     val previous = category(uuid)
     if (previous == null) return createCategory(value).value.uuid
     check(previous.value.copy(id = 0) == value)
@@ -47,7 +47,6 @@ internal fun CatalogItemEditor(
     initial: CatalogItemInput,
     saveLabel: String,
     allowScope: Boolean = false,
-    allowGroup: Boolean = allowScope,
     onDismiss: () -> Unit,
     save: suspend (CatalogItemInput, String) -> String,
     onSaved: (String) -> Unit,
@@ -56,7 +55,6 @@ internal fun CatalogItemEditor(
     var icon by rememberSaveable { mutableStateOf(initial.iconKey) }
     var iconColor by rememberSaveable { mutableStateOf(initial.iconColor) }
     var scope by rememberSaveable { mutableStateOf(initial.scope) }
-    var group by rememberSaveable { mutableStateOf(initial.group.takeUnless { it == ReportGroup.INCOME } ?: ReportGroup.OTHER) }
     var showIcons by rememberSaveable { mutableStateOf(false) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     val newUuid = rememberSaveable { newCatalogUuid() }
@@ -73,18 +71,15 @@ internal fun CatalogItemEditor(
                     name, { name = it; error = null }, Modifier.fillMaxWidth(), enabled = !busy,
                     label = { Text("Nombre") }, singleLine = true,
                 )
+                if (allowScope) {
+                    EditorChoice("Tipo de movimiento", scope, CategoryScope.entries, { it.editorLabel() }, !busy) { scope = it }
+                }
                 OutlinedButton(enabled = !busy, onClick = { showIcons = true }) {
                     CatalogIcon(icon, color = iconColor)
                     Spacer(Modifier.width(8.dp))
                     Text("Elegir icono")
                 }
                 CatalogIconColorPicker(iconColor, enabled = !busy) { iconColor = it }
-                if (allowScope) {
-                    EditorChoice("Tipo de movimiento", scope, CategoryScope.entries, { it.editorLabel() }, !busy) { scope = it }
-                }
-                if (allowGroup && scope != CategoryScope.INCOME) {
-                    EditorChoice("Grupo del reporte", group, expenseGroups, { it.editorLabel() }, !busy) { group = it }
-                }
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
@@ -96,8 +91,13 @@ internal fun CatalogItemEditor(
                             busy = true
                             coroutine.launch {
                                 val saved = try {
-                                    save(CatalogItemInput(if (unchangedName) name else name.trim(), icon, scope,
-                                        if (scope == CategoryScope.INCOME) ReportGroup.INCOME else group, iconColor), newUuid)
+                                    val input = CatalogItemInput(
+                                        name = if (unchangedName) name else name.trim(),
+                                        iconKey = icon,
+                                        scope = scope,
+                                        iconColor = iconColor,
+                                    )
+                                    save(input, newUuid)
                                 } catch (cancel: CancellationException) {
                                     throw cancel
                                 } catch (_: Exception) {
@@ -120,19 +120,10 @@ internal fun CatalogItemEditor(
     }
 }
 
-private val expenseGroups = listOf(ReportGroup.FIXED_COST, ReportGroup.MAINTENANCE, ReportGroup.OTHER)
-
 private fun CategoryScope.editorLabel() = when (this) {
     CategoryScope.INCOME -> "Ingresos"
     CategoryScope.EXPENSE -> "Egresos"
     CategoryScope.BOTH -> "Ingresos y egresos"
-}
-
-private fun ReportGroup.editorLabel() = when (this) {
-    ReportGroup.INCOME -> "Ingresos"
-    ReportGroup.FIXED_COST -> "Costos fijos"
-    ReportGroup.MAINTENANCE -> "Mantenimiento"
-    ReportGroup.OTHER -> "Otros"
 }
 
 @Composable
