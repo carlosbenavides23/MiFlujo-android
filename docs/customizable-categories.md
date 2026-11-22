@@ -621,7 +621,7 @@ Secuencia propuesta para un UID:
 env -u FIREBASE_TOKEN -u GOOGLE_APPLICATION_CREDENTIALS -u GOOGLE_CLOUD_PROJECT \
   -u GCLOUD_PROJECT -u FIREBASE_CONFIG XDG_CONFIG_HOME="$PWD/firebase-config" CI=1 \
   firebase emulators:exec --project demo-miflujo-catalog --only auth,firestore \
-  'node --test movement.test.mjs && node seed-android.mjs --movement-v2'
+  'node --test movement.test.mjs && node seed-android.mjs --catalog-colors'
 ```
 
 ### Prueba Android con Firebase Emulator en AVD o por USB
@@ -634,11 +634,11 @@ env -u FIREBASE_TOKEN -u GOOGLE_APPLICATION_CREDENTIALS -u GOOGLE_CLOUD_PROJECT 
    ```
 
 2. En otra terminal, desde la raíz del repositorio, preparar la cuenta ficticia y el
-   marcador v2.
+   marcador 3 del protocolo experimental con color.
 
    ```sh
    env FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 \
-     node scripts/firestore-catalog/seed-android.mjs --movement-v2
+     node scripts/firestore-catalog/seed-android.mjs --catalog-colors
    ```
 
 3. Para el POCO X7 Pro, conectar el teléfono por USB con la depuración USB activada y
@@ -687,16 +687,15 @@ contiene únicamente datos ficticios. El cliente configura Auth y Firestore Emul
 para `demo-miflujo-catalog` con las dos direcciones locales ya admitidas.
 
 1. En Android Studio, seleccionar `catalogLab` en **Build Variants** y ejecutar la app
-   de pruebas. En la base local, **Agregar categoría de prueba** crea una categoría
-   y una subcategoría ficticias con iconos. **Nuevo** y **Editar** reutilizan los controles
-   de cápsulas y el lector de montos. El selector usa UUID, permite ambas referencias
-   vacías y conserva una selección archivada histórica al editarla. Room valida ámbito
-   y parentesco al guardar.
+   de pruebas. En la base local, **Configuración → Categorías** permite crear una ficha
+   de prueba. **Nuevo** y **Editar** reutilizan los controles de cápsulas y el lector de
+   montos. El selector usa UUID, permite guardar sin categoría y conserva la referencia
+   histórica si se mantiene la categoría original. Room valida ámbito y parentesco al guardar.
 2. **Reporte mensual** calcula C$ y US$ por separado a partir de una lectura
    transaccional del catálogo y los movimientos visibles. Reutiliza el desglose flexible
-   y el generador de PDF. **Exportar JSON** usa el mismo modelo portable v3 en ambas
-   particiones. **Restaurar JSON** valida v1/v2/v3, pide confirmación y repite las
-   comprobaciones de sincronización en la transacción de 6B. La partición de cuenta
+   y el generador de PDF con agrupación por categoría. **Exportar JSON** usa el modelo
+   portable v4 en ambas particiones. **Restaurar JSON** valida v1–v4, pide confirmación
+   y repite las comprobaciones de sincronización en la transacción de 6B. La partición de cuenta
    ofrece exportación y reportes y carece de acceso al almacén de restauración.
 3. Preparar la cuenta ficticia con la [configuración de emuladores de 6C](#prueba-android-con-firebase-emulator-en-avd-o-por-usb).
    Elegir **Emulador por USB** o **Emulador en AVD**. La pantalla abre la partición del
@@ -727,3 +726,117 @@ administrativa de backfill, reanudable y con inventario antes y después, probad
 datos ficticios. Un fallo conserva el UID congelado. Ante una migración local fallida,
 Room conserva la v3 por rollback. Falta el flujo de recuperación para el usuario y verificar
 apertura, restauración y corte en instalaciones aisladas de Android antes de activar.
+
+## Gestión de categorías
+
+En la variante aislada `catalogLab`, **Configuración → Categorías** muestra fichas activas y
+archivadas. Se pueden crear, editar el nombre y el icono, asignar un color opcional, archivar
+tras confirmación y restaurar. El editor muestra nombre, icono y color opcional. Las fichas
+nuevas se crean con ámbito `BOTH` y grupo de reporte `OTHER`. El ámbito, grupo y UUID de
+las fichas existentes se conservan al editarlas. Los nombres iguales son válidos y el UUID
+distingue cada ficha.
+
+En **Nuevo** y **Editar movimiento**, el selector ofrece categorías activas compatibles con el
+tipo y la opción **Sin categoría**. **Crear nueva categoría** conserva el importe, moneda, fecha
+y detalle del borrador y selecciona la ficha recién guardada. Una categoría histórica archivada
+sigue visible en la edición. Si se guarda el movimiento en su categoría original, se conserva
+su referencia histórica a la subcategoría. Si se elige explícitamente otra categoría o se quita
+la clasificación, se guarda la nueva selección con una referencia de subcategoría vacía.
+
+El historial, el reporte mensual y su PDF muestran la categoría. El reporte agrupa los importes
+históricos bajo su categoría mediante una copia en memoria. Room, los respaldos JSON y la
+sincronización conservan sus referencias y contratos.
+
+El selector incluye 50 [Material Symbols Rounded](https://developers.google.com/fonts/docs/material_symbols)
+como VectorDrawables, con búsqueda en español y nueve grupos. Los nombres de categorías son
+independientes de los nombres de los símbolos. Se almacena `iconKey` en Room, JSON v3 y el
+protocolo experimental. Un identificador desconocido se muestra como el icono genérico y
+se conserva al editar el nombre. La licencia y la revisión de origen están en los assets
+de la variante.
+
+Las pruebas Compose usan una base Room temporal por prueba y se habilitan con
+`-PcatalogLabUiTests=true`. Con esa propiedad, los APK de prueba usan el paquete separado
+`com.carlos.miflujo.cataloglab.uitest` y su APK instrumentado. El flujo normal de
+`catalogLab` y la app principal conservan sus paquetes y sus bases.
+
+### Color opcional del icono
+
+El formulario muestra diez colores en dos filas de cinco. **Usar color predeterminado**
+es un control aparte. La marca visible y el estado accesible identifican la selección.
+La vista previa, el catálogo y los movimientos aplican el tinte al dibujo. Las muestras
+mantienen el tono de referencia y los iconos ajustan su contraste contra la superficie
+del tema cuando hace falta. [Contraste no textual, W3C](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast).
+
+Room añade `iconColor` anulable al catálogo y a las subcategorías. Las bases candidatas
+de movimientos y catálogo migran de v4 a v5, y las bases sandbox y por cuenta migran de
+v1 a v2. Se conservan los UUID, las revisiones, las marcas de archivo y los movimientos.
+NULL usa el color del tema. La exportación experimental ahora genera JSON v4 y admite
+importar v1–v3 con el color del tema.
+
+El cliente de sincronización coordinada requiere el marcador 3 en la cuenta ficticia.
+El paso de preparación usa `seed-android.mjs --catalog-colors`. La cuenta mantiene los
+documentos de movimientos v2. El catálogo nuevo se escribe como v2 y puede leer fichas
+v1 sin color. Si se cambia una ficha v1 después del corte, se escribe v2 con una
+revisión nueva. Las reglas candidatas del emulador impiden que una escritura v1
+sobrescriba esos documentos. Un ensayo antiguo con marcador 2 requiere elevarlo de
+forma explícita. Los pendientes locales se conservan mientras el protocolo no coincide.
+
+## Vista integrada del catálogo
+
+`catalogPreview` ejecuta la estructura de navegación, Ajustes, Inicio, Movimientos
+y Reporte de MiFlujo con un almacén local de prueba. Comparte con `catalogLab` el
+administrador, el editor, el selector contextual, los 50 iconos y la paleta en
+`app/src/catalogUi`. Categoría reutiliza el tamaño y la tipografía del control
+de fecha, con el icono tintado y el nombre en una línea. Las etiquetas
+de accesibilidad conservan el nombre completo.
+
+El selector flotante se ancla al control y aprovecha el espacio encima cuando
+abre cerca del borde inferior. Tiene una altura máxima de 260 dp, una lista
+con desplazamiento propio y la acción **Crear nueva categoría** separada al pie.
+Muestra todas las categorías activas compatibles, sin buscador ni cambio de
+pantalla. Tocar fuera, elegir una ficha o pulsar Atrás cierra el selector.
+
+El orden usa la instantánea local existente. Cuenta los movimientos persistidos
+visibles de los últimos 90 días por UUID de categoría y por su fecha original de
+registro. Incluye ambas monedas y tipos. Desempata por uso más reciente, orden del
+catálogo, nombre y UUID. Las fichas sin uso quedan disponibles. El orden de las
+fichas ya visibles se conserva mientras el selector está abierto. Los descartes
+y la cola provisional quedan fuera del conteo. Editar detalle, importe o fecha
+contable conserva la fecha original de registro.
+
+**+ Agregar** abre la cápsula. **Agregar otro** mantiene una cola provisional
+y **Confirmar** guarda el lote en una transacción. El editor persistido se abre
+desde **Movimientos → Detalle del movimiento → Editar**. Si se mantiene la categoría
+original, conserva la referencia histórica. Las altas de egresos requieren una
+categoría, los ingresos pueden quedar sin categoría y se prescinde de subcategorías
+en la interfaz. El historial y la búsqueda muestran el nombre guardado de la
+categoría. En el Reporte, las categorías nuevas cuentan como ingreso cuando el
+movimiento es ingreso, y como **Otros** cuando es egreso. Las categorías de ámbito
+limitado de versiones anteriores mantienen su disponibilidad y su grupo original.
+
+La instalación normal de prueba usa `com.carlos.miflujo.catalogpreview` y la
+base `catalog-preview.db`, creada desde cero con la Room candidata. La base
+conserva los UUID y las relaciones del catálogo. La adaptación a enums de grupos
+solo se usa para presentar las pantallas compartidas. El manifiesto retira el
+permiso de red, el inicializador de Firebase y la actividad de producción.
+La vista integrada omite respaldo, restauración, exportación PDF y Cloud Sync.
+`catalogLab` conserva sus recorridos de respaldo, PDF y Firebase Emulator.
+
+### Revisión en un dispositivo
+
+```bash
+./gradlew :app:assembleCatalogPreview
+adb -d install -r app/build/outputs/apk/catalogPreview/app-catalogPreview.apk
+```
+
+Abrir **MiFlujo · Vista de catálogo**. En **Ajustes → Categorías**, crear fichas y
+probar icono, color, archivo y restauración. Abrir **+ Agregar** y elegir categorías
+en ambos tipos. Con varias fichas, comprobar el orden después de guardar movimientos,
+desplazarse hasta una ficha sin uso y probar los cierres al tocar fuera y con Atrás.
+Para probar la creación contextual, escribir monto y detalle primero. Registrar,
+cerrar y reabrir la app. Desde **Movimientos**, abrir el detalle y editar el movimiento. Para probar una referencia archivada, archivar
+su categoría y volver al detalle. La edición debe mostrarla y las altas deben
+omitirla en el selector.
+
+Las pruebas instrumentadas usan otro paquete, `com.carlos.miflujo.catalogpreview.uitest`,
+para que sus fixtures tengan almacenamiento independiente de esta revisión manual.

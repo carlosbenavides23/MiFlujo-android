@@ -116,11 +116,11 @@ service cloud.firestore {
     function validMovementLinks(uid, data) {
       return (data.categoryUuid == null && data.subcategoryUuid == null)
         || (isCatalogUuid(data.categoryUuid)
-            && getAfter(/databases/$(database)/documents/users/$(uid)/categories/$(data.categoryUuid)).data.schemaVersion == 1
+            && getAfter(/databases/$(database)/documents/users/$(uid)/categories/$(data.categoryUuid)).data.schemaVersion in [1, 2]
             && getAfter(/databases/$(database)/documents/users/$(uid)/categories/$(data.categoryUuid)).data.scope in [data.type, 'BOTH']
             && (data.subcategoryUuid == null
                 || (isCatalogUuid(data.subcategoryUuid)
-                    && getAfter(/databases/$(database)/documents/users/$(uid)/subcategories/$(data.subcategoryUuid)).data.schemaVersion == 1
+                    && getAfter(/databases/$(database)/documents/users/$(uid)/subcategories/$(data.subcategoryUuid)).data.schemaVersion in [1, 2]
                     && getAfter(/databases/$(database)/documents/users/$(uid)/subcategories/$(data.subcategoryUuid)).data.categoryUuid == data.categoryUuid)));
     }
 
@@ -155,16 +155,16 @@ service cloud.firestore {
 
       allow create: if isAuthorizedUser(uid) && (
         (protocol(uid) == 1 && isValidMovement(request.resource.data, movementUuid))
-        || (protocol(uid) == 2 && validMovementV2(uid, movementUuid, request.resource.data)
+        || (protocol(uid) in [2, 3] && validMovementV2(uid, movementUuid, request.resource.data)
             && request.resource.data.revision == 1)
       );
 
       allow update: if isAuthorizedUser(uid) && (
-        (protocol(uid) == 1 && resource.data.schemaVersion == 1
+        (protocol(uid) == 1 && resource.data.schemaVersion in [1, 2]
             && isValidMovement(request.resource.data, movementUuid)
             && request.resource.data.uuid == resource.data.uuid
             && request.resource.data.createdAt == resource.data.createdAt)
-        || (protocol(uid) == 2 && validMovementV2Update(uid, movementUuid, resource.data, request.resource.data))
+        || (protocol(uid) in [2, 3] && validMovementV2Update(uid, movementUuid, resource.data, request.resource.data))
       );
 
       allow delete: if false;
@@ -190,7 +190,8 @@ service cloud.firestore {
         'schemaVersion', 'uuid', 'name', 'iconKey', 'archived', 'sortOrder',
         'revisionCounter', 'revisionActorUuid'
       ].concat(extra);
-      return data.keys().hasAll(fields) && data.keys().hasOnly(fields);
+      let fieldsForVersion = data.schemaVersion == 2 ? fields.concat(['iconColor']) : fields;
+      return data.keys().hasAll(fieldsForVersion) && data.keys().hasOnly(fieldsForVersion);
     }
 
     function validCatalogText(value, maxBytes) {
@@ -198,13 +199,21 @@ service cloud.firestore {
     }
 
     function validCatalogData(data, uuid) {
-      return data.schemaVersion is int && data.schemaVersion == 1
+      return data.schemaVersion is int && data.schemaVersion in [1, 2]
+        && (data.schemaVersion == 1 || data.iconColor == null || data.iconColor in [
+            'red', 'orange', 'amber', 'green', 'mint', 'cyan', 'blue', 'violet', 'pink', 'gray'
+        ])
         && isCatalogUuid(data.uuid) && data.uuid == uuid
         && validCatalogText(data.name, 480) && validCatalogText(data.iconKey, 128)
         && data.archived is bool
         && data.sortOrder is int && data.sortOrder >= -2147483648 && data.sortOrder <= 2147483647
         && data.revisionCounter is int && data.revisionCounter >= 0
         && isCatalogUuid(data.revisionActorUuid);
+    }
+
+    function catalogWriteAllowed(uid, data) {
+      let version = protocol(uid);
+      return (version == 2 && data.schemaVersion == 1) || (version == 3 && data.schemaVersion == 2);
     }
 
     function validCatalogAdvance(before, after) {
@@ -253,26 +262,26 @@ service cloud.firestore {
 
     match /users/{uid}/categories/{uuid} {
       allow read: if isAuthorizedUser(uid);
-      allow create: if isAuthorizedUser(uid) && protocol(uid) == 2 && validCategoryShape(request.resource.data, uuid)
+      allow create: if isAuthorizedUser(uid) && catalogWriteAllowed(uid, request.resource.data) && validCategoryShape(request.resource.data, uuid)
         && !existsAfter(/databases/$(database)/documents/users/$(uid)/subcategories/$(uuid));
-      allow update: if isAuthorizedUser(uid) && protocol(uid) == 2 && validCategoryShape(request.resource.data, uuid)
+      allow update: if isAuthorizedUser(uid) && catalogWriteAllowed(uid, request.resource.data) && validCategoryShape(request.resource.data, uuid)
         && request.resource.data.uuid == resource.data.uuid
         && request.resource.data.scope == resource.data.scope
         && request.resource.data.reportGroup == resource.data.reportGroup
-        && request.resource.data.schemaVersion == resource.data.schemaVersion
+        && request.resource.data.schemaVersion >= resource.data.schemaVersion
         && validCatalogAdvance(resource.data, request.resource.data);
       allow delete: if false;
     }
 
     match /users/{uid}/subcategories/{uuid} {
       allow read: if isAuthorizedUser(uid);
-      allow create: if isAuthorizedUser(uid) && protocol(uid) == 2 && validSubcategoryShape(request.resource.data, uuid)
+      allow create: if isAuthorizedUser(uid) && catalogWriteAllowed(uid, request.resource.data) && validSubcategoryShape(request.resource.data, uuid)
         && !existsAfter(/databases/$(database)/documents/users/$(uid)/categories/$(uuid))
         && hasCatalogParent(uid, request.resource.data.categoryUuid);
-      allow update: if isAuthorizedUser(uid) && protocol(uid) == 2 && validSubcategoryShape(request.resource.data, uuid)
+      allow update: if isAuthorizedUser(uid) && catalogWriteAllowed(uid, request.resource.data) && validSubcategoryShape(request.resource.data, uuid)
         && request.resource.data.uuid == resource.data.uuid
         && request.resource.data.categoryUuid == resource.data.categoryUuid
-        && request.resource.data.schemaVersion == resource.data.schemaVersion
+        && request.resource.data.schemaVersion >= resource.data.schemaVersion
         && hasCatalogParent(uid, request.resource.data.categoryUuid)
         && validCatalogAdvance(resource.data, request.resource.data);
       allow delete: if false;

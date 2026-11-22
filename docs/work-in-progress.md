@@ -487,3 +487,157 @@ El PDF anterior pasó el verificador final. El raster de Poppler confirma el pun
 - Queda ejecutar la validación integral de 6D en Android y verificar el recorrido visual
   de la variante aislada. El PR hacia `dev` conserva los bloqueos de activación documentados
   en [6D](customizable-categories.md#integración-funcional-experimental-iteración-6d).
+
+## Editor funcional de categorías y subcategorías
+
+- `ux/category-editor` parte de `origin/dev` en `8e57378`. El editor y el selector de
+  iconos funcionan en [catalogLab](customizable-categories.md#gestión-de-categorías)
+  con el repositorio experimental existente. Configuración abre la lista activa o
+  archivada. El formulario de movimientos conserva el borrador al crear una categoría
+  y mantiene la clasificación histórica cuando corresponde.
+- Pasaron **346 pruebas JVM en debug**, **349 en catalogLab** y **21 comprobaciones
+  Python** de SQLite y configuración. Se ensamblaron los APK de debug, catalogLab
+  y las pruebas instrumentadas. Pasaron **3/3 pruebas Compose en el POCO X7 Pro** con
+  Room en memoria y los paquetes independientes `com.carlos.miflujo.cataloglab.uitest`
+  y `com.carlos.miflujo.cataloglab.uitest.test`. Cubrieron guardado contextual y
+  restauración del estado, JSON v3 y el contrato remoto, creación y edición de fichas,
+  archivo, restauración y referencias históricas. La configuración instrumentada evitó
+  reemplazar la instalación previa de catalogLab firmada con otra clave.
+- Pendientes la evaluación visual y los bloqueos de activación de 6D. Producción
+  sigue usando Room v3, respaldo v2 y su Cloud Sync vigente.
+
+### Color opcional para iconos
+
+- `catalogLab` ofrece diez colores con vista previa, selección accesible y un control
+  independiente para volver al tema. El icono y su tinte se muestran en el catálogo,
+  los selectores y las referencias históricas.
+- Las bases experimentales añadieron una columna anulable mediante migraciones 4 → 5
+  y 1 → 2. Los colores se escriben en JSON v4 y en las fichas remotas v2 del marcador
+  experimental 3. Los lectores conservan compatibilidad con los archivos y documentos
+  anteriores. Ver el [contrato actualizado](customizable-categories.md#color-opcional-del-icono).
+- Pasaron **348 pruebas JVM en debug**, **352 en catalogLab**, **22 comprobaciones Python**,
+  **7 pruebas de Firestore Emulator** y **31 instrumentadas en el POCO X7 Pro**. Se
+  ensambló catalogLab. El POCO ejecutó la suite en los paquetes aislados de pruebas.
+  Las reglas y formatos de producción conservan su configuración vigente.
+
+### Pulido del formulario de categorías
+
+- En `catalogLab`, «Color del icono» empieza plegado y muestra el color actual o
+  «Predeterminado». Al desplegarlo están disponibles la cuadrícula de diez muestras
+  y el control para volver al color del tema. El formulario conserva el color al
+  plegar la sección y se puede desplazar con la paleta abierta.
+- Se retiró «Grupo del reporte». La edición conserva el grupo guardado y las
+  nuevas categorías se crean en Ingresos si son exclusivas de ingreso, o en Otros
+  si admiten egresos. Los cálculos y la agrupación de los reportes siguen vigentes.
+- Pasaron 348 pruebas JVM de debug, 352 de catalogLab y las cuatro pruebas de
+  `CatalogEditorFlowTest` en el POCO X7 Pro con los paquetes aislados. Se ensamblaron
+  debug, catalogLab y los APK de pruebas. Queda pendiente la revisión manual del
+  diseño en pantallas pequeñas, con fuente ampliada y con TalkBack.
+
+### Catálogo de un nivel
+
+- En [catalogLab](customizable-categories.md#gestión-de-categorías), el catálogo, el selector
+  de movimientos, el historial y el reporte muestran categorías. Los importes históricos se
+  agrupan por categoría en el reporte mensual y su PDF. Se conserva el editor con 50 iconos,
+  diez colores opcionales y el control plegado por defecto.
+- Las altas desde el formulario guardan la categoría elegida con referencia de subcategoría
+  vacía. La edición conserva el UUID histórico siempre que se guarde la categoría original.
+  Se mantienen los registros, relaciones y contratos de Room, JSON y Cloud Sync.
+- Antes de integrar con la aplicación principal, revisar la validación y los flujos de captura
+  y edición que aún exigen subcategoría en costos fijos. La activación también conserva los
+  [bloqueos de integración de 6D](customizable-categories.md#integración-funcional-experimental-iteración-6d).
+- Pasaron 348 pruebas JVM de debug, 352 de catalogLab, 22 comprobaciones Python y
+  47 pruebas instrumentadas en el POCO X7 Pro. Gradle ensambló debug, catalogLab y
+  los APK instrumentados. Las cuatro de Compose usaron bases temporales
+  con datos ficticios y verificaron gestión, iconos, color, alta con categoría y
+  edición histórica con reapertura de Room, historial, reporte y respaldo JSON.
+  La primera corrida incluyó `ExampleInstrumentedTest`, que exige el ID de
+  producción. Se excluyó en la repetición con el paquete aislado. Se omitieron
+  dos casos que requieren Firebase Emulator.
+
+## Integración experimental de categorías en la interfaz principal
+
+- [catalogPreview](customizable-categories.md#vista-integrada-del-catálogo) reutiliza
+  la navegación, Ajustes y la cápsula de la app. Su instalación y Room están
+  aisladas y el APK carece de permiso de red. El administrador y los recursos de
+  catálogo se comparten con catalogLab.
+- Las altas de la cápsula persisten el lote en una sola transacción. La edición
+  desde el historial trabaja con el movimiento candidato por UUID. Los nombres
+  personalizados se ven en Inicio, búsqueda, historial y Reporte. La exportación
+  de PDF y las operaciones de respaldo y Cloud Sync quedan fuera de esta vista.
+- La aprobación visual precede a cualquier decisión sobre migración definitiva,
+  respaldo de producción o corte de Cloud Sync. Siguen vigentes las condiciones
+  de activación de [6D](customizable-categories.md#integración-funcional-experimental-iteración-6d).
+- Se ensamblaron `debug`, `catalogLab`, `catalogPreview` y los APK de pruebas.
+  Pasaron 348 pruebas JVM de debug, 352 de catalogLab, 348 de catalogPreview y
+  24 comprobaciones Python. En el POCO X7 Pro pasaron los dos recorridos Compose
+  de catalogPreview, con cierre y reapertura de la actividad real, comprobaciones
+  de Room y verificación del aislamiento. La regresión instrumentada de catalogLab
+  se detuvo antes de ejecutar casos porque el teléfono rechazó la instalación
+  de su APK de pruebas (`INSTALL_FAILED_USER_RESTRICTED`).
+- El POCO tiene instalada **MiFlujo · Vista de catálogo**. Se verificaron su
+  actividad de inicio y su UID independiente. El APK de la vista carece de
+  permiso de Internet y de inicialización predeterminada de Firebase. Los
+  metadatos de la instalación de producción coincidieron antes y después.
+
+### Hoja de selección y categorías para ambos tipos
+
+- En [la vista integrada](customizable-categories.md#vista-integrada-del-catálogo),
+  el control redondeado conserva su lugar junto a la fecha. Muestra **Elegir categoría**
+  o la ficha elegida. La hoja Material 3 comparte buscador, listado desplazable y
+  acción tonal de creación entre las variantes experimentales.
+- El editor compartido guarda las fichas nuevas como `BOTH` con grupo `OTHER`.
+  Los ingresos se contabilizan como ingresos. Los egresos de fichas nuevas se
+  agrupan en Otros. Los ámbitos, grupos y UUID históricos se conservan.
+- Se mantienen los borradores y la confirmación transaccional de la cola. Se
+  conservan los esquemas y los contratos de respaldo y sincronización.
+- Se ensamblaron `debug`, `catalogLab`, `catalogPreview` y los APK instrumentados
+  de ambas variantes experimentales. Pasaron 348 pruebas JVM de debug, 352 de
+  catalogLab, 348 de catalogPreview y 24 comprobaciones Python.
+- En el POCO X7 Pro pasaron los cuatro recorridos Compose de catalogPreview y los
+  cuatro de catalogLab. Se probó la búsqueda y el desplazamiento con 80 fichas,
+  el cierre desde el control accesible, la captura y edición con persistencia,
+  y el control estrecho con texto al 180 % en ambos temas.
+- Se actualizó y se abrió el APK normal de **MiFlujo · Vista de catálogo** en
+  el POCO. Quedan pendientes la revisión visual directa de la hoja, Atrás del
+  sistema y TalkBack. El dispositivo rechazó los eventos remotos de teclado y toque.
+
+### Selector contextual de Quick Entry
+
+- [catalogPreview](customizable-categories.md#vista-integrada-del-catálogo) vuelve al
+  control compacto junto a la fecha y usa una lista flotante anclada de hasta 260 dp.
+  La acción de crear queda al pie. Selector y ordenación se reutilizan en catalogLab.
+- El orden cuenta movimientos persistidos visibles registrados en los últimos 90 días.
+  La frecuencia y la última fecha original de registro determinan la prioridad. Los
+  empates se resuelven de forma estable y todas las fichas activas compatibles se
+  pueden alcanzar desplazando la lista. El cálculo reutiliza la instantánea de Room.
+- Compilaron catalogPreview y catalogLab. Pasaron dos pruebas JVM de ordenación
+  y el único caso instrumentado de catalogPreview en el POCO, con 80 fichas,
+  selección, cierre al tocar fuera y creación conservando el borrador. Se instaló
+  la variante aislada. La valoración visual y de ergonomía queda para la revisión
+  manual del usuario.
+
+### Suspensión de borrador al editar un pendiente
+
+- En `ux/category-editor`, Quick Entry conserva el borrador nuevo en el estado
+  guardable del formulario. Al editar se carga una copia del pendiente. **Guardar**
+  actualiza solo esa entrada por UUID y **Cancelar** descarta sus cambios. Ambas
+  acciones recuperan el borrador con el importe textual y el UUID de categoría.
+  **Confirmar** sigue guardando el lote en una transacción.
+- **Salir** mantiene la confirmación de descarte. Si hay un borrador suspendido,
+  el aviso lo incluye. **Continuar** conserva los dos borradores y la cola.
+- **Salir**, **Cancelar** y **Guardar** comparten una fila adaptable de Material 3.
+  Los botones tienen un alto mínimo de 48 dp y pueden pasar a otra línea si el
+  ancho o el tamaño del texto lo exige.
+- Pasaron `git diff --check`, la compilación de `catalogPreview`, los 15 casos
+  de `QuickEntryStateTest` y dos recorridos Compose focalizados en el POCO X7 Pro.
+  Se probó la recreación de la actividad con una edición activa, la recuperación
+  tras cancelar o guardar y la confirmación del lote. El APK normal se actualizó
+  por ADB con `install -r`. Se comprobó la conservación del archivo de la base
+  experimental y la coincidencia de los metadatos de la app de producción.
+  Queda pendiente la revisión visual manual de la fila de acciones.
+- Al recuperar el borrador con **Guardar** o **Cancelar**, el cursor se coloca al
+  final de monto y detalle. La edición se indica con **Editando movimiento** y
+  el borde de la tarjeta activa. Pasaron la revisión estática,
+  `git diff --check`, la compilación de `catalogPreview` y la actualización en
+  el POCO X7 Pro con `adb install -r`. Queda pendiente la validación manual.

@@ -10,6 +10,9 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.carlos.miflujo.data.backup.CatalogMovementBackupStore
 import com.carlos.miflujo.data.backup.CatalogRestoreDestination
 import com.carlos.miflujo.data.cataloglab.CatalogLabSession
+import com.carlos.miflujo.data.category.CATALOG_ICON_COLOR_4_5
+import com.carlos.miflujo.data.category.CategoryCatalogSchema
+import com.carlos.miflujo.domain.category.CatalogIconColor
 import com.carlos.miflujo.data.local.MIGRATION_1_2
 import com.carlos.miflujo.data.local.MIGRATION_2_3
 import com.carlos.miflujo.data.local.MiFlujoDatabase
@@ -45,6 +48,45 @@ class CatalogMovementMigrationTest {
 
     @get:Rule
     val helper = MigrationTestHelper(instrumentation, MiFlujoDatabase::class.java)
+
+    @get:Rule
+    val catalogHelper = MigrationTestHelper(instrumentation, CatalogMovementDatabase::class.java)
+
+    @Test
+    fun upgradesV4WithoutLosingArchivedRowsOrChangingMovementValues() = runBlocking {
+        withDatabaseName { name ->
+            val original = historicalExpense()
+            catalogHelper.createDatabase(name, 4).use { old ->
+                CategoryCatalogSchema.initialize(old)
+                installMovementRelationshipGuards(old)
+                old.execSQL("UPDATE categories SET archived = 1 WHERE id = 2")
+                old.execSQL("UPDATE subcategories SET archived = 1 WHERE id = 1")
+                old.execSQL(
+                    """INSERT INTO movements
+                        (id,uuid,type,amount_minor,currency,date_epoch_day,category_id,subcategory_id,detail,
+                        created_at_epoch_millis,updated_at_epoch_millis)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                    arrayOf(original.id, original.uuid, original.type, original.amountMinor, original.currency,
+                        original.dateEpochDay, original.categoryId, original.subcategoryId, original.detail,
+                        original.createdAtEpochMillis, original.updatedAtEpochMillis),
+                )
+            }
+            target(name).useRoom { db ->
+                val session = CatalogLabSession.local(db)
+                val parent = checkNotNull(session.categories.category(LegacyCategoryCatalog.categories[1].uuid))
+                val child = session.categories.subcategories(parent.value.uuid, includeArchived = true).single { it.value.id == 1L }
+                assertTrue(parent.value.archived)
+                assertTrue(child.value.archived)
+                assertNull(parent.value.iconColor)
+                assertNull(child.value.iconColor)
+                assertEquals(original, db.movements().find(original.uuid))
+                val colored = session.categories.updateCategory(parent.value.edited(iconColor = CatalogIconColor.AMBER), parent.revision)
+                val restored = session.categories.updateCategory(colored.value.edited(archived = false), colored.revision)
+                assertEquals(CatalogIconColor.AMBER, restored.value.iconColor)
+                assertEquals(original, db.movements().find(original.uuid))
+            }
+        }
+    }
 
     @Test
     fun upgradesV3WithAllSeedsAndPreservesIdsFinancialFieldsAndSyncMetadata() = runBlocking {
@@ -368,7 +410,7 @@ class CatalogMovementMigrationTest {
         val builder = if (name == null) Room.inMemoryDatabaseBuilder(context, CatalogMovementDatabase::class.java)
         else Room.databaseBuilder(context, CatalogMovementDatabase::class.java, name)
         return builder.addCallback(CatalogMovementDatabase.initializer)
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, CATALOG_MOVEMENT_MIGRATION_3_4).build()
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, CATALOG_MOVEMENT_MIGRATION_3_4, CATALOG_ICON_COLOR_4_5).build()
     }
 
     private fun query(db: SupportSQLiteDatabase, sql: String): List<List<String?>> = db.query(sql).use { cursor ->

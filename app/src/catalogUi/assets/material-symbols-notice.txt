@@ -1,0 +1,3 @@
+Material Symbols Rounded by Google
+https://github.com/google/material-design-icons/tree/310de998d61fc253a6df21e708a54c1d18338cab/symbols/web
+Licensed under Apache License 2.0. The selected SVGs were converted to Android VectorDrawables.

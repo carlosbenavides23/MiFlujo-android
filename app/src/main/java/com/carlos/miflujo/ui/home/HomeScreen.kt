@@ -46,6 +46,7 @@ fun HomeScreen(
     uiState: HomeUiState,
     indicatorState: CloudSyncHomeIndicatorState,
     modifier: Modifier = Modifier,
+    categoryLabels: Map<String, String> = emptyMap(),
 ) {
     Column(
         modifier = modifier
@@ -67,7 +68,7 @@ fun HomeScreen(
             cordoba = uiState.report.cordoba,
             dollar = uiState.report.dollar,
         )
-        RecentMovementsCard(movements = uiState.recentMovements)
+        RecentMovementsCard(uiState.recentMovements, categoryLabels)
     }
 }
 
@@ -273,7 +274,7 @@ private fun InlineMetric(
 }
 
 @Composable
-private fun RecentMovementsCard(movements: List<Movement>) {
+private fun RecentMovementsCard(movements: List<Movement>, categoryLabels: Map<String, String>) {
     Card(
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -294,7 +295,7 @@ private fun RecentMovementsCard(movements: List<Movement>) {
                 )
             } else {
                 movements.forEachIndexed { index, movement ->
-                    RecentMovementRow(movement = movement)
+                    RecentMovementRow(movement, categoryLabels[movement.uuid] ?: movement.categoryLabel())
                     if (index < movements.lastIndex) {
                         HorizontalDivider()
                     }
@@ -305,7 +306,7 @@ private fun RecentMovementsCard(movements: List<Movement>) {
 }
 
 @Composable
-private fun RecentMovementRow(movement: Movement) {
+private fun RecentMovementRow(movement: Movement, categoryLabel: String) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -324,7 +325,7 @@ private fun RecentMovementRow(movement: Movement) {
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = "${movement.date.formatVisibleDate()} · ${movement.categoryLabel()}",
+                text = "${movement.date.formatVisibleDate()} · $categoryLabel",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,

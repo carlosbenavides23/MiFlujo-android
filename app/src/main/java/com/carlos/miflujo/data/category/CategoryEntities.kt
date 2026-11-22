@@ -19,6 +19,7 @@ data class CategoryEntity(
     val revisionCounter: Long,
     val revisionActorUuid: String,
     val syncState: String,
+    val iconColor: String? = null,
 )
 
 @Entity(
@@ -37,6 +38,7 @@ data class SubcategoryEntity(
     val revisionCounter: Long,
     val revisionActorUuid: String,
     val syncState: String,
+    val iconColor: String? = null,
 )
 
 @Entity(tableName = "catalog_installation", indices = [Index(value = ["actorUuid"], unique = true)])
@@ -44,12 +46,12 @@ data class CatalogInstallationEntity(@PrimaryKey val id: Int = 1, val actorUuid:
 
 fun Category.toEntity(revision: CatalogRevision, state: CatalogSyncState) = CategoryEntity(
     id, uuid, name, scope.name, reportGroup.name, iconKey, archived, sortOrder,
-    revision.counter, revision.actorUuid, state.name,
+    revision.counter, revision.actorUuid, state.name, iconColor?.key,
 )
-fun CategoryEntity.toDomain() = Category(id, uuid, name, CategoryScope.valueOf(scope), ReportGroup.valueOf(reportGroup), iconKey, archived, sortOrder)
+fun CategoryEntity.toDomain() = Category(id, uuid, name, CategoryScope.valueOf(scope), ReportGroup.valueOf(reportGroup), iconKey, archived, sortOrder, CatalogIconColor.fromKey(iconColor))
 fun Subcategory.toEntity(revision: CatalogRevision, state: CatalogSyncState) = SubcategoryEntity(
-    id, uuid, categoryId, name, iconKey, archived, sortOrder, revision.counter, revision.actorUuid, state.name,
+    id, uuid, categoryId, name, iconKey, archived, sortOrder, revision.counter, revision.actorUuid, state.name, iconColor?.key,
 )
-fun SubcategoryEntity.toDomain() = Subcategory(id, uuid, categoryId, name, iconKey, archived, sortOrder)
+fun SubcategoryEntity.toDomain() = Subcategory(id, uuid, categoryId, name, iconKey, archived, sortOrder, CatalogIconColor.fromKey(iconColor))
 fun CategoryEntity.stored() = StoredCategory(toDomain(), CatalogRevision(revisionCounter, revisionActorUuid), CatalogSyncState.valueOf(syncState))
 fun SubcategoryEntity.stored() = StoredSubcategory(toDomain(), CatalogRevision(revisionCounter, revisionActorUuid), CatalogSyncState.valueOf(syncState))

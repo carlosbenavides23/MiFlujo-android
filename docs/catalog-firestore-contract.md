@@ -305,3 +305,19 @@ la cuenta ficticia debe prepararse después. No se requieren credenciales de una
 La integración con la app requiere decisiones posteriores sobre enlace de catálogo local
 a cuenta, vida útil de su sesión, programación, activación y migración en el corte coordinado.
 El motor experimental carece de llamadas desde el contenedor, WorkManager o la UI.
+
+## Extensión de color para el catálogo coordinado
+
+El marcador administrativo del emulador `metadata/movementProtocol` admite la fase 3.
+Con esa fase, los movimientos conservan su esquema v2 y las fichas de catálogo
+se escriben como v2 con `iconColor` obligatorio. El campo es anulable y su valor
+es una de las diez claves del catálogo. Los clientes de fase 3 leen fichas v1 como
+color nulo. Un cambio de ficha v1 avanza la revisión y escribe v2. Las reglas
+candidatas deniegan degradar una ficha v2 a v1 incluso ante un cambio posterior
+del marcador. La fase 2 sigue disponible para los ensayos históricos del protocolo
+sin color. Evitar bajar el marcador de una cuenta ya convertida.
+
+Para activar la fase 3 en el fixture de Auth y Firestore Emulator, usar
+`seed-android.mjs --catalog-colors`. El cliente detiene la corrida y conserva los
+pendientes si el marcador difiere. La prueba aislada 4B conserva el escritor v1
+y rechaza enviar fichas con color.

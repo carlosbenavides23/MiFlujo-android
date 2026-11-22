@@ -12,16 +12,17 @@ import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 
-/** Preparatory v3 codec. Not wired into BackupExporter, BackupImporter or SettingsViewModel. */
+/** Versioned experimental catalog codec. Not wired into BackupExporter, BackupImporter or SettingsViewModel. */
 object CatalogBackupJson {
-    const val Version = 3L
+    const val Version = 4L
 
     fun parse(json: String): CatalogBackup = try {
         validateCatalogBackupJsonSyntax(json)
         val root = JSONObject(json)
         when (root.integer("schemaVersion")) {
             1L, 2L -> legacy(BackupJsonParser.parse(json)).validatedCopy()
-            Version -> parseV3(root).validatedCopy()
+            3L -> parseCatalog(root, withColor = false).validatedCopy()
+            Version -> parseCatalog(root, withColor = true).validatedCopy()
             else -> error("Unsupported backup version")
         }
     } catch (e: InvalidBackupException) { throw e
@@ -38,11 +39,12 @@ object CatalogBackupJson {
             .put("categories", array(snapshot.categories.map { c ->
                 JSONObject().put("uuid", c.uuid).put("name", c.name).put("scope", c.scope.name)
                     .put("reportGroup", c.reportGroup.name).put("iconKey", c.iconKey)
+                    .put("iconColor", c.iconColor?.key ?: JSONObject.NULL)
                     .put("archived", c.archived).put("sortOrder", c.sortOrder).put("revision", revision(c.revision))
             }))
             .put("subcategories", array(snapshot.subcategories.map { s ->
                 JSONObject().put("uuid", s.uuid).put("categoryUuid", s.categoryUuid).put("name", s.name)
-                    .put("iconKey", s.iconKey).put("archived", s.archived).put("sortOrder", s.sortOrder)
+                    .put("iconKey", s.iconKey).put("iconColor", s.iconColor?.key ?: JSONObject.NULL).put("archived", s.archived).put("sortOrder", s.sortOrder)
                     .put("revision", revision(s.revision))
             }))
             .put("movements", array(snapshot.movements.map { m ->
@@ -54,17 +56,17 @@ object CatalogBackupJson {
             })).toString(2)
     }
 
-    private fun parseV3(root: JSONObject): CatalogBackup {
+    private fun parseCatalog(root: JSONObject, withColor: Boolean): CatalogBackup {
         root.shape("schemaVersion", "app", "createdAt", "categories", "subcategories", "movements")
         require(root.string("app") == BackupAppName)
         return CatalogBackup(root.time("createdAt"), root.objects("categories").map { c ->
-            c.shape("uuid", "name", "scope", "reportGroup", "iconKey", "archived", "sortOrder", "revision")
+            c.catalogShape(withColor, "uuid", "name", "scope", "reportGroup", "iconKey", "archived", "sortOrder", "revision")
             BackupCategory(c.string("uuid"), c.string("name"), CategoryScope.valueOf(c.string("scope")),
-                ReportGroup.valueOf(c.string("reportGroup")), c.string("iconKey"), c.boolean("archived"), c.position(), c.revision())
+                ReportGroup.valueOf(c.string("reportGroup")), c.string("iconKey"), c.boolean("archived"), c.position(), c.revision(), c.iconColor(withColor))
         }, root.objects("subcategories").map { s ->
-            s.shape("uuid", "categoryUuid", "name", "iconKey", "archived", "sortOrder", "revision")
+            s.catalogShape(withColor, "uuid", "categoryUuid", "name", "iconKey", "archived", "sortOrder", "revision")
             BackupSubcategory(s.string("uuid"), s.string("categoryUuid"), s.string("name"), s.string("iconKey"),
-                s.boolean("archived"), s.position(), s.revision())
+                s.boolean("archived"), s.position(), s.revision(), s.iconColor(withColor))
         }, root.objects("movements").map { m ->
             m.shape("uuid", "type", "amountMinor", "currency", "date", "categoryUuid", "subcategoryUuid", "detail", "createdAt", "updatedAt")
             BackupMovement(m.string("uuid"), MovementType.valueOf(m.string("type")), m.integer("amountMinor"),
@@ -72,6 +74,12 @@ object CatalogBackupJson {
                 m.nullable("subcategoryUuid"), m.nullable("detail"), m.time("createdAt"), m.time("updatedAt"))
         })
     }
+    private fun JSONObject.catalogShape(withColor: Boolean, vararg keys: String) =
+        if (withColor) shape(*keys, "iconColor") else shape(*keys)
+
+    private fun JSONObject.iconColor(withColor: Boolean): CatalogIconColor? =
+        if (withColor) CatalogIconColor.fromKey(nullable("iconColor")) else null
+
     private fun legacy(old: ParsedBackup): CatalogBackup {
         val stamp = LegacyCategoryCatalog.seedRevision
         val categories = LegacyCategoryCatalog.categories.associateBy { it.id }

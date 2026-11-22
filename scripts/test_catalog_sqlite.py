@@ -39,6 +39,27 @@ class CatalogSqliteTest(unittest.TestCase):
     def tearDown(self):
         self.db.close()
 
+    def test_color_columns_preserve_rows_and_allow_reuse_and_null(self):
+        migration = (BASE / "data/category/CatalogIconColorMigration.kt").read_text()
+        statements = re.findall(r'db.execSQL\("(ALTER TABLE .*?)"\)', migration)
+        self.assertEqual(2, len(statements))
+        for table in ("categories", "subcategories"):
+            self.db.execute(f"UPDATE {table} SET archived = 1 WHERE id = 1")
+        original = {
+            table: self.db.execute(f"SELECT * FROM {table} ORDER BY id").fetchall()
+            for table in ("categories", "subcategories")
+        }
+        for sql in statements:
+            self.db.execute(sql)
+        for table, rows in original.items():
+            self.assertEqual([row + (None,) for row in rows],
+                             self.db.execute(f"SELECT * FROM {table} ORDER BY id").fetchall())
+            self.db.execute(f"UPDATE {table} SET iconColor = 'mint' WHERE id IN (1, 2)")
+            self.db.execute(f"UPDATE {table} SET archived = 0 WHERE id = 1")
+            self.assertEqual([(0, "mint"), (0, "mint")],
+                             self.db.execute(f"SELECT archived, iconColor FROM {table} WHERE id IN (1, 2) ORDER BY id").fetchall())
+        self.assertEqual([], self.db.execute("PRAGMA foreign_key_check").fetchall())
+
     def test_seed_and_foreign_keys(self):
         self.assertEqual(4, self.db.execute("SELECT count(*) FROM categories").fetchone()[0])
         self.assertEqual(3, self.db.execute("SELECT count(*) FROM subcategories").fetchone()[0])

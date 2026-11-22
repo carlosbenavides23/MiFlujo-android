@@ -29,7 +29,7 @@ interface BackupMovementDao {
 }
 
 /** Independent database for atomic catalog + movement backup experiments, no app injection. */
-@Database(entities = [CategoryEntity::class, SubcategoryEntity::class, CatalogInstallationEntity::class, BackupMovementEntity::class], version = 1, exportSchema = true)
+@Database(entities = [CategoryEntity::class, SubcategoryEntity::class, CatalogInstallationEntity::class, BackupMovementEntity::class], version = 2, exportSchema = true)
 abstract class BackupSandboxDatabase : RoomDatabase() {
     abstract fun categories(): CategoryDao
     abstract fun movements(): BackupMovementDao
@@ -52,6 +52,6 @@ abstract class BackupSandboxDatabase : RoomDatabase() {
         }
         fun openIsolated(context: Context): BackupSandboxDatabase = Room.databaseBuilder(
             context.applicationContext, BackupSandboxDatabase::class.java, "category-backup-sandbox.db",
-        ).addCallback(initializer).build()
+        ).addCallback(initializer).addMigrations(CATALOG_ICON_COLOR_1_2).build()
     }
 }

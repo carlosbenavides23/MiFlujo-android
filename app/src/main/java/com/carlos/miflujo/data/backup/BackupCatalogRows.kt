@@ -68,7 +68,7 @@ internal suspend fun replaceBackupContents(
     val subcategoryIds = backup.subcategories.associate { child ->
         val value = Subcategory(
             uuid = child.uuid, categoryId = categoryIds.getValue(child.categoryUuid), name = child.name,
-            iconKey = child.iconKey, archived = child.archived, sortOrder = child.sortOrder,
+            iconKey = child.iconKey, archived = child.archived, sortOrder = child.sortOrder, iconColor = child.iconColor,
         )
         child.uuid to catalog.insertSubcategory(value.toEntity(child.revision, CatalogSyncState.PENDING))
     }

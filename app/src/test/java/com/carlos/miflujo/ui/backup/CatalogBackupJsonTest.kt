@@ -28,7 +28,21 @@ class CatalogBackupJsonTest {
         currency = Currency.DOLLAR, date = movement.date, category = MovementCategory.FIXED_COST,
         subcategory = MovementSubcategory.WATER, detail = movement.detail, createdAt = time, updatedAt = time.plusNanos(1))
 
-    @Test fun `v3 round trip preserves exact content and revision without local sending metadata`() {
+    @Test fun `colors round trip and legacy v3 defaults to theme color`() {
+        val colored = sample().copy(
+            categories = listOf(parent.copy(iconColor = CatalogIconColor.RED)),
+            subcategories = listOf(child.copy(iconColor = CatalogIconColor.MINT)),
+        )
+        assertEquals(colored, CatalogBackupJson.parse(CatalogBackupJson.serialize(colored)))
+        invalid(root().also { it.getJSONArray("categories").getJSONObject(0).put("iconColor", "#ffffff") })
+        invalid(root().also { it.getJSONArray("subcategories").getJSONObject(0).remove("iconColor") })
+        val v3 = JSONObject(CatalogBackupJson.serialize(colored)).put("schemaVersion", 3)
+        invalid(v3)
+        listOf("categories", "subcategories").forEach { v3.getJSONArray(it).getJSONObject(0).remove("iconColor") }
+        assertEquals(sample(), CatalogBackupJson.parse(v3.toString()))
+    }
+
+    @Test fun `v4 round trip preserves exact content and revision without local sending metadata`() {
         val input = sample()
         val json = CatalogBackupJson.serialize(input)
         assertEquals(input, CatalogBackupJson.parse(json))
@@ -120,9 +134,9 @@ class CatalogBackupJsonTest {
         assertEquals(Long.MAX_VALUE, CatalogBackupJson.parse(CatalogBackupJson.serialize(backup)).movements.single().amountMinor)
     }
     @Test fun `unknown incomplete and locally decorated formats are rejected`() {
-        invalid(root().put("schemaVersion", 4))
-        // JSONObject normalizes a Double 3.0 to the literal 3 when serializing; exercise wire input.
-        invalidJson(root().toString().replace("\"schemaVersion\":3", "\"schemaVersion\":3.0"))
+        invalid(root().put("schemaVersion", 5))
+        // JSONObject normalizes a Double 4.0 to the literal 4 when serializing; exercise wire input.
+        invalidJson(root().toString().replace("\"schemaVersion\":4", "\"schemaVersion\":4.0"))
         invalidJson(root().toString() + "{}")
         invalid(root().put("app", "Other")); invalid(root().also { it.remove("categories") })
         invalid(root().also { it.getJSONArray("movements").getJSONObject(0).remove("subcategoryUuid") })
@@ -130,7 +144,7 @@ class CatalogBackupJsonTest {
         invalid(root().also { it.getJSONArray("categories").getJSONObject(0).put("syncState", "SYNCED") })
         invalid(root().also { it.getJSONArray("movements").getJSONObject(0).put("date", "2024-02-30") })
     }
-    @Test fun `legacy malformed references remain invalid and production still rejects v3`() {
+    @Test fun `legacy malformed references remain invalid and production still rejects the catalog format`() {
         val legacy = JSONObject(BackupJsonSerializer.serialize(time, listOf(oldMovement())))
         legacy.getJSONArray("movements").getJSONObject(0).put("category", "UNKNOWN")
         invalid(legacy)
@@ -170,7 +184,7 @@ class CatalogBackupJsonTest {
             "\"amountMinor\":12345/*comment*/",
         ).forEach { invalidJson(json.replace(amount, it)) }
         invalidJson(json + '\u0000')
-        invalidJson(json.replaceFirst("\"schemaVersion\":3", "\"schemaVersion\":2,\"schemaVersion\":3"))
+        invalidJson(json.replaceFirst("\"schemaVersion\":4", "\"schemaVersion\":2,\"schemaVersion\":4"))
     }
 
     @Test fun `strict reading accepts escaped text without interpreting punctuation as structure`() {

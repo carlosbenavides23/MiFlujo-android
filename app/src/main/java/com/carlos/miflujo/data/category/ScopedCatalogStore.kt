@@ -24,6 +24,7 @@ class ScopedCatalogStore private constructor(
             val name = scopedCatalogDatabaseName(uid)
             val db = Room.databaseBuilder(context.applicationContext, CategoryCatalogDatabase::class.java, name)
                 .addCallback(CategoryCatalogDatabase.initializer)
+                .addMigrations(CATALOG_ICON_COLOR_4_5)
                 .build()
             return ScopedCatalogStore(uid, db)
         }
@@ -105,7 +106,7 @@ internal class RoomCatalogSyncSource(
                         val value = Category(
                             id = category?.value?.id ?: 0, uuid = entry.uuid, name = entry.name,
                             scope = entry.scope, reportGroup = entry.reportGroup, iconKey = entry.iconKey,
-                            archived = entry.archived, sortOrder = entry.sortOrder,
+                            archived = entry.archived, sortOrder = entry.sortOrder, iconColor = entry.iconColor,
                         )
                         val row = value.toEntity(entry.revision, CatalogSyncState.SYNCED)
                         if (category == null) dao.insertCategory(row) else check(dao.updateCategory(row) == 1)
@@ -113,7 +114,7 @@ internal class RoomCatalogSyncSource(
                     is RemoteSubcategoryDto -> {
                         val value = Subcategory(
                             id = child?.value?.id ?: 0, uuid = entry.uuid, categoryId = requireNotNull(parent).id,
-                            name = entry.name, iconKey = entry.iconKey, archived = entry.archived, sortOrder = entry.sortOrder,
+                            name = entry.name, iconKey = entry.iconKey, archived = entry.archived, sortOrder = entry.sortOrder, iconColor = entry.iconColor,
                         )
                         val row = value.toEntity(entry.revision, CatalogSyncState.SYNCED)
                         if (child == null) dao.insertSubcategory(row) else check(dao.updateSubcategory(row) == 1)
