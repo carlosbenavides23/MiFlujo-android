@@ -11,8 +11,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.MotionDurationScale
 
-private const val openDurationMillis = 200
-private const val closeDurationMillis = 165
+private const val openDurationMillis = 155
+private const val closeDurationMillis = 125
 
 internal class CategoryPickerMotion(
     private val expanded: Boolean,

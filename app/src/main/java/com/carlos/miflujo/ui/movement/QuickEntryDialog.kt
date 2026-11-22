@@ -610,7 +610,7 @@ internal fun CapsuleMenuControl(
         val scale by animateFloatAsState(
             targetValue = if (pressed) 0.965f else 1f,
             animationSpec = if (pressed) {
-                tween(55, easing = LinearOutSlowInEasing)
+                tween(45, easing = LinearOutSlowInEasing)
             } else {
                 spring(
                     dampingRatio = Spring.DampingRatioNoBouncy,
