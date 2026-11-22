@@ -43,8 +43,9 @@ fun ReportScreen(
     uiState: ReportUiState,
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
-    onShareReport: () -> Unit,
+    onShareReport: (() -> Unit)?,
     modifier: Modifier = Modifier,
+    categoryLabels: Map<String, String>? = null,
 ) {
     Column(
         modifier = modifier
@@ -63,7 +64,7 @@ fun ReportScreen(
             onPreviousMonth = onPreviousMonth,
             onNextMonth = onNextMonth,
         )
-        ShareReportButton(
+        if (onShareReport != null) ShareReportButton(
             enabled = !uiState.isExportingReport,
             isSharing = uiState.isExportingReport,
             onClick = onShareReport,
@@ -76,8 +77,9 @@ fun ReportScreen(
         ExpenseDetailCard(
             cordoba = uiState.report.cordoba,
             dollar = uiState.report.dollar,
+            showSubcategories = categoryLabels == null,
         )
-        MonthlyMovementsCard(movements = uiState.movements)
+        MonthlyMovementsCard(uiState.movements, categoryLabels.orEmpty())
     }
 }
 
@@ -242,6 +244,7 @@ private fun CurrencyStatementSection(
 private fun ExpenseDetailCard(
     cordoba: CurrencySummary,
     dollar: CurrencySummary,
+    showSubcategories: Boolean,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -259,12 +262,14 @@ private fun ExpenseDetailCard(
                 title = "Córdobas",
                 currencySymbol = "C$",
                 summary = cordoba,
+                showSubcategories = showSubcategories,
             )
             HorizontalDivider()
             ExpenseDetailCurrencySection(
                 title = "Dólares",
                 currencySymbol = "US$",
                 summary = dollar,
+                showSubcategories = showSubcategories,
             )
         }
     }
@@ -275,6 +280,7 @@ private fun ExpenseDetailCurrencySection(
     title: String,
     currencySymbol: String,
     summary: CurrencySummary,
+    showSubcategories: Boolean,
 ) {
     val breakdown = summary.expenseBreakdown
 
@@ -321,30 +327,32 @@ private fun ExpenseDetailCurrencySection(
                 value = breakdown.otherMinor.formatVisibleMoney(currencySymbol),
             )
         }
-        HorizontalDivider()
-        Column(
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                text = "Costos fijos",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            BreakdownLine(
-                label = "Agua",
-                value = breakdown.waterMinor.formatVisibleMoney(currencySymbol),
-                indented = true,
-            )
-            BreakdownLine(
-                label = "Luz",
-                value = breakdown.electricityMinor.formatVisibleMoney(currencySymbol),
-                indented = true,
-            )
-            BreakdownLine(
-                label = "Internet",
-                value = breakdown.internetMinor.formatVisibleMoney(currencySymbol),
-                indented = true,
-            )
+        if (showSubcategories) {
+            HorizontalDivider()
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = "Costos fijos",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                BreakdownLine(
+                    label = "Agua",
+                    value = breakdown.waterMinor.formatVisibleMoney(currencySymbol),
+                    indented = true,
+                )
+                BreakdownLine(
+                    label = "Luz",
+                    value = breakdown.electricityMinor.formatVisibleMoney(currencySymbol),
+                    indented = true,
+                )
+                BreakdownLine(
+                    label = "Internet",
+                    value = breakdown.internetMinor.formatVisibleMoney(currencySymbol),
+                    indented = true,
+                )
+            }
         }
     }
 }
@@ -386,6 +394,7 @@ private fun MonthlyActivityCard(
 @Composable
 private fun MonthlyMovementsCard(
     movements: List<Movement>,
+    categoryLabels: Map<String, String>,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -411,7 +420,9 @@ private fun MonthlyMovementsCard(
                         if (index > 0) {
                             HorizontalDivider()
                         }
-                        MonthlyMovementRow(movement = movement)
+                        val category = categoryLabels[movement.uuid]
+                        MonthlyMovementRow(movement, category?.let { "${movement.typeLabel()} · $it" }
+                            ?: movement.classificationLabel())
                     }
                 }
             }
@@ -422,6 +433,7 @@ private fun MonthlyMovementsCard(
 @Composable
 private fun MonthlyMovementRow(
     movement: Movement,
+    classification: String,
 ) {
     Column(
         modifier = Modifier
@@ -444,7 +456,7 @@ private fun MonthlyMovementRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    text = movement.classificationLabel(),
+                    text = classification,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

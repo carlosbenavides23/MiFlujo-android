@@ -74,18 +74,7 @@ fun SettingsScreen(
         isCloudAccountOperationRunning = isCloudAccountOperationInProgress,
     )
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
-    ) {
-        Text(
-            text = "Ajustes",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.SemiBold,
-        )
+    SettingsContent(modifier) {
         CloudSyncSection(
             status = cloudAccountStatus,
             isOperationInProgress = isCloudAccountOperationInProgress,
@@ -183,6 +172,37 @@ fun SettingsScreen(
             onDismissRequest = onCancelRestore,
             onConfirmRestore = onConfirmRestore,
         )
+    }
+}
+
+@Composable
+internal fun SettingsContent(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp),
+    ) {
+        Text(
+            text = "Ajustes",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+        content()
+    }
+}
+
+@Composable
+internal fun CatalogSettingsScreen(onOpenCatalog: () -> Unit, modifier: Modifier = Modifier) {
+    SettingsContent(modifier) {
+        SettingsOptionRow(SettingsOption(
+            title = "Categorías",
+            description = "Administrá las categorías de ingresos y egresos.",
+            enabled = true,
+            status = null,
+            onClick = onOpenCatalog,
+        ))
     }
 }
 

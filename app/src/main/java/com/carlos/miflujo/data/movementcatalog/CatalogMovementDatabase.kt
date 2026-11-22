@@ -42,6 +42,9 @@ internal interface CatalogMovementDao {
     @Query("DELETE FROM movements")
     suspend fun clearForRestore()
 
+    @Query("DELETE FROM movements WHERE uuid = :uuid AND sync_status = 'LOCAL_ONLY' AND deleted_at_epoch_millis IS NULL")
+    suspend fun deleteLocal(uuid: String): Int
+
     @Insert
     suspend fun insert(movement: CatalogMovementEntity): Long
 
@@ -49,7 +52,7 @@ internal interface CatalogMovementDao {
     suspend fun update(movement: CatalogMovementEntity): Int
 }
 
-/** Candidate for fresh installs and migration tests. No builder is wired into the app. */
+/** Candidate database for isolated experiments and migration tests. */
 @Database(
     entities = [CatalogMovementEntity::class, CategoryEntity::class, SubcategoryEntity::class, CatalogInstallationEntity::class],
     version = 5,

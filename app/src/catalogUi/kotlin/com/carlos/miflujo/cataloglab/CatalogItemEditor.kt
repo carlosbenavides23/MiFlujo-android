@@ -47,6 +47,7 @@ internal fun CatalogItemEditor(
     initial: CatalogItemInput,
     saveLabel: String,
     allowScope: Boolean = false,
+    scopeOptions: List<CategoryScope> = CategoryScope.entries,
     onDismiss: () -> Unit,
     save: suspend (CatalogItemInput, String) -> String,
     onSaved: (String) -> Unit,
@@ -72,7 +73,7 @@ internal fun CatalogItemEditor(
                     label = { Text("Nombre") }, singleLine = true,
                 )
                 if (allowScope) {
-                    EditorChoice("Tipo de movimiento", scope, CategoryScope.entries, { it.editorLabel() }, !busy) { scope = it }
+                    EditorChoice("Tipo de movimiento", scope, scopeOptions, { it.editorLabel() }, !busy) { scope = it }
                 }
                 OutlinedButton(enabled = !busy, onClick = { showIcons = true }) {
                     CatalogIcon(icon, color = iconColor)

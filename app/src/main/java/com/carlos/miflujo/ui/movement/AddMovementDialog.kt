@@ -53,7 +53,7 @@ fun AddMovementDialog(
 ) {
     var showPrototype by rememberSaveable { mutableStateOf(false) }
     if (showPrototype) {
-        QuickEntryDemo(onClose = { showPrototype = false })
+        QuickEntryDialog(onClose = { showPrototype = false })
         return
     }
     val formStateKey = initialMovement?.id

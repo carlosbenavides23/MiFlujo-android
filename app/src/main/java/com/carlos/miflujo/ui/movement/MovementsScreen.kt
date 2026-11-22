@@ -59,9 +59,11 @@ fun MovementsScreen(
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
     onFilterSelected: (MovementFilter) -> Unit,
-    onEditMovement: (Movement, AddMovementInput, onUpdated: () -> Unit) -> Unit,
+    onEditMovement: ((Movement, AddMovementInput, onUpdated: () -> Unit) -> Unit)?,
     onDeleteMovement: (Movement, onDeleted: () -> Unit) -> Unit,
     modifier: Modifier = Modifier,
+    categoryLabels: Map<String, String> = emptyMap(),
+    onOpenEditor: ((Movement) -> Unit)? = null,
 ) {
     var selectedMovement by remember { mutableStateOf<Movement?>(null) }
     var movementPendingEdit by remember { mutableStateOf<Movement?>(null) }
@@ -70,8 +72,8 @@ fun MovementsScreen(
     var listCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     var searchFieldBounds by remember { mutableStateOf<Rect?>(null) }
     val focusManager = LocalFocusManager.current
-    val searchedMovements = remember(uiState.movements, searchQuery) {
-        uiState.movements.filterBySearch(searchQuery)
+    val searchedMovements = remember(uiState.movements, searchQuery, categoryLabels) {
+        uiState.movements.filterBySearch(searchQuery, categoryLabels)
     }
     val hasSearchQuery = searchQuery.trim().isNotEmpty()
 
@@ -150,10 +152,11 @@ fun MovementsScreen(
         } else {
             items(
                 items = searchedMovements,
-                key = { it.id },
+                key = { it.uuid },
             ) { movement ->
                 MovementRow(
                     movement = movement,
+                    categoryLabel = categoryLabels[movement.uuid] ?: movement.categoryLabel(),
                     onClick = { selectedMovement = movement },
                 )
             }
@@ -163,10 +166,11 @@ fun MovementsScreen(
     selectedMovement?.let { movement ->
         MovementDetailDialog(
             movement = movement,
+            categoryLabel = categoryLabels[movement.uuid] ?: movement.categoryLabel(),
             onDismissRequest = { selectedMovement = null },
             onEditClick = {
-                movementPendingEdit = movement
                 selectedMovement = null
+                if (onOpenEditor == null) movementPendingEdit = movement else onOpenEditor(movement)
             },
             onDeleteClick = { movementPendingDelete = movement },
         )
@@ -177,7 +181,7 @@ fun MovementsScreen(
             initialMovement = movement,
             onDismissRequest = { movementPendingEdit = null },
             onSubmit = { input ->
-                onEditMovement(movement, input) {
+                checkNotNull(onEditMovement)(movement, input) {
                     movementPendingEdit = null
                     selectedMovement = null
                 }
@@ -328,6 +332,7 @@ private fun MovementFilters(
 @Composable
 private fun MovementRow(
     movement: Movement,
+    categoryLabel: String,
     onClick: () -> Unit,
 ) {
     Card(
@@ -370,7 +375,7 @@ private fun MovementRow(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = movement.categoryLabel(),
+                text = categoryLabel,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -429,6 +434,7 @@ private fun EmptySearchResultsCard() {
 @Composable
 private fun MovementDetailDialog(
     movement: Movement,
+    categoryLabel: String,
     onDismissRequest: () -> Unit,
     onEditClick: () -> Unit,
     onDeleteClick: () -> Unit,
@@ -446,7 +452,7 @@ private fun MovementDetailDialog(
                 DetailLine(label = "Monto", value = movement.formattedSignedAmount())
                 DetailLine(label = "Fecha", value = movement.date.formatVisibleDate())
                 DetailLine(label = "Detalle", value = movement.detail.orEmpty().ifBlank { "Sin detalle" })
-                DetailLine(label = "Clasificación", value = movement.categoryLabel())
+                DetailLine(label = "Clasificación", value = categoryLabel)
             }
         },
         confirmButton = {
@@ -523,13 +529,13 @@ private fun DetailLine(
     }
 }
 
-private fun List<Movement>.filterBySearch(query: String): List<Movement> {
+private fun List<Movement>.filterBySearch(query: String, categoryLabels: Map<String, String>): List<Movement> {
     val normalizedQuery = query.trim()
     if (normalizedQuery.isEmpty()) return this
 
     return filter { movement ->
         movement.detail.orEmpty().contains(normalizedQuery, ignoreCase = true) ||
-            movement.categoryLabel().contains(normalizedQuery, ignoreCase = true)
+            (categoryLabels[movement.uuid] ?: movement.categoryLabel()).contains(normalizedQuery, ignoreCase = true)
     }
 }
 

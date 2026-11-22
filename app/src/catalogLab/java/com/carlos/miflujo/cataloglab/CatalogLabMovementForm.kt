@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import com.carlos.miflujo.domain.backup.BackupCategory
 import com.carlos.miflujo.domain.backup.CatalogBackup
 import com.carlos.miflujo.domain.category.CatalogIconColor
 import com.carlos.miflujo.domain.category.CategoryRepository
@@ -45,7 +46,6 @@ internal fun CatalogLabMovementForm(
     var creatingCategory by rememberSaveable { mutableStateOf(false) }
     val (type, currency, amount, date, detail, categoryUuid) = entry
     val category = catalog.categories.firstOrNull { it.uuid == categoryUuid }
-    val categories = catalog.categories.filter { !it.archived && it.scope.supports(type) }
 
     Dialog(onDismissRequest = { if (!saving) onDismiss() }) {
         Surface(shape = MaterialTheme.shapes.large) {
@@ -70,9 +70,9 @@ internal fun CatalogLabMovementForm(
                 }
                 OutlinedTextField(date, { entry = entry.copy(date = it) }, label = { Text("Fecha (AAAA-MM-DD)") }, singleLine = true)
                 CatalogMenu(
-                    label = category?.let { if (it.archived) "${it.name} (archivada)" else it.name } ?: "Sin categoría",
+                    label = category?.visibleName() ?: "Sin categoría",
                     icon = category?.iconKey, iconColor = category?.iconColor,
-                    options = categories.map { CatalogMenuItem(it.uuid, it.name, it.iconKey, it.iconColor) },
+                    categories = catalog.categories, type = type,
                     select = { entry = entry.selectCategory(it) },
                     onCreate = { creatingCategory = true },
                 )
@@ -112,13 +112,12 @@ internal fun CatalogLabMovementForm(
     )
 }
 
-private data class CatalogMenuItem(val uuid: String, val name: String, val icon: String, val color: CatalogIconColor?)
-
 @Composable
 private fun CatalogMenu(
     label: String,
     icon: String?,
-    options: List<CatalogMenuItem>,
+    categories: List<BackupCategory>,
+    type: MovementType,
     select: (String?) -> Unit,
     onCreate: () -> Unit,
     iconColor: CatalogIconColor? = null,
@@ -131,14 +130,11 @@ private fun CatalogMenu(
             Text(label)
         }
         DropdownMenu(expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(text = { Text("Sin categoría") }, onClick = { expanded = false; select(null) })
-            DropdownMenuItem(
-                text = { Text("Crear nueva categoría") }, onClick = { expanded = false; onCreate() },
+            CatalogCategoryOptions(
+                categories, type, allowUncategorized = true,
+                onSelect = { expanded = false; select(it) },
+                onCreate = { expanded = false; onCreate() },
             )
-            options.forEach { option ->
-                DropdownMenuItem(text = { Text(option.name) }, leadingIcon = { CatalogIcon(option.icon, color = option.color, background = MaterialTheme.colorScheme.surfaceContainer) },
-                    onClick = { expanded = false; select(option.uuid) })
-            }
         }
     }
 }
@@ -156,7 +152,7 @@ internal data class CatalogMovementEntry(
         copy(categoryUuid = uuid)
 
     fun selectionFor(previous: CatalogMovementSelection?): CatalogMovementSelection =
-        previous?.takeIf { it.categoryUuid == categoryUuid } ?: CatalogMovementSelection(categoryUuid)
+        previous.withCategory(categoryUuid)
 
     companion object {
         fun from(draft: CatalogMovementDraft?) = CatalogMovementEntry(

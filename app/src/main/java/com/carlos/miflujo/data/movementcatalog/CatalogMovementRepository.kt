@@ -5,6 +5,7 @@ import androidx.room.withTransaction
 import com.carlos.miflujo.data.category.CategoryDao
 import com.carlos.miflujo.data.category.toDomain
 import com.carlos.miflujo.domain.category.CategorySelection
+import com.carlos.miflujo.domain.category.isCanonicalCatalogUuid
 import com.carlos.miflujo.domain.model.CatalogMovement
 import com.carlos.miflujo.domain.model.CatalogMovementDraft
 import com.carlos.miflujo.domain.model.CatalogMovementSelection
@@ -29,11 +30,15 @@ internal class CatalogMovementRepository(
         movements.find(uuid)?.snapshot()
     }
 
-    suspend fun create(draft: CatalogMovementDraft): CatalogMovement = database.withTransaction {
+    suspend fun create(
+        draft: CatalogMovementDraft,
+        uuid: String = generateMovementUuid(),
+    ): CatalogMovement = database.withTransaction {
+        require(isCanonicalCatalogUuid(uuid))
         val selection = resolve(draft)
         val time = nowMillis()
         val row = CatalogMovementEntity(
-            uuid = generateMovementUuid(), type = draft.type.name, amountMinor = draft.amountMinor,
+            uuid = uuid, type = draft.type.name, amountMinor = draft.amountMinor,
             currency = draft.currency.name, dateEpochDay = draft.date.toEpochDay(),
             categoryId = selection.categoryId, subcategoryId = selection.subcategoryId, detail = draft.detail,
             createdAtEpochMillis = time, updatedAtEpochMillis = time, syncStatus = newStatus,

@@ -61,6 +61,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
@@ -73,10 +74,47 @@ import com.carlos.miflujo.ui.formatVisibleDate
 import com.carlos.miflujo.ui.theme.financePositiveColor
 import com.carlos.miflujo.ui.theme.financeNegativeColor
 import java.time.LocalDate
+import java.util.UUID
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
+
+internal class QuickEntryCatalog(
+    val initialDraft: QuickEntryDraft?,
+    val validate: (QuickEntryDraft) -> String?,
+    val categoryLabel: (String?) -> String,
+    val categoryIcon: @Composable (String?, Modifier, Color) -> Unit,
+    val categoryOptions: @Composable (MovementType, select: (String?) -> Unit, create: () -> Unit) -> Unit,
+    val categoryEditor: @Composable (MovementType, onCreated: (String) -> Unit, onDismiss: () -> Unit) -> Unit,
+    val onSave: suspend (List<PendingEntry>) -> Unit,
+)
 
 @Composable
-internal fun QuickEntryDemo(onClose: () -> Unit) {
-    var state by rememberSaveable { mutableStateOf(QuickEntryState()) }
+internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? = null) {
+    var state by rememberSaveable { mutableStateOf(QuickEntryState(active = catalog?.initialDraft ?: QuickEntryDraft())) }
+    val scope = rememberCoroutineScope()
+    val focus = LocalFocusManager.current
+    var activeId by rememberSaveable { mutableStateOf(UUID.randomUUID().toString()) }
+    var saving by remember { mutableStateOf(false) }
+    var creatingCategory by rememberSaveable { mutableStateOf(false) }
+    val validate = catalog?.validate ?: QuickEntryDraft::validationMessage
+    val editingStored = catalog?.initialDraft != null
+    fun save(entries: List<PendingEntry>) {
+        if (saving || catalog == null) return
+        saving = true
+        focus.clearFocus()
+        scope.launch {
+            try {
+                catalog.onSave(entries)
+                onClose()
+            } catch (cancel: CancellationException) {
+                throw cancel
+            } catch (_: Exception) {
+                state = state.copy(confirmedCount = null, message = "No se pudo guardar. Revisá la categoría e intentá de nuevo.")
+            } finally {
+                saving = false
+            }
+        }
+    }
     var showMorphInspector by remember { mutableStateOf(false) }
     val debuggable = LocalContext.current.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
     val hapticFeedback = LocalHapticFeedback.current
@@ -135,14 +173,21 @@ internal fun QuickEntryDemo(onClose: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     // Keep a neutral surface suited to the active color scheme.
     val activeSurface = if (colors.background.luminance() < 0.5f) Color(0xFF1B1E23) else colors.surfaceContainerHigh
-    fun close() { if (state.hasWork) state = state.requestExit() else onClose() }
+    fun close() {
+        if (saving) return
+        if (state.hasWork) state = state.requestExit() else onClose()
+    }
     Dialog(onDismissRequest = { close() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(modifier = Modifier.fillMaxSize()
                 .onGloballyPositioned { selectorHostBounds = it.boundsInWindow() }
-                .pointerInput(categoryMenu, subcategoryMenu) {
+                .pointerInput(categoryMenu, subcategoryMenu, saving) {
                     awaitPointerEventScope {
                         while (true) {
                             val event = awaitPointerEvent(PointerEventPass.Initial)
+                            if (saving) {
+                                event.changes.forEach { it.consume() }
+                                continue
+                            }
                             val down = event.changes.firstOrNull { it.pressed && !it.previousPressed }
                             val origin = selectorHostBounds?.topLeft
                             if (down != null && origin != null) {
@@ -156,11 +201,11 @@ internal fun QuickEntryDemo(onClose: () -> Unit) {
                 .padding(12.dp).imePadding(), shape = RoundedCornerShape(28.dp)) {
             Box(Modifier.fillMaxSize().onGloballyPositioned { hostBounds = it.boundsInWindow() }) {
             Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Registro con cápsulas", style = MaterialTheme.typography.titleLarge)
-                Text("Demostración: nada se guarda. Use datos ficticios.", style = MaterialTheme.typography.bodySmall)
+                Text(if (editingStored) "Editar movimiento" else "Registro con cápsulas", style = MaterialTheme.typography.titleLarge)
+                if (catalog == null) Text("Demostración: nada se guarda. Use datos ficticios.", style = MaterialTheme.typography.bodySmall)
                 if (debuggable && showMorphInspector) CurrencyMorphInspector(onClose = { showMorphInspector = false })
                 LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (pending.isEmpty()) item { Text("Los movimientos pendientes aparecerán aquí.") }
+                    if (pending.isEmpty() && !editingStored) item { Text("Los movimientos pendientes aparecerán aquí.") }
                     items(pending, key = { it.id }) { entry ->
                         val draft = entry.draft
                         val isEditing = editing == entry.id
@@ -184,7 +229,7 @@ internal fun QuickEntryDemo(onClose: () -> Unit) {
                                 .onGloballyPositioned { if (transferId == entry.id) targetBounds = it.boundsInWindow() }
                                 .graphicsLayer { alpha = if (transferId == entry.id) 0f else 1f },
                         ) {
-                            PendingSummary(draft, isEditing = isEditing) {
+                            PendingSummary(draft, isEditing = isEditing, catalogLabel = catalog?.categoryLabel?.invoke(draft.catalogCategoryUuid)) {
                                 IconButton(onClick = {
                                     val previousId = state.editingId
                                     state = state.edit(entry.id)
@@ -227,7 +272,7 @@ internal fun QuickEntryDemo(onClose: () -> Unit) {
                                 value = active.type, label = if (active.type == MovementType.INCOME) "Ingreso, cambiar a egreso" else "Egreso, cambiar a ingreso",
                                 accent = if (active.type == MovementType.INCOME) CapsuleToggleColors.Income else CapsuleToggleColors.Expense,
                                 onClick = {
-                                    state = state.update(state.active.copy(type = if (state.active.type == MovementType.INCOME) MovementType.EXPENSE else MovementType.INCOME, category = null, subcategory = null))
+                                    state = state.update(state.active.copy(type = if (state.active.type == MovementType.INCOME) MovementType.EXPENSE else MovementType.INCOME, category = null, subcategory = null, catalogCategoryUuid = null))
                                     haptics.perform(QuickEntryHaptics.Action.ToggleType)
                                 },
                             ) { type -> MovementSymbol(type) }
@@ -237,24 +282,58 @@ internal fun QuickEntryDemo(onClose: () -> Unit) {
                             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                                 val context = LocalContext.current
                                 CapsuleMenuControl(icon = Icons.Default.CalendarToday, label = "Fecha", text = if (active.date == LocalDate.now()) "Hoy" else active.date.formatVisibleDate(), modifier = Modifier.weight(1f), onClick = { DatePickerDialog(context, { _, y, m, d -> state = state.update(active.copy(date = LocalDate.of(y, m + 1, d))) }, active.date.year, active.date.monthValue - 1, active.date.dayOfMonth).show() })
-                                if (active.type == MovementType.EXPENSE) CategoryMenu(active.category, categoryMenu, Modifier.weight(1f)) { state = state.update(active.copy(category = it, subcategory = null)) }
-                                else Text("Ingreso general", modifier = Modifier.weight(1f).padding(12.dp), style = MaterialTheme.typography.bodySmall)
+                                if (catalog != null) {
+                                    CategoryPopup(categoryMenu, Modifier.weight(1f), anchor = { toggle ->
+                                        CapsuleMenuControl(
+                                            label = "Categoría",
+                                            text = catalog.categoryLabel(active.catalogCategoryUuid),
+                                            modifier = Modifier.fillMaxWidth(),
+                                            onClick = toggle,
+                                        ) { iconModifier ->
+                                            catalog.categoryIcon(active.catalogCategoryUuid, iconModifier, activeSurface)
+                                        }
+                                    }) {
+                                        catalog.categoryOptions(active.type, { uuid ->
+                                            state = state.update(state.active.copy(catalogCategoryUuid = uuid))
+                                            categoryMenu.expanded = false
+                                        }, {
+                                            categoryMenu.expanded = false
+                                            creatingCategory = true
+                                        })
+                                    }
+                                } else if (active.type == MovementType.EXPENSE) {
+                                    CategoryMenu(active.category, categoryMenu, Modifier.weight(1f)) {
+                                        state = state.update(active.copy(category = it, subcategory = null))
+                                    }
+                                } else {
+                                    Text("Ingreso general", modifier = Modifier.weight(1f).padding(12.dp), style = MaterialTheme.typography.bodySmall)
+                                }
                             }
                         }
-                        if (active.type == MovementType.EXPENSE && active.category == MovementCategory.FIXED_COST) SubcategoryMenu(active.subcategory, subcategoryMenu) { state = state.update(active.copy(subcategory = it)) }
+                        if (catalog == null && active.type == MovementType.EXPENSE && active.category == MovementCategory.FIXED_COST) SubcategoryMenu(active.subcategory, subcategoryMenu) { state = state.update(active.copy(subcategory = it)) }
                     }
                 }
                 state.message?.let {
                     Text(it, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }
                 FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TextButton(onClick = { close() }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Salir") }
-                    if (editing == null) {
-                        OutlinedButton(onClick = {
+                    TextButton(onClick = { close() }, enabled = !saving, modifier = Modifier.heightIn(min = 48.dp)) { Text("Salir") }
+                    if (editingStored) {
+                        Button(enabled = !saving, onClick = {
+                            val error = validate(state.active)
+                            if (error == null) save(listOf(PendingEntry(activeId, state.active)))
+                            else {
+                                state = state.copy(message = error)
+                                haptics.perform(QuickEntryHaptics.Action.ValidationRejected)
+                            }
+                        }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (saving) "Guardando…" else "Guardar cambios") }
+                    } else if (editing == null) {
+                        OutlinedButton(enabled = !saving, onClick = {
                             val before = state.pending.size
                             val previousMessage = state.message
-                            state = state.add()
+                            state = state.add(validate, activeId)
                             if (state.pending.size > before) {
+                                activeId = UUID.randomUUID().toString()
                                 haptics.perform(QuickEntryHaptics.Action.Added)
                                 targetBounds = null
                                 transferReady = false
@@ -265,16 +344,22 @@ internal fun QuickEntryDemo(onClose: () -> Unit) {
                                 haptics.perform(QuickEntryHaptics.Action.ValidationRejected)
                             }
                         }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Agregar otro") }
-                        Button(onClick = {
+                        Button(enabled = !saving, onClick = {
                             val previousMessage = state.message
-                            state = state.confirm()
+                            val confirmed = state.confirm(validate)
+                            if (catalog != null && confirmed.confirmedCount != null) {
+                                val entries = state.pending
+                                val submitted = if (confirmed.confirmedCount == entries.size) entries
+                                    else entries + PendingEntry(activeId, state.active)
+                                save(submitted)
+                            } else state = confirmed
                             if (state.message != null && state.message != previousMessage) haptics.perform(QuickEntryHaptics.Action.ValidationRejected)
-                        }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Confirmar") }
+                        }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (saving) "Guardando…" else "Confirmar") }
                     } else {
                         OutlinedButton(onClick = { state = state.cancelEdit() }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Cancelar") }
                         Button(onClick = {
                             val previousMessage = state.message
-                            state = state.saveEdit()
+                            state = state.saveEdit(validate)
                             if (state.message != null && state.message != previousMessage) haptics.perform(QuickEntryHaptics.Action.ValidationRejected)
                         }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Guardar cambios") }
                     }
@@ -283,14 +368,20 @@ internal fun QuickEntryDemo(onClose: () -> Unit) {
             val flight = transfer
             val host = hostBounds
             if (flight != null && host != null && transferReady) {
-                TransferOverlay(flight, targetBounds ?: flight.source, host, progress, activeSurface)
+                TransferOverlay(flight, targetBounds ?: flight.source, host, progress, activeSurface, catalog?.categoryLabel?.invoke(flight.entry.draft.catalogCategoryUuid))
             }
             }
         }
     }
+    if (catalog != null && creatingCategory) {
+        catalog.categoryEditor(state.active.type, { uuid ->
+            state = state.update(state.active.copy(catalogCategoryUuid = uuid))
+            creatingCategory = false
+        }, { creatingCategory = false })
+    }
     if (state.exitRequested) AlertDialog(
         onDismissRequest = { state = state.copy(exitRequested = false) },
-        title = { Text("Salir de la demostración") }, text = { Text("Se descartarán los movimientos provisionales y los cambios de la cápsula activa.") },
+        title = { Text(if (catalog == null) "Salir de la demostración" else "¿Descartar cambios?") }, text = { Text("Se descartarán los movimientos provisionales y los cambios de la cápsula activa.") },
         confirmButton = { TextButton(onClick = onClose) { Text("Descartar y salir") } },
         dismissButton = { TextButton(onClick = { state = state.copy(exitRequested = false) }) { Text("Continuar") } },
     )
@@ -317,7 +408,7 @@ private data class PendingTransfer(val entry: PendingEntry, val source: Rect)
 private val PendingActionSize = 48.dp
 
 @Composable
-private fun TransferOverlay(flight: PendingTransfer, target: Rect, host: Rect, progress: Animatable<Float, androidx.compose.animation.core.AnimationVector1D>, sourceColor: androidx.compose.ui.graphics.Color) {
+private fun TransferOverlay(flight: PendingTransfer, target: Rect, host: Rect, progress: Animatable<Float, androidx.compose.animation.core.AnimationVector1D>, sourceColor: androidx.compose.ui.graphics.Color, catalogLabel: String?) {
     val density = LocalDensity.current
     val draft = flight.entry.draft
     Surface(
@@ -337,14 +428,14 @@ private fun TransferOverlay(flight: PendingTransfer, target: Rect, host: Rect, p
         color = lerp(sourceColor, MaterialTheme.colorScheme.surfaceContainerHigh, progress.value.coerceIn(0f, 1f)),
         contentColor = MaterialTheme.colorScheme.onSurface,
     ) {
-        PendingSummary(draft) { Spacer(Modifier.size(width = PendingActionSize * 2, height = PendingActionSize)) }
+        PendingSummary(draft, catalogLabel = catalogLabel) { Spacer(Modifier.size(width = PendingActionSize * 2, height = PendingActionSize)) }
     }
 }
 
 @Composable
-private fun PendingSummary(draft: QuickEntryDraft, isEditing: Boolean = false, actions: @Composable RowScope.() -> Unit) {
+private fun PendingSummary(draft: QuickEntryDraft, isEditing: Boolean = false, catalogLabel: String? = null, actions: @Composable RowScope.() -> Unit) {
     val amountColor = if (draft.type == MovementType.INCOME) financePositiveColor() else financeNegativeColor()
-    val category = listOf(categoryLabel(draft.category), subcategoryLabel(draft.subcategory))
+    val category = catalogLabel ?: listOf(categoryLabel(draft.category), subcategoryLabel(draft.subcategory))
         .filter { it.isNotBlank() }.joinToString(" · ")
     Row(
         Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
@@ -480,11 +571,18 @@ private fun subcategoryLabel(value: MovementSubcategory?) = when (value) { Movem
 
 @Composable
 private fun CapsuleMenuControl(icon: ImageVector, label: String, text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    CapsuleMenuControl(label, text, modifier, onClick) {
+        Icon(icon, contentDescription = null, modifier = it, tint = MaterialTheme.colorScheme.onSurface)
+    }
+}
+
+@Composable
+private fun CapsuleMenuControl(label: String, text: String, modifier: Modifier = Modifier, onClick: () -> Unit, icon: @Composable (Modifier) -> Unit) {
     Row(
         modifier = modifier.heightIn(min = 48.dp).clickable(role = Role.Button, onClick = onClick).semantics { contentDescription = "$label: $text" }.padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurface)
+        icon(Modifier.size(14.dp))
         Spacer(Modifier.width(4.dp))
         Text(text, modifier = Modifier.weight(1f, fill = false), style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Spacer(Modifier.width(2.dp))
@@ -505,15 +603,35 @@ private class SelectorMenuState {
 
 @Composable
 private fun CategoryMenu(value: MovementCategory?, menu: SelectorMenuState, modifier: Modifier = Modifier, onSelect: (MovementCategory) -> Unit) {
-    DisposableEffect(menu) { onDispose { menu.expanded = false; menu.anchor = null } }
-    BackHandler(enabled = menu.expanded) { menu.expanded = false }
-    Box(modifier.onGloballyPositioned { menu.anchor = it.boundsInWindow() }) {
-        CapsuleMenuControl(icon = Icons.Default.Category, label = "Categoría", text = categoryLabel(value).ifBlank { "Categoría" }, modifier = Modifier.fillMaxWidth(), onClick = { menu.expanded = !menu.expanded })
-        DropdownMenu(expanded = menu.expanded, onDismissRequest = { menu.expanded = false }, properties = PopupProperties(focusable = false, dismissOnClickOutside = false)) {
-            listOf(MovementCategory.FIXED_COST, MovementCategory.MAINTENANCE, MovementCategory.OTHER).forEach { item -> DropdownMenuItem(text = { Text(categoryLabel(item)) }, onClick = { onSelect(item); menu.expanded = false }) }
+    CategoryPopup(menu, modifier, anchor = { toggle ->
+        CapsuleMenuControl(Icons.Default.Category, "Categoría", categoryLabel(value).ifBlank { "Categoría" }, Modifier.fillMaxWidth(), toggle)
+    }) {
+        listOf(MovementCategory.FIXED_COST, MovementCategory.MAINTENANCE, MovementCategory.OTHER).forEach { item ->
+            DropdownMenuItem(text = { Text(categoryLabel(item)) }, onClick = { onSelect(item); menu.expanded = false })
         }
     }
 }
+
+@Composable
+private fun CategoryPopup(
+    menu: SelectorMenuState,
+    modifier: Modifier,
+    anchor: @Composable (toggle: () -> Unit) -> Unit,
+    items: @Composable ColumnScope.() -> Unit,
+) {
+    DisposableEffect(menu) { onDispose { menu.expanded = false; menu.anchor = null } }
+    BackHandler(enabled = menu.expanded) { menu.expanded = false }
+    Box(modifier.onGloballyPositioned { menu.anchor = it.boundsInWindow() }) {
+        anchor { menu.expanded = !menu.expanded }
+        DropdownMenu(
+            expanded = menu.expanded,
+            onDismissRequest = { menu.expanded = false },
+            properties = PopupProperties(focusable = false, dismissOnClickOutside = false),
+            content = items,
+        )
+    }
+}
+
 @Composable
 private fun SubcategoryMenu(value: MovementSubcategory?, menu: SelectorMenuState, onSelect: (MovementSubcategory) -> Unit) {
     DisposableEffect(menu) { onDispose { menu.expanded = false; menu.anchor = null } }

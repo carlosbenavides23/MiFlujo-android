@@ -8,6 +8,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.carlos.miflujo.domain.backup.CatalogBackup
 import com.carlos.miflujo.domain.category.CategoryRepository
@@ -22,6 +23,7 @@ internal fun CatalogManagement(
     onBack: () -> Unit,
     refresh: suspend () -> Unit,
     loadError: String?,
+    showHeader: Boolean = true,
 ) {
     val scope = rememberCoroutineScope()
     var archived by rememberSaveable { mutableStateOf(false) }
@@ -58,10 +60,12 @@ internal fun CatalogManagement(
     val categories = snapshot?.categories.orEmpty().filter { it.archived == archived }
 
     BackHandler { if (!busy) onBack() }
-    LazyColumn(modifier, contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    LazyColumn(modifier.testTag("catalog-management"), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
-            TextButton(onBack, enabled = !busy) { Text("Volver a Configuración") }
-            Text("Categorías", style = MaterialTheme.typography.headlineSmall)
+            if (showHeader) {
+                TextButton(onBack, enabled = !busy) { Text("Volver a Configuración") }
+                Text("Categorías", style = MaterialTheme.typography.headlineSmall)
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(!archived, { archived = false }, label = { Text("Activas") }, enabled = !busy)
                 FilterChip(archived, { archived = true }, label = { Text("Archivadas") }, enabled = !busy)

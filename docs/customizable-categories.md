@@ -778,3 +778,47 @@ v1 sin color. Si se cambia una ficha v1 después del corte, se escribe v2 con un
 revisión nueva. Las reglas candidatas del emulador impiden que una escritura v1
 sobrescriba esos documentos. Un ensayo antiguo con marcador 2 requiere elevarlo de
 forma explícita. Los pendientes locales se conservan mientras el protocolo no coincide.
+
+## Vista integrada del catálogo
+
+`catalogPreview` ejecuta la estructura de navegación, Ajustes, Inicio, Movimientos
+y Reporte de MiFlujo con un almacén local de prueba. Comparte con `catalogLab` el
+administrador, el editor, las opciones del selector, los 50 iconos y la paleta en
+`app/src/catalogUi`. El selector ocupa el control de categoría de la cápsula y
+filtra por tipo y estado. Crear una categoría desde ese control admite el tipo
+del borrador o ambos tipos y selecciona la categoría al guardarla.
+
+**+ Agregar** abre la cápsula. **Agregar otro** mantiene una cola provisional
+y **Confirmar** guarda el lote en una transacción. El editor persistido se abre
+desde **Movimientos → Detalle del movimiento → Editar**. Si se mantiene la categoría
+original, conserva la referencia histórica. Las altas de egresos requieren una
+categoría, los ingresos pueden quedar sin categoría y se prescinde de subcategorías
+en la interfaz. El historial y la búsqueda muestran el nombre guardado de la
+categoría. El Reporte conserva sus grupos de totales y utiliza estos nombres para
+mostrar los movimientos.
+
+La instalación normal de prueba usa `com.carlos.miflujo.catalogpreview` y la
+base `catalog-preview.db`, creada desde cero con la Room candidata. La base
+conserva los UUID y las relaciones del catálogo. La adaptación a enums de grupos
+solo se usa para presentar las pantallas compartidas. El manifiesto retira el
+permiso de red, el inicializador de Firebase y la actividad de producción.
+La vista integrada omite respaldo, restauración, exportación PDF y Cloud Sync.
+`catalogLab` conserva sus recorridos de respaldo, PDF y Firebase Emulator.
+
+### Revisión en un dispositivo
+
+```bash
+./gradlew :app:assembleCatalogPreview
+adb -d install -r app/build/outputs/apk/catalogPreview/app-catalogPreview.apk
+```
+
+Abrir **MiFlujo · Vista de catálogo**. En **Ajustes → Categorías**, crear fichas
+de distinto tipo y probar icono, color, archivo y restauración. Abrir **+ Agregar**,
+alternar ingreso y egreso, elegir una categoría y crear otra con un monto y detalle
+ya escritos. Registrar, cerrar y reabrir la app. Desde **Movimientos**, abrir el
+detalle y editar el movimiento. Para probar una referencia archivada, archivar
+su categoría y volver al detalle. La edición debe mostrarla y las altas deben
+omitirla en el selector.
+
+Las pruebas instrumentadas usan otro paquete, `com.carlos.miflujo.catalogpreview.uitest`,
+para que sus fixtures tengan almacenamiento independiente de esta revisión manual.

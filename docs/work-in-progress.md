@@ -554,3 +554,28 @@ El PDF anterior pasó el verificador final. El raster de Poppler confirma el pun
   La primera corrida incluyó `ExampleInstrumentedTest`, que exige el ID de
   producción. Se excluyó en la repetición con el paquete aislado. Se omitieron
   dos casos que requieren Firebase Emulator.
+
+## Integración experimental de categorías en la interfaz principal
+
+- [catalogPreview](customizable-categories.md#vista-integrada-del-catálogo) reutiliza
+  la navegación, Ajustes y la cápsula de la app. Su instalación y Room están
+  aisladas y el APK carece de permiso de red. El administrador y los recursos de
+  catálogo se comparten con catalogLab.
+- Las altas de la cápsula persisten el lote en una sola transacción. La edición
+  desde el historial trabaja con el movimiento candidato por UUID. Los nombres
+  personalizados se ven en Inicio, búsqueda, historial y Reporte. La exportación
+  de PDF y las operaciones de respaldo y Cloud Sync quedan fuera de esta vista.
+- La aprobación visual precede a cualquier decisión sobre migración definitiva,
+  respaldo de producción o corte de Cloud Sync. Siguen vigentes las condiciones
+  de activación de [6D](customizable-categories.md#integración-funcional-experimental-iteración-6d).
+- Se ensamblaron `debug`, `catalogLab`, `catalogPreview` y los APK de pruebas.
+  Pasaron 348 pruebas JVM de debug, 352 de catalogLab, 348 de catalogPreview y
+  24 comprobaciones Python. En el POCO X7 Pro pasaron los dos recorridos Compose
+  de catalogPreview, con cierre y reapertura de la actividad real, comprobaciones
+  de Room y verificación del aislamiento. La regresión instrumentada de catalogLab
+  se detuvo antes de ejecutar casos porque el teléfono rechazó la instalación
+  de su APK de pruebas (`INSTALL_FAILED_USER_RESTRICTED`).
+- El POCO tiene instalada **MiFlujo · Vista de catálogo**. Se verificaron su
+  actividad de inicio y su UID independiente. El APK de la vista carece de
+  permiso de Internet y de inicialización predeterminada de Firebase. Los
+  metadatos de la instalación de producción coincidieron antes y después.

@@ -16,6 +16,7 @@ internal data class QuickEntryDraft(
     val date: LocalDate = LocalDate.now(),
     val category: MovementCategory? = null,
     val subcategory: MovementSubcategory? = null,
+    val catalogCategoryUuid: String? = null,
 ) : Serializable {
     fun validationMessage(): String? = quickEntryValidationMessage(type, amount, currency, date, category, subcategory)
 }
@@ -38,11 +39,14 @@ internal data class QuickEntryState(
 
     fun update(draft: QuickEntryDraft) = copy(active = draft, message = null, confirmedCount = null)
 
-    fun add(): QuickEntryState {
+    fun add(
+        validate: (QuickEntryDraft) -> String? = QuickEntryDraft::validationMessage,
+        id: String = UUID.randomUUID().toString(),
+    ): QuickEntryState {
         if (editingId != null) return this
-        active.validationMessage()?.let { return copy(message = it) }
+        validate(active)?.let { return copy(message = it) }
         val next = QuickEntryDraft(type = active.type, currency = active.currency)
-        return copy(pending = pending + PendingEntry(UUID.randomUUID().toString(), active), active = next, baseline = next, message = null)
+        return copy(pending = pending + PendingEntry(id, active), active = next, baseline = next, message = null)
     }
 
     fun edit(id: String): QuickEntryState {
@@ -51,9 +55,9 @@ internal data class QuickEntryState(
         return copy(active = entry.draft, editingId = id, message = null)
     }
 
-    fun saveEdit(): QuickEntryState {
+    fun saveEdit(validate: (QuickEntryDraft) -> String? = QuickEntryDraft::validationMessage): QuickEntryState {
         val id = editingId ?: return this
-        active.validationMessage()?.let { return copy(message = it) }
+        validate(active)?.let { return copy(message = it) }
         return copy(pending = pending.map { if (it.id == id) it.copy(draft = active) else it }, active = baseline, editingId = null, message = null)
     }
 
@@ -70,10 +74,10 @@ internal data class QuickEntryState(
     fun requestExit() = copy(exitRequested = hasWork)
 
     // Preview a count, never insert into the queue or report a successful save.
-    fun confirm(): QuickEntryState {
+    fun confirm(validate: (QuickEntryDraft) -> String? = QuickEntryDraft::validationMessage): QuickEntryState {
         if (editingId != null) return this
         if (dirty || pending.isEmpty()) {
-            active.validationMessage()?.let { return copy(message = it) }
+            validate(active)?.let { return copy(message = it) }
             return copy(confirmedCount = pending.size + 1, message = null)
         }
         return copy(confirmedCount = pending.size, message = null)
