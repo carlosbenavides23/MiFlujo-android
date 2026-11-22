@@ -102,9 +102,10 @@ internal fun CatalogLabMovementForm(
                     CapsuleMenuControl(
                         label = "Categoría",
                         text = category?.visibleName() ?: "Categoría",
-                        modifier = Modifier.fillMaxWidth().then(motion.buttonReaction()),
+                        modifier = Modifier.fillMaxWidth(),
                         onClick = { menu.expanded = !menu.expanded },
                         announceLabelOnly = true,
+                        pressScale = true,
                     ) {
                         CatalogIcon(category?.iconKey, it, color = category?.iconColor)
                     }

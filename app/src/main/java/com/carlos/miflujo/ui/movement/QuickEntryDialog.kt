@@ -3,6 +3,7 @@ package com.carlos.miflujo.ui.movement
 import android.app.DatePickerDialog
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -296,9 +297,10 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                                         CapsuleMenuControl(
                                             label = "Categoría",
                                             text = active.catalogCategoryUuid?.let(catalog.categoryLabel) ?: "Categoría",
-                                            modifier = Modifier.fillMaxWidth().then(motion.buttonReaction()),
+                                            modifier = Modifier.fillMaxWidth(),
                                             onClick = { categoryMenu.expanded = !categoryMenu.expanded },
                                             announceLabelOnly = true,
+                                            pressScale = true,
                                         ) { iconModifier ->
                                             catalog.categoryIcon(active.catalogCategoryUuid, iconModifier, activeSurface)
                                         }
@@ -597,10 +599,40 @@ internal fun CapsuleMenuControl(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
     announceLabelOnly: Boolean = false,
+    pressScale: Boolean = false,
     icon: @Composable (Modifier) -> Unit,
 ) {
+    val interaction = if (pressScale) remember { MutableInteractionSource() } else null
+    val contentMotion = if (
+        interaction != null && rememberCoroutineScope().coroutineContext[MotionDurationScale]?.scaleFactor != 0f
+    ) {
+        val pressed by interaction.collectIsPressedAsState()
+        val scale by animateFloatAsState(
+            targetValue = if (pressed) 0.965f else 1f,
+            animationSpec = if (pressed) {
+                tween(55, easing = LinearOutSlowInEasing)
+            } else {
+                spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMedium,
+                    visibilityThreshold = 0.001f,
+                )
+            },
+            label = "categoryPress",
+        )
+        Modifier.graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        }
+    } else Modifier
+
     Row(
-        modifier = modifier.heightIn(min = 48.dp).clickable(role = Role.Button, onClick = onClick).semantics { contentDescription = "$label: $text" }.padding(horizontal = 4.dp),
+        modifier = modifier
+            .heightIn(min = 48.dp)
+            .clickable(role = Role.Button, interactionSource = interaction, onClick = onClick)
+            .semantics { contentDescription = "$label: $text" }
+            .padding(horizontal = 4.dp)
+            .then(contentMotion),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         icon(Modifier.size(14.dp))
