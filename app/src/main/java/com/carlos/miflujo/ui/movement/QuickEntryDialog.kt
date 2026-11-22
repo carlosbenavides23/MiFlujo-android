@@ -84,7 +84,8 @@ internal class QuickEntryCatalog(
     val categoryLabel: (String?) -> String,
     val categoryIcon: @Composable (String?, Modifier, Color) -> Unit,
     val categoryPicker: @Composable (
-        MovementType, String?, onDismiss: () -> Unit, select: (String?) -> Unit, create: () -> Unit,
+        expanded: Boolean, type: MovementType, selectedUuid: String?,
+        onDismiss: () -> Unit, select: (String?) -> Unit, create: () -> Unit,
     ) -> Unit,
     val categoryEditor: @Composable (onCreated: (String) -> Unit, onDismiss: () -> Unit) -> Unit,
     val onSave: suspend (List<PendingEntry>) -> Unit,
@@ -300,8 +301,8 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                                         ) { iconModifier ->
                                             catalog.categoryIcon(active.catalogCategoryUuid, iconModifier, activeSurface)
                                         }
-                                        if (categoryMenu.expanded) catalog.categoryPicker(
-                                            active.type, active.catalogCategoryUuid,
+                                        catalog.categoryPicker(
+                                            categoryMenu.expanded, active.type, active.catalogCategoryUuid,
                                             { categoryMenu.expanded = false },
                                             { uuid ->
                                                 state = state.update(state.active.copy(catalogCategoryUuid = uuid))

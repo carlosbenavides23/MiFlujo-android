@@ -48,10 +48,11 @@ internal fun CatalogPreviewMovementDialog(
                 val category = byUuid[uuid]
                 CatalogIcon(category?.iconKey, modifier, color = category?.iconColor, background = background)
             },
-            categoryPicker = { type, uuid, dismiss, select, create ->
+            categoryPicker = { expanded, type, uuid, dismiss, select, create ->
                 CatalogCategoryPicker(
                     categories, type, uuid, allowUncategorized = type == MovementType.INCOME,
                     onDismiss = dismiss, onSelect = select, onCreate = create,
+                    expanded = expanded,
                 )
             },
             categoryEditor = { onCreated, dismiss ->

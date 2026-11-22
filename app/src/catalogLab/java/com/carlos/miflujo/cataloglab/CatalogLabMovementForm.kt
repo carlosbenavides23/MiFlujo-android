@@ -106,8 +106,9 @@ internal fun CatalogLabMovementForm(
                     ) {
                         CatalogIcon(category?.iconKey, it, color = category?.iconColor)
                     }
-                    if (menu.expanded) CatalogCategoryPicker(
+                    CatalogCategoryPicker(
                         categoriesByUsage, type, categoryUuid, allowUncategorized = true,
+                        expanded = menu.expanded,
                         onDismiss = { menu.expanded = false },
                         onSelect = {
                             entry = entry.selectCategory(it)
