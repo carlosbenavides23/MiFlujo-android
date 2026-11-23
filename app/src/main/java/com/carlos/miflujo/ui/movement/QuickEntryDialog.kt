@@ -80,11 +80,11 @@ import com.carlos.miflujo.ui.theme.financeNegativeColor
 import java.time.LocalDate
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.delay
 
 internal class QuickEntryCatalog(
     val initialDraft: QuickEntryDraft?,
     val validate: (QuickEntryDraft) -> String?,
+    val catalogLoaded: Boolean,
     val changeType: (QuickEntryDraft, MovementType, QuickEntryDraft?) -> QuickEntryDraft,
     val selectCategory: (QuickEntryDraft, String?, QuickEntryDraft?) -> QuickEntryDraft,
     val categoryLabel: (String?) -> String,
@@ -96,10 +96,16 @@ internal class QuickEntryCatalog(
     val categoryEditor: @Composable (onCreated: (String) -> Unit, onDismiss: () -> Unit) -> Unit,
     val startSave: (String, List<PendingEntry>) -> Boolean,
     val awaitSave: suspend (String, List<PendingEntry>) -> Boolean,
+    val retainsSave: (String) -> Boolean,
 )
 
 @Composable
-internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? = null) {
+internal fun QuickEntryDialog(
+    onClose: () -> Unit,
+    catalog: QuickEntryCatalog? = null,
+    visible: Boolean = true,
+    onLeaveReconciliation: () -> Unit = {},
+) {
     var state by rememberSaveable {
         mutableStateOf(QuickEntryState(creationDraft = catalog?.initialDraft ?: QuickEntryDraft()))
     }
@@ -107,9 +113,14 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
     var activeId by rememberSaveable { mutableStateOf(UUID.randomUUID().toString()) }
     var draftRestorations by remember { mutableIntStateOf(0) }
     var submissionId by rememberSaveable { mutableStateOf<String?>(null) }
-    val saving = submissionId != null
     var creatingCategory by rememberSaveable { mutableStateOf(false) }
     var choosingDate by rememberSaveable { mutableStateOf(false) }
+    var reconciliationFailed by rememberSaveable { mutableStateOf(false) }
+    val phase = quickEntrySavePhase(
+        submissionId, reconciliationFailed, submissionId?.let { catalog?.retainsSave?.invoke(it) } == true,
+    )
+    val saving = phase.frozen
+    val saveActionLabel = if (phase == QuickEntrySavePhase.RECONCILING) "Verificando…" else "Guardando…"
     val validate = catalog?.validate ?: QuickEntryDraft::validationMessage
     val editingStored = catalog?.initialDraft != null
     fun selectCategory(uuid: String?, createdInEditor: Boolean = false) {
@@ -132,23 +143,19 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
         if (!catalog.startSave(id, state.catalogSubmissionEntries(activeId, editingStored))) submissionId = null
     }
     val closeAfterSave by rememberUpdatedState(onClose)
-    LaunchedEffect(submissionId) {
+    LaunchedEffect(submissionId, visible, reconciliationFailed) {
+        if (!visible || reconciliationFailed) return@LaunchedEffect
         val id = submissionId ?: return@LaunchedEffect
         val entries = state.catalogSubmissionEntries(activeId, editingStored)
         val saveError = "No se pudo guardar. Revisá la categoría e intentá de nuevo."
         val pendingSave = checkNotNull(catalog)
-        var confirmed: Boolean
-        while (true) {
-            try {
-                confirmed = pendingSave.awaitSave(id, entries)
-                break
-            } catch (cancel: CancellationException) {
-                throw cancel
-            } catch (_: Exception) {
-                // A failed reconciliation read does not tell us whether the batch was saved.
-                state = state.copy(message = saveError)
-                delay(1_000)
-            }
+        val confirmed = try {
+            pendingSave.awaitSave(id, entries)
+        } catch (cancel: CancellationException) {
+            throw cancel
+        } catch (_: Exception) {
+            reconciliationFailed = true
+            return@LaunchedEffect
         }
         if (confirmed) {
             closeAfterSave()
@@ -157,11 +164,24 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
             submissionId = null
         }
     }
+    val active = state.active
+    LaunchedEffect(catalog?.catalogLoaded, active, state.editingId, saving, visible) {
+        val type = active.pendingCatalogType
+        if (visible && type != null && catalog != null) ifEditable {
+            val current = state.active
+            if (current == active) {
+                val resolved = catalog.changeType(current, type, state.baseline.takeIf { editingStored })
+                if (resolved != current) state = state.update(resolved)
+            }
+        }
+    }
+    // Keep the attempt and its drafts registered with rememberSaveable while the window is parked.
+    if (!visible) return
+
     var showMorphInspector by remember { mutableStateOf(false) }
     val debuggable = LocalContext.current.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
     val hapticFeedback = LocalHapticFeedback.current
     val haptics = remember(hapticFeedback) { QuickEntryHaptics(hapticFeedback) }
-    val active = state.active
     val pending = state.pending
     val editing = state.editingId
     val categoryMenu = remember { SelectorMenuState() }
@@ -221,18 +241,18 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
     fun close() = ifEditable {
         if (state.hasWork) state = state.requestExit() else onClose()
     }
-    QuickEntryWindow(
-        onDismissRequest = editableAction {
+    QuickEntryWindow(onDismissRequest = {
+        if (reconciliationFailed) onLeaveReconciliation() else ifEditable {
             if (catalog != null && categoryMenu.expanded) categoryMenu.expanded = false else close()
-        },
-    ) {
+        }
+    }) {
         Surface(modifier = Modifier.fillMaxWidth()
                 .onGloballyPositioned { selectorHostBounds = it.boundsInWindow() }
-                .pointerInput(categoryMenu, subcategoryMenu, saving) {
+                .pointerInput(categoryMenu, subcategoryMenu, saving, phase.canLeave) {
                     awaitPointerEventScope {
                         while (true) {
                             val event = awaitPointerEvent(PointerEventPass.Initial)
-                            if (saving) {
+                            if (saving && !phase.canLeave) {
                                 event.changes.forEach { it.consume() }
                                 continue
                             }
@@ -336,7 +356,9 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                                 accent = if (active.type == MovementType.INCOME) CapsuleToggleColors.Income else CapsuleToggleColors.Expense,
                                 onClick = editableAction {
                                     val draft = state.active
-                                    val type = if (draft.type == MovementType.INCOME) MovementType.EXPENSE else MovementType.INCOME
+                                    val type = if ((draft.pendingCatalogType ?: draft.type) == MovementType.INCOME) {
+                                        MovementType.EXPENSE
+                                    } else MovementType.INCOME
                                     val updated = catalog?.changeType?.invoke(draft, type, state.baseline.takeIf { editingStored })
                                         ?: draft.copy(type = type, category = null, subcategory = null, catalogCategoryUuid = null)
                                     state = state.update(updated)
@@ -364,7 +386,7 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                                         val motion = rememberCategoryPickerMotion(categoryMenu.expanded)
                                         CapsuleMenuControl(
                                             label = "Categoría",
-                                            text = active.catalogCategoryUuid?.let(catalog.categoryLabel) ?: "Categoría",
+                                            text = catalog.categoryLabel(active.catalogCategoryUuid),
                                             modifier = Modifier.fillMaxWidth(),
                                             onClick = editableAction { categoryMenu.expanded = !categoryMenu.expanded },
                                             announceLabelOnly = true,
@@ -397,12 +419,23 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                         if (catalog == null && active.type == MovementType.EXPENSE && active.category == MovementCategory.FIXED_COST) SubcategoryMenu(active.subcategory, subcategoryMenu) { state = state.update(active.copy(subcategory = it)) }
                     }
                 }
-                state.message?.let {
+                val message = if (phase.canLeave) {
+                    "No se pudo verificar si se guardaron los movimientos. Podés retomar desde + Agregar."
+                } else state.message
+                message?.let {
                     Text(it, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }
                 FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TextButton(onClick = { close() }, enabled = !saving, modifier = Modifier.heightIn(min = 48.dp)) { Text("Salir") }
-                    if (editingStored) {
+                    TextButton(
+                        onClick = { if (reconciliationFailed) onLeaveReconciliation() else close() },
+                        enabled = !saving || phase.canLeave,
+                        modifier = Modifier.heightIn(min = 48.dp),
+                    ) { Text(if (phase.canLeave) "Salir y conservar" else "Salir") }
+                    if (phase.canLeave) {
+                        Button(onClick = { reconciliationFailed = false }, modifier = Modifier.heightIn(min = 48.dp)) {
+                            Text("Reintentar consulta")
+                        }
+                    } else if (editingStored) {
                         Button(enabled = !saving, onClick = editableAction {
                             val error = validate(state.active)
                             if (error == null) save()
@@ -410,7 +443,7 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                                 state = state.copy(message = error)
                                 haptics.perform(QuickEntryHaptics.Action.ValidationRejected)
                             }
-                        }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (saving) "Guardando…" else "Guardar cambios") }
+                        }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (saving) saveActionLabel else "Guardar cambios") }
                     } else if (editing == null) {
                         OutlinedButton(enabled = !saving, onClick = editableAction {
                             val before = state.pending.size
@@ -433,7 +466,7 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                                 save()
                             } else state = confirmed
                             if (state.message != null && state.message != previousMessage) haptics.perform(QuickEntryHaptics.Action.ValidationRejected)
-                        }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (saving) "Guardando…" else "Confirmar") }
+                        }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (saving) saveActionLabel else "Confirmar") }
                     } else {
                         val editActionPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                         OutlinedButton(

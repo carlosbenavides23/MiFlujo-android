@@ -78,6 +78,8 @@ internal class CatalogPreviewSave(private val scope: CoroutineScope) {
 
     suspend fun await(id: String, reconcile: suspend () -> Boolean): Boolean =
         active?.takeIf { it.first == id }?.second?.await() ?: reconcile()
+
+    fun retains(id: String): Boolean = active?.first == id
 }
 
 internal class CatalogPreviewModel(application: Application) : AndroidViewModel(application) {
@@ -110,9 +112,16 @@ internal class CatalogPreviewModel(application: Application) : AndroidViewModel(
         refreshes.update { it + 1 }
     }
 
-    suspend fun loadEditor(uuid: String): CatalogMovement? =
-        editedMovement?.takeIf { it.uuid == uuid }
-            ?: session.movements.find(uuid)?.also { editedMovement = it }
+    suspend fun loadEditor(uuid: String): Result<CatalogMovement?> = try {
+        Result.success(
+            editedMovement?.takeIf { it.uuid == uuid }
+                ?: session.movements.find(uuid)?.also { editedMovement = it },
+        )
+    } catch (cancel: CancellationException) {
+        throw cancel
+    } catch (error: Exception) {
+        Result.failure(error)
+    }
 
     fun closeEditor() {
         editedMovement = null
@@ -144,6 +153,9 @@ internal class CatalogPreviewModel(application: Application) : AndroidViewModel(
         database.close()
     }
 }
+
+internal fun Result<CatalogMovement?>.editorUuidAfterLookup(requestedUuid: String): String? =
+    if (isSuccess && getOrNull() == null) null else requestedUuid
 
 internal suspend fun matchesSavedMovements(
     entries: List<Pair<String, CatalogMovementDraft>>,

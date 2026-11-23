@@ -6,6 +6,12 @@ import com.carlos.miflujo.domain.model.CatalogMovementDraft
 import com.carlos.miflujo.domain.model.Currency
 import com.carlos.miflujo.domain.model.MovementType
 import com.carlos.miflujo.domain.model.SyncStatus
+import com.carlos.miflujo.ui.movement.PendingEntry
+import com.carlos.miflujo.ui.movement.QuickEntryDraft
+import com.carlos.miflujo.ui.movement.QuickEntrySavePhase
+import com.carlos.miflujo.ui.movement.QuickEntryState
+import com.carlos.miflujo.ui.movement.catalogSubmissionEntries
+import com.carlos.miflujo.ui.movement.quickEntrySavePhase
 import java.time.LocalDate
 import java.time.LocalDateTime
 import kotlinx.coroutines.CompletableDeferred
@@ -22,6 +28,47 @@ import org.junit.Test
 
 class CatalogPreviewQuickEntryTest {
     @Test
+    fun `only a successful missing editor lookup clears its requested UUID`() {
+        val lookupFailure = Result.failure<CatalogMovement?>(IllegalStateException("Reading movement failed"))
+        assertEquals(movement.uuid, lookupFailure.editorUuidAfterLookup(movement.uuid))
+        assertEquals(movement.uuid, Result.success(movement).editorUuidAfterLookup(movement.uuid))
+        assertNull(Result.success<CatalogMovement?>(null).editorUuidAfterLookup(movement.uuid))
+    }
+
+    @Test
+    fun `failed reconciliation permits leaving with the frozen attempt available for another query`() = runBlocking {
+        val save = CatalogPreviewSave(this)
+        val attempt = "restored"
+        val draft = QuickEntryDraft(amount = "12,50")
+        val state = QuickEntryState(pending = listOf(PendingEntry(movement.uuid, draft)))
+        val submitted = state.catalogSubmissionEntries("unused", editingStored = false)
+        val failure = IllegalStateException("Reading Room failed")
+
+        assertEquals(QuickEntrySavePhase.RECONCILING, quickEntrySavePhase(attempt, false, save.retains(attempt)))
+        val error = runCatching { save.await(attempt) { throw failure } }.exceptionOrNull()
+        assertSame(failure, error)
+        val waiting = quickEntrySavePhase(attempt, true, save.retains(attempt))
+        assertEquals(QuickEntrySavePhase.READ_FAILED, waiting)
+        assertTrue(waiting.frozen)
+        assertTrue(waiting.canLeave)
+        assertFalse(save.retains(attempt))
+
+        assertEquals(submitted, state.catalogSubmissionEntries("unused", editingStored = false))
+        assertTrue(save.await(attempt) {
+            matchesSavedMovements(submitted.map { it.id to movement.draft }) { movement }
+        })
+    }
+
+    @Test
+    fun `a known negative result can leave the original capture editable`() = runBlocking {
+        val save = CatalogPreviewSave(this)
+        val attempt = "restored"
+        assertTrue(quickEntrySavePhase(attempt, false, save.retains(attempt)).frozen)
+        assertFalse(save.await(attempt) { matchesSavedMovements(listOf(movement.uuid to movement.draft)) { null } })
+        assertEquals(QuickEntrySavePhase.EDITABLE, quickEntrySavePhase(null, false, false))
+    }
+
+    @Test
     fun `the write survives replacement of the UI waiter and blocks repeated starts`() = runBlocking {
         val save = CatalogPreviewSave(this)
         val commit = CompletableDeferred<Unit>()
@@ -33,6 +80,8 @@ class CatalogPreviewQuickEntryTest {
         val oldUi = launch(start = CoroutineStart.UNDISPATCHED) {
             save.await("attempt") { error("Should use the retained write") }
         }
+        assertEquals(QuickEntrySavePhase.WRITING, quickEntrySavePhase("attempt", false, save.retains("attempt")))
+        assertFalse(QuickEntrySavePhase.WRITING.canLeave)
         oldUi.cancelAndJoin()
         assertFalse(save.start("attempt") { error("Duplicate attempt") })
         assertFalse(save.start("other") { error("A write is already in progress") })

@@ -5,12 +5,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -19,7 +21,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.carlos.miflujo.cataloglab.CatalogManagement
-import com.carlos.miflujo.cataloglab.visibleName
 import com.carlos.miflujo.domain.backup.BackupMovement
 import com.carlos.miflujo.domain.category.ReportGroup
 import com.carlos.miflujo.domain.model.CatalogMovement
@@ -59,6 +60,8 @@ internal fun CatalogPreviewApp(model: CatalogPreviewModel) {
     var movementMonth by rememberSaveable { mutableStateOf(YearMonth.now()) }
     var reportMonth by rememberSaveable { mutableStateOf(YearMonth.now()) }
     var filter by rememberSaveable { mutableStateOf(MovementFilter.All) }
+    var reconciliationParked by rememberSaveable { mutableStateOf(false) }
+    var editLookupAttempt by remember { mutableIntStateOf(0) }
 
     fun closeSettings() {
         if (showCatalog) showCatalog = false else showSettings = false
@@ -71,16 +74,37 @@ internal fun CatalogPreviewApp(model: CatalogPreviewModel) {
         }
     }
 
-    LaunchedEffect(editUuid) {
+    LaunchedEffect(editUuid, editLookupAttempt, data) {
         val uuid = editUuid
-        editing = if (uuid == null) null else try {
-            checkNotNull(model.loadEditor(uuid))
-        } catch (cancel: CancellationException) {
-            throw cancel
-        } catch (_: Exception) {
-            editUuid = null
+        if (uuid == null) {
+            editing = null
+            return@LaunchedEffect
+        }
+        if (editing?.uuid == uuid) return@LaunchedEffect
+        val lookup = model.loadEditor(uuid)
+        if (editUuid != uuid) return@LaunchedEffect
+        editing = lookup.getOrNull()
+        editUuid = lookup.editorUuidAfterLookup(uuid)
+        if (editUuid == null) {
+            reconciliationParked = false
             scope.launch { snackbar.showSnackbar("El movimiento ya no está disponible.") }
-            null
+        } else if (lookup.isFailure) {
+            if (snackbar.showSnackbar("No se pudo consultar el movimiento.", actionLabel = "Reintentar") ==
+                SnackbarResult.ActionPerformed
+            ) editLookupAttempt++
+        }
+    }
+
+    fun openQuickEntry(uuid: String? = null) {
+        if (reconciliationParked) {
+            reconciliationParked = false
+            if (editUuid != null && editing?.uuid != editUuid) editLookupAttempt++
+        } else if (editUuid != null && editing?.uuid != editUuid) {
+            editLookupAttempt++
+        } else if (uuid == null) {
+            showAdd = true
+        } else {
+            editUuid = uuid
         }
     }
 
@@ -91,7 +115,7 @@ internal fun CatalogPreviewApp(model: CatalogPreviewModel) {
             .map { it.forMainScreens(categories[it.categoryUuid]?.reportGroup) }
     }
     val labels = remember(snapshot, categories) {
-        snapshot?.movements.orEmpty().associate { it.uuid to (categories[it.categoryUuid]?.visibleName() ?: "Sin categoría") }
+        snapshot?.movements.orEmpty().associate { it.uuid to catalogCategoryLabel(it.categoryUuid, categories) }
     }
     val uncategorizedMovementUuids = remember(snapshot) {
         snapshot?.movements.orEmpty().filter { it.categoryUuid == null }.mapTo(mutableSetOf()) { it.uuid }
@@ -105,7 +129,7 @@ internal fun CatalogPreviewApp(model: CatalogPreviewModel) {
         showSettings = showSettings,
         onOpenSettings = { showSettings = true },
         onCloseSettings = ::closeSettings,
-        onAdd = snapshot?.let { { showAdd = true } },
+        onAdd = if (snapshot != null || reconciliationParked || editUuid != null) ({ openQuickEntry() }) else null,
         title = "MiFlujo · Vista de catálogo",
         settingsTitle = if (showCatalog) "Categorías" else "MiFlujo · Vista de catálogo",
         snackbarHost = { SnackbarHost(snackbar) },
@@ -160,7 +184,7 @@ internal fun CatalogPreviewApp(model: CatalogPreviewModel) {
                     }
                 },
                 categoryLabels = labels,
-                onOpenEditor = { editUuid = it.uuid },
+                onOpenEditor = { openQuickEntry(it.uuid) },
             )
             MainDestination.Report -> ReportScreen(
                 ReportUiState(reportMonth, calculate(movements, reportMonth, uncategorizedMovementUuids),
@@ -176,11 +200,14 @@ internal fun CatalogPreviewApp(model: CatalogPreviewModel) {
     val original = editing?.takeIf { it.uuid == editUuid }
     if (showAdd || original != null) key(original?.uuid) {
         CatalogPreviewMovementDialog(
-            data?.categoriesByUsage.orEmpty(), data?.catalog?.subcategories.orEmpty(), original, model,
+            data?.categoriesByUsage, data?.catalog?.subcategories, original, model,
+            visible = !reconciliationParked,
+            onLeaveReconciliation = { reconciliationParked = true },
             onClose = {
                 model.closeEditor()
                 showAdd = false
                 editUuid = null
+                reconciliationParked = false
             },
         )
     }

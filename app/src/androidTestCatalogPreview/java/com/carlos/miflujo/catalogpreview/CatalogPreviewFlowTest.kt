@@ -87,7 +87,7 @@ class CatalogPreviewFlowTest {
         compose.onNodeWithContentDescription("Egreso, cambiar a ingreso").performClick()
         compose.onNodeWithContentDescription("Monto").performTextInput("8")
         compose.onNodeWithContentDescription("Detalle (opcional)").performTextInput("Reembolso de prueba")
-        categoryControl("Categoría").performTouchInput { click() }
+        categoryControl("Sin categoría").performTouchInput { click() }
         waitFor(hasText("Transporte local") and hasClickAction()).performClick()
         waitFor("Confirmar").performClick()
         waitFor("Viaje de prueba")
@@ -151,7 +151,7 @@ class CatalogPreviewFlowTest {
 
         amount.performTextInput("10")
         detail.performTextInput("Egreso clasificado")
-        categoryControl("Categoría").performTouchInput { click() }
+        categoryControl("Sin categoría").performTouchInput { click() }
         waitFor(categoryOption).performClick()
         waitFor("Confirmar").performClick()
         compose.waitUntil(8_000) {
@@ -186,7 +186,7 @@ class CatalogPreviewFlowTest {
         openMovement("Egreso libre")
         dialogButton("Sin categoría").assertIsDisplayed()
         waitFor("Editar").performClick()
-        categoryControl("Categoría").assertExists()
+        categoryControl("Sin categoría").assertExists()
         detail.performTextReplacement("Egreso libre editado")
         waitFor("Guardar cambios").performClick()
         compose.waitUntil(8_000) {
@@ -201,7 +201,7 @@ class CatalogPreviewFlowTest {
 
         openMovement("Egreso libre editado")
         waitFor("Editar").performClick()
-        categoryControl("Categoría").performTouchInput { click() }
+        categoryControl("Sin categoría").performTouchInput { click() }
         waitFor(categoryOption).performClick()
         waitFor("Guardar cambios").performClick()
         compose.waitUntil(8_000) {
@@ -287,7 +287,7 @@ class CatalogPreviewFlowTest {
         val amount = compose.onNodeWithContentDescription("Monto")
         val detail = compose.onNodeWithContentDescription("Detalle (opcional)")
         amount.performTextInput("800")
-        categoryControl("Categoría").performTouchInput { click() }
+        categoryControl("Sin categoría").performTouchInput { click() }
         waitFor(hasText("Servicios de prueba") and hasClickAction()).performClick()
         waitFor("Agregar otro").performClick()
 
@@ -295,7 +295,7 @@ class CatalogPreviewFlowTest {
         compose.onNodeWithContentDescription("Córdobas, cambiar a dólares").performClick()
         amount.performTextInput("250.")
         detail.performTextInput("Compra de materiales")
-        categoryControl("Categoría").performTouchInput { click() }
+        categoryControl("Sin categoría").performTouchInput { click() }
         waitFor(hasText("Materiales de prueba") and hasClickAction()).performClick()
         waitFor(hasContentDescription("Editar movimiento")).performClick()
         amount.assertTextEquals("800").performTextReplacement("900")
@@ -375,11 +375,11 @@ class CatalogPreviewFlowTest {
         compose.onNodeWithContentDescription("Volver").performClick()
 
         waitFor("+ Agregar").performClick()
-        categoryControl("Categoría").performTouchInput { click() }
+        categoryControl("Sin categoría").performTouchInput { click() }
         waitFor("Crear nueva categoría")
         compose.onNodeWithText("Servicios de prueba").assertDoesNotExist()
         compose.onNodeWithText("Servicios de prueba (archivada)").assertDoesNotExist()
-        categoryControl("Categoría").performTouchInput { click() }
+        categoryControl("Sin categoría").performTouchInput { click() }
         waitFor("Salir").performClick()
 
         openMovement("Cuenta anterior")
@@ -436,7 +436,7 @@ class CatalogPreviewFlowTest {
         waitFor("+ Agregar").performClick()
         compose.onNodeWithContentDescription("Monto").performTextInput("12.50")
         compose.onNodeWithContentDescription("Detalle (opcional)").performTextInput("Borrador de prueba")
-        categoryControl("Categoría").performTouchInput { click() }
+        categoryControl("Sin categoría").performTouchInput { click() }
         waitFor("Comercio 79").assertIsDisplayed()
         waitFor("Crear nueva categoría").assertIsDisplayed()
 

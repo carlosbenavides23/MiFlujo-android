@@ -26,10 +26,12 @@ import java.io.Serializable
 
 @Composable
 internal fun CatalogPreviewMovementDialog(
-    categories: List<BackupCategory>,
-    subcategories: List<BackupSubcategory>,
+    categories: List<BackupCategory>?,
+    subcategories: List<BackupSubcategory>?,
     original: CatalogMovement?,
     model: CatalogPreviewModel,
+    visible: Boolean,
+    onLeaveReconciliation: () -> Unit,
     onClose: () -> Unit,
 ) {
     val previous = original?.draft
@@ -44,10 +46,12 @@ internal fun CatalogPreviewMovementDialog(
     fun normalized(entries: List<PendingEntry>) = entries.map {
         (original?.uuid ?: it.id) to it.draft.toCatalogDraft(baseline)
     }
-    val byUuid = categories.associateBy { it.uuid }
-    val hasActiveHistoricalSubcategory = subcategories.any { it.uuid == baseline?.subcategoryUuid && !it.archived }
+    val byUuid = categories?.associateBy { it.uuid }
+    val hasActiveHistoricalSubcategory = subcategories.orEmpty().any { it.uuid == baseline?.subcategoryUuid && !it.archived }
     QuickEntryDialog(
         onClose = onClose,
+        visible = visible,
+        onLeaveReconciliation = onLeaveReconciliation,
         catalog = QuickEntryCatalog(
             initialDraft = previous?.let {
                 QuickEntryDraft(
@@ -55,21 +59,25 @@ internal fun CatalogPreviewMovementDialog(
                     detail = it.detail.orEmpty(), date = it.date, catalogCategoryUuid = it.selection.categoryUuid,
                 )
             },
-            validate = { draft -> validateQuickEntryAmount(draft.amount).error },
+            validate = { draft ->
+                if (draft.pendingCatalogType != null) "Esperá a que cargue el catálogo para aplicar el cambio de tipo."
+                else validateQuickEntryAmount(draft.amount).error
+            },
+            catalogLoaded = byUuid != null,
             changeType = { draft, type, historical ->
                 draft.changeCatalogType(type, historical, byUuid, hasActiveHistoricalSubcategory)
             },
             selectCategory = { draft, uuid, historical ->
                 draft.selectCatalogCategory(uuid, historical)
             },
-            categoryLabel = { byUuid[it]?.visibleName() ?: "Sin categoría" },
+            categoryLabel = { catalogCategoryLabel(it, byUuid) },
             categoryIcon = { uuid, modifier, background ->
-                val category = byUuid[uuid]
+                val category = byUuid?.get(uuid)
                 CatalogIcon(category?.iconKey, modifier, color = category?.iconColor, background = background)
             },
             categoryPicker = { expanded, motion, type, uuid, dismiss, select, create ->
                 CatalogCategoryPicker(
-                    categories, type, uuid, allowUncategorized = true,
+                    categories.orEmpty(), type, uuid, allowUncategorized = true,
                     onDismiss = dismiss, onSelect = select, onCreate = create,
                     expanded = expanded, motion = motion,
                 )
@@ -98,6 +106,7 @@ internal fun CatalogPreviewMovementDialog(
             awaitSave = { id, entries ->
                 model.quickEntrySave.await(id) { model.wasSaved(normalized(entries)) }
             },
+            retainsSave = model.quickEntrySave::retains,
         ),
     )
 }
@@ -123,22 +132,27 @@ private fun QuickEntryDraft.toCatalogDraft(previous: EditBaseline?): CatalogMove
 internal fun QuickEntryDraft.changeCatalogType(
     type: MovementType,
     historical: QuickEntryDraft?,
-    categories: Map<String, BackupCategory>,
+    categories: Map<String, BackupCategory>?,
     hasActiveHistoricalSubcategory: Boolean,
 ): QuickEntryDraft {
+    if (type == this.type) return copy(pendingCatalogType = null)
     val original = historical?.takeUnless { historicalCategoryReplaced }
     val uuid = catalogCategoryUuid ?: original?.catalogCategoryUuid
-    val category = categories[uuid]
+    if (uuid != null && categories == null && !catalogCategoryCreatedInEditor) {
+        return copy(pendingCatalogType = type)
+    }
+    val category = categories?.get(uuid)
     val keepsOriginalCategory = uuid != null && uuid == original?.catalogCategoryUuid
     val returningToOriginal = keepsOriginalCategory && type == original?.type
     val compatible = when {
-        returningToOriginal -> category?.scope?.supports(type) != false
+        returningToOriginal -> category?.scope?.supports(type) == true
         // The editor creates an active BOTH category before the next snapshot arrives.
         category == null -> catalogCategoryCreatedInEditor && uuid != null
         else -> !category.archived && category.scope.supports(type)
     }
     return copy(
         type = type,
+        pendingCatalogType = null,
         catalogCategoryUuid = uuid.takeIf { compatible },
         catalogCategoryCreatedInEditor = catalogCategoryCreatedInEditor && compatible,
         // Room only accepts an archived child on the unchanged historical relationship.
@@ -146,6 +160,9 @@ internal fun QuickEntryDraft.changeCatalogType(
             !returningToOriginal && !hasActiveHistoricalSubcategory,
     )
 }
+
+internal fun catalogCategoryLabel(uuid: String?, categories: Map<String, BackupCategory>?): String =
+    if (uuid == null) "Sin categoría" else categories?.get(uuid)?.visibleName() ?: "Categoría seleccionada"
 
 internal fun QuickEntryDraft.selectCatalogCategory(uuid: String?, historical: QuickEntryDraft?): QuickEntryDraft =
     copy(

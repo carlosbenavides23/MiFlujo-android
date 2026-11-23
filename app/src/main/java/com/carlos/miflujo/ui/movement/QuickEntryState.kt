@@ -20,6 +20,7 @@ internal data class QuickEntryDraft(
     val historicalCategoryReplaced: Boolean = false,
     val omitHistoricalSubcategory: Boolean = false,
     val catalogCategoryCreatedInEditor: Boolean = false,
+    val pendingCatalogType: MovementType? = null,
 ) : Serializable {
     private companion object {
         // Keep compatibility with drafts saved before the category flags were added.
@@ -30,6 +31,24 @@ internal data class QuickEntryDraft(
 }
 
 internal data class PendingEntry(val id: String, val draft: QuickEntryDraft) : Serializable
+
+internal enum class QuickEntrySavePhase {
+    EDITABLE, WRITING, RECONCILING, READ_FAILED;
+
+    val frozen: Boolean get() = this != EDITABLE
+    val canLeave: Boolean get() = this == READ_FAILED
+}
+
+internal fun quickEntrySavePhase(
+    submissionId: String?,
+    reconciliationFailed: Boolean,
+    hasRetainedWrite: Boolean,
+): QuickEntrySavePhase = when {
+    submissionId == null -> QuickEntrySavePhase.EDITABLE
+    reconciliationFailed -> QuickEntrySavePhase.READ_FAILED
+    hasRetainedWrite -> QuickEntrySavePhase.WRITING
+    else -> QuickEntrySavePhase.RECONCILING
+}
 
 private val QuickEntryState.includesCreationDraft: Boolean
     get() = pending.isEmpty() || creationDraft.amount.isNotBlank()

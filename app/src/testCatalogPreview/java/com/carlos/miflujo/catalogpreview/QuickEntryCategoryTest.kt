@@ -14,6 +14,50 @@ import org.junit.Test
 
 class QuickEntryCategoryTest {
     @Test
+    fun `a restored category waits for its metadata and survives a compatible type change`() {
+        val waiting = original.changeCatalogType(EXPENSE, original, null, false)
+        assertEquals(INCOME, waiting.type)
+        assertEquals(EXPENSE, waiting.pendingCatalogType)
+        assertEquals(selection, waiting.selectionForSave(selection))
+
+        val resolved = waiting.changeCatalogType(EXPENSE, original, catalog(CategoryScope.BOTH), true)
+        assertEquals(EXPENSE, resolved.type)
+        assertNull(resolved.pendingCatalogType)
+        assertEquals(selection, resolved.selectionForSave(selection))
+    }
+
+    @Test
+    fun `an available empty or incompatible catalog clears the category after waiting`() {
+        val waiting = original.changeCatalogType(EXPENSE, null, null, false)
+        assertEquals(categoryUuid, waiting.catalogCategoryUuid)
+        for (available in listOf(emptyMap(), catalog(CategoryScope.INCOME))) {
+            val resolved = waiting.changeCatalogType(EXPENSE, null, available, false)
+            assertEquals(EXPENSE, resolved.type)
+            assertNull(resolved.pendingCatalogType)
+            assertNull(resolved.catalogCategoryUuid)
+        }
+    }
+
+    @Test
+    fun `explicit removal while waiting is never undone by the arriving catalog`() {
+        val waiting = original.changeCatalogType(EXPENSE, original, null, false)
+        val removed = waiting.selectCatalogCategory(null, original)
+        val available = catalog(CategoryScope.BOTH)
+        val resolved = removed.changeCatalogType(EXPENSE, original, available, true)
+        val returned = resolved.changeCatalogType(INCOME, original, available, true)
+        assertEquals(EXPENSE, resolved.type)
+        assertEquals(CatalogMovementSelection(), returned.selectionForSave(selection))
+    }
+
+    @Test
+    fun `only a null reference means uncategorized`() {
+        assertEquals("Sin categoría", catalogCategoryLabel(null, null))
+        assertEquals("Categoría seleccionada", catalogCategoryLabel(categoryUuid, null))
+        assertEquals("Categoría seleccionada", catalogCategoryLabel(categoryUuid, emptyMap()))
+        assertEquals("Transporte", catalogCategoryLabel(categoryUuid, catalog(CategoryScope.BOTH)))
+    }
+
+    @Test
     fun `both scope survives switching in either direction`() {
         val expense = original.changeCatalogType(EXPENSE, null, catalog(CategoryScope.BOTH), false)
         val income = expense.changeCatalogType(INCOME, null, catalog(CategoryScope.BOTH), false)

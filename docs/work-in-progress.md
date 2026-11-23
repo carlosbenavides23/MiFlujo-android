@@ -764,8 +764,8 @@ El PDF anterior pasó el verificador final. El raster de Poppler confirma el pun
   durante una recreación. El diálogo conserva el identificador del intento
   junto con su borrador y cola restaurables. Si se restaura un intento sin
   la escritura en memoria, compara los UUID y el contenido exacto en Room
-  antes de reactivar la captura. Si falla esa consulta, vuelve a consultar
-  manteniendo la captura bloqueada. Un conflicto no autoriza sobrescribir
+  antes de reactivar la captura. Si falla esa consulta, el usuario puede
+  reintentar la lectura con la captura bloqueada. Un conflicto no autoriza sobrescribir
   el movimiento existente. El lote sigue usando una sola transacción.
 - El último catálogo y los movimientos válidos se conservan aunque falle
   la última lectura. El error se informa por separado y la lectura ya no
@@ -803,3 +803,23 @@ El PDF anterior pasó el verificador final. El raster de Poppler confirma el pun
   movimiento válido.
 - Pasaron las cuatro pruebas JVM focalizadas de `QuickEntryConfirmationTest`,
   `:app:assembleCatalogPreview` y `git diff --check`.
+
+### Recuperación de Quick Entry con lecturas pendientes
+
+- Mientras no exista un snapshot válido, un cambio de tipo que depende de
+  una categoría se difiere y conserva los UUID de la relación. Al llegar el
+  catálogo se aplica la regla de compatibilidad. Quitar o reemplazar la
+  categoría sigue siendo explícito. Un UUID sin metadatos se muestra como
+  **Categoría seleccionada** y la referencia nula como **Sin categoría**.
+- Si falla la consulta de un movimiento que se estaba editando, se conserva
+  la edición solicitada por UUID. **Reintentar** o un nuevo snapshot permiten
+  repetir la consulta. Solo una lectura exitosa sin el movimiento confirma
+  su ausencia.
+- La escritura activa, la verificación en Room y el fallo de esa verificación
+  son estados distintos. Ante un fallo se puede reintentar solo la consulta
+  o salir y retomar desde **+ Agregar**. El intento, los UUID y el contenido
+  siguen en el estado restaurable y quedan bloqueados hasta conocer el
+  resultado.
+- Pasaron las 19 pruebas JVM focalizadas de `QuickEntryCategoryTest` y
+  `CatalogPreviewQuickEntryTest`, el ensamblado de `catalogPreview` y
+  `git diff --check`.
