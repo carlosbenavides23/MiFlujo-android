@@ -16,6 +16,7 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.foundation.lazy.rememberLazyListState
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
@@ -498,8 +499,16 @@ private fun QuickEntryWindow(onDismissRequest: () -> Unit, content: @Composable 
             decorFitsSystemWindows = false,
         ),
     ) {
+        val density = LocalDensity.current
+        val keyboardInset = WindowInsets.ime.exclude(WindowInsets.systemBars.union(WindowInsets.displayCutout))
+        val panelAlignment = Alignment { size, space, direction ->
+            // Preserve the resting center until the keyboard makes that position unavailable.
+            val restingSpace = IntSize(space.width, space.height + keyboardInset.getBottom(density))
+            val centered = Alignment.Center.align(size, restingSpace, direction)
+            IntOffset(centered.x, minOf(centered.y, space.height - size.height))
+        }
         // Keep the window bounds stable while the compact panel uses the inset-adjusted space.
-        Box(Modifier.fillMaxSize().safeDrawingPadding(), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxSize().safeDrawingPadding(), contentAlignment = panelAlignment) {
             Box(Modifier.matchParentSize().pointerInput(Unit) {
                 detectTapGestures { dismissOnBackdrop() }
             })

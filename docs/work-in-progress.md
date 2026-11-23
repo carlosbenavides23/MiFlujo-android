@@ -728,3 +728,13 @@ El PDF anterior pasó el verificador final. El raster de Poppler confirma el pun
   abierto midió un destino de 200 px al inicio y al final. Pasaron los
   recorridos focalizados de altura, edición y toque fuera. Se retiraron las
   trazas y se actualizó `catalogPreview` por ADB conservando su base.
+
+### Posición de Quick Entry con el teclado visible
+
+- El panel toma como referencia el centro con el teclado cerrado. Si el IME
+  ocupa parte de esa posición, el panel sube solo hasta caber en el área segura
+  y conserva el margen inferior existente. La cola sigue usando el espacio
+  restante y se desplaza cuando hace falta.
+- Pasaron la revisión estática, `git diff --check` y la compilación de
+  `catalogPreview`. Se actualizó el APK en el POCO X7 Pro conservando la base
+  experimental. La validación de ergonomía queda para la revisión manual.
