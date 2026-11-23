@@ -176,7 +176,7 @@ internal fun CatalogPreviewApp(model: CatalogPreviewModel) {
     val original = editing?.takeIf { it.uuid == editUuid }
     if (showAdd || original != null) key(original?.uuid) {
         CatalogPreviewMovementDialog(
-            data?.categoriesByUsage.orEmpty(), original, model,
+            data?.categoriesByUsage.orEmpty(), data?.catalog?.subcategories.orEmpty(), original, model,
             onClose = {
                 model.closeEditor()
                 showAdd = false

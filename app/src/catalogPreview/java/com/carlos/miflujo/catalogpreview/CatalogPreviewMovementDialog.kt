@@ -11,6 +11,7 @@ import com.carlos.miflujo.cataloglab.createFromEditor
 import com.carlos.miflujo.cataloglab.visibleName
 import com.carlos.miflujo.cataloglab.withCategory
 import com.carlos.miflujo.domain.backup.BackupCategory
+import com.carlos.miflujo.domain.backup.BackupSubcategory
 import com.carlos.miflujo.domain.model.CatalogMovement
 import com.carlos.miflujo.domain.model.CatalogMovementDraft
 import com.carlos.miflujo.domain.model.CatalogMovementSelection
@@ -26,6 +27,7 @@ import java.io.Serializable
 @Composable
 internal fun CatalogPreviewMovementDialog(
     categories: List<BackupCategory>,
+    subcategories: List<BackupSubcategory>,
     original: CatalogMovement?,
     model: CatalogPreviewModel,
     onClose: () -> Unit,
@@ -43,6 +45,7 @@ internal fun CatalogPreviewMovementDialog(
         (original?.uuid ?: it.id) to it.draft.toCatalogDraft(baseline)
     }
     val byUuid = categories.associateBy { it.uuid }
+    val hasActiveHistoricalSubcategory = subcategories.any { it.uuid == baseline?.subcategoryUuid && !it.archived }
     QuickEntryDialog(
         onClose = onClose,
         catalog = QuickEntryCatalog(
@@ -53,6 +56,12 @@ internal fun CatalogPreviewMovementDialog(
                 )
             },
             validate = { draft -> validateQuickEntryAmount(draft.amount).error },
+            changeType = { draft, type, historical ->
+                draft.changeCatalogType(type, historical, byUuid, hasActiveHistoricalSubcategory)
+            },
+            selectCategory = { draft, uuid, historical ->
+                draft.selectCatalogCategory(uuid, historical)
+            },
             categoryLabel = { byUuid[it]?.visibleName() ?: "Sin categoría" },
             categoryIcon = { uuid, modifier, background ->
                 val category = byUuid[uuid]
@@ -60,7 +69,7 @@ internal fun CatalogPreviewMovementDialog(
             },
             categoryPicker = { expanded, motion, type, uuid, dismiss, select, create ->
                 CatalogCategoryPicker(
-                    categories, type, uuid, allowUncategorized = type == MovementType.INCOME,
+                    categories, type, uuid, allowUncategorized = true,
                     onDismiss = dismiss, onSelect = select, onCreate = create,
                     expanded = expanded, motion = motion,
                 )
@@ -106,7 +115,42 @@ private fun QuickEntryDraft.toCatalogDraft(previous: EditBaseline?): CatalogMove
         else detail.takeUnless(String::isBlank)
     return CatalogMovementDraft(
         type, checkNotNull(validateQuickEntryAmount(amount).amountMinor), currency, date,
-        previous?.let { CatalogMovementSelection(it.categoryUuid, it.subcategoryUuid) }
-            .withCategory(catalogCategoryUuid), savedDetail,
+        selectionForSave(previous?.let { CatalogMovementSelection(it.categoryUuid, it.subcategoryUuid) }),
+        savedDetail,
     )
 }
+
+internal fun QuickEntryDraft.changeCatalogType(
+    type: MovementType,
+    historical: QuickEntryDraft?,
+    categories: Map<String, BackupCategory>,
+    hasActiveHistoricalSubcategory: Boolean,
+): QuickEntryDraft {
+    val original = historical?.takeUnless { historicalCategoryReplaced }
+    val uuid = catalogCategoryUuid ?: original?.catalogCategoryUuid
+    val category = categories[uuid]
+    val keepsOriginalCategory = uuid != null && uuid == original?.catalogCategoryUuid
+    val returningToOriginal = keepsOriginalCategory && type == original?.type
+    val compatible = when {
+        returningToOriginal -> category?.scope?.supports(type) != false
+        else -> category != null && !category.archived && category.scope.supports(type)
+    }
+    return copy(
+        type = type,
+        catalogCategoryUuid = uuid.takeIf { compatible },
+        // Room only accepts an archived child on the unchanged historical relationship.
+        omitHistoricalSubcategory = compatible && keepsOriginalCategory &&
+            !returningToOriginal && !hasActiveHistoricalSubcategory,
+    )
+}
+
+internal fun QuickEntryDraft.selectCatalogCategory(uuid: String?, historical: QuickEntryDraft?): QuickEntryDraft =
+    copy(
+        catalogCategoryUuid = uuid,
+        historicalCategoryReplaced = historicalCategoryReplaced ||
+            (historical?.catalogCategoryUuid != null && uuid != historical.catalogCategoryUuid),
+    )
+
+internal fun QuickEntryDraft.selectionForSave(historical: CatalogMovementSelection?): CatalogMovementSelection =
+    historical.takeUnless { historicalCategoryReplaced || omitHistoricalSubcategory }
+        .withCategory(catalogCategoryUuid)

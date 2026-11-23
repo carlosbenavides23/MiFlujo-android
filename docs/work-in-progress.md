@@ -774,3 +774,19 @@ El PDF anterior pasó el verificador final. El raster de Poppler confirma el pun
   ensamblado de `catalogPreview` y `git diff --check`. Se revisaron
   estáticamente los manejadores de mutación. La recreación se cubrió
   reemplazando al consumidor del resultado en JVM, sin una Activity real.
+
+### Categorías de Quick Entry al cambiar de tipo
+
+- Las categorías activas compatibles, incluidas las de alcance `BOTH`, se
+  conservan al alternar entre ingreso y egreso. Una categoría incompatible
+  queda fuera de la selección para el nuevo tipo.
+- En una edición histórica, volver al tipo original recupera la relación
+  anterior si el usuario no eligió otra categoría ni la quitó. Esto incluye
+  categorías y subcategorías archivadas en su relación original. Con una
+  categoría activa que admite el nuevo tipo, solo se conserva una
+  subcategoría histórica compatible con ese cambio.
+- **Sin categoría** está disponible para ambos tipos. Es una selección
+  explícita que guarda referencias nulas y evita restaurar la relación
+  anterior al volver al tipo original.
+- Pasaron las siete pruebas JVM focalizadas de `QuickEntryCategoryTest`,
+  `:app:assembleCatalogPreview` y `git diff --check`.

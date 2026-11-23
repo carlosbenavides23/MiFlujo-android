@@ -17,7 +17,14 @@ internal data class QuickEntryDraft(
     val category: MovementCategory? = null,
     val subcategory: MovementSubcategory? = null,
     val catalogCategoryUuid: String? = null,
+    val historicalCategoryReplaced: Boolean = false,
+    val omitHistoricalSubcategory: Boolean = false,
 ) : Serializable {
+    private companion object {
+        // Keep compatibility with drafts saved before the category flags were added.
+        private const val serialVersionUID = 5834423242141167301L
+    }
+
     fun validationMessage(): String? = quickEntryValidationMessage(type, amount, currency, date, category, subcategory)
 }
 

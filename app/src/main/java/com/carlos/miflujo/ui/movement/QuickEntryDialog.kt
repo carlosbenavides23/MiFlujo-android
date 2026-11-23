@@ -85,6 +85,8 @@ import kotlinx.coroutines.delay
 internal class QuickEntryCatalog(
     val initialDraft: QuickEntryDraft?,
     val validate: (QuickEntryDraft) -> String?,
+    val changeType: (QuickEntryDraft, MovementType, QuickEntryDraft?) -> QuickEntryDraft,
+    val selectCategory: (QuickEntryDraft, String?, QuickEntryDraft?) -> QuickEntryDraft,
     val categoryLabel: (String?) -> String,
     val categoryIcon: @Composable (String?, Modifier, Color) -> Unit,
     val categoryPicker: @Composable (
@@ -110,6 +112,10 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
     var choosingDate by rememberSaveable { mutableStateOf(false) }
     val validate = catalog?.validate ?: QuickEntryDraft::validationMessage
     val editingStored = catalog?.initialDraft != null
+    fun selectCategory(uuid: String?) {
+        if (catalog == null) return
+        state = state.update(catalog.selectCategory(state.active, uuid, state.baseline.takeIf { editingStored }))
+    }
     fun ifEditable(action: () -> Unit) {
         if (submissionId == null) action()
     }
@@ -333,7 +339,11 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                                 value = active.type, label = if (active.type == MovementType.INCOME) "Ingreso, cambiar a egreso" else "Egreso, cambiar a ingreso",
                                 accent = if (active.type == MovementType.INCOME) CapsuleToggleColors.Income else CapsuleToggleColors.Expense,
                                 onClick = editableAction {
-                                    state = state.update(state.active.copy(type = if (state.active.type == MovementType.INCOME) MovementType.EXPENSE else MovementType.INCOME, category = null, subcategory = null, catalogCategoryUuid = null))
+                                    val draft = state.active
+                                    val type = if (draft.type == MovementType.INCOME) MovementType.EXPENSE else MovementType.INCOME
+                                    val updated = catalog?.changeType?.invoke(draft, type, state.baseline.takeIf { editingStored })
+                                        ?: draft.copy(type = type, category = null, subcategory = null, catalogCategoryUuid = null)
+                                    state = state.update(updated)
                                     haptics.perform(QuickEntryHaptics.Action.ToggleType)
                                 },
                             ) { type -> MovementSymbol(type) }
@@ -370,7 +380,7 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                                             categoryMenu.expanded, motion, active.type, active.catalogCategoryUuid,
                                             editableAction { categoryMenu.expanded = false },
                                             { uuid -> ifEditable {
-                                                state = state.update(state.active.copy(catalogCategoryUuid = uuid))
+                                                selectCategory(uuid)
                                                 categoryMenu.expanded = false
                                             } },
                                             editableAction {
@@ -478,7 +488,7 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
     }
     if (catalog != null && creatingCategory) {
         catalog.categoryEditor({ uuid -> ifEditable {
-            state = state.update(state.active.copy(catalogCategoryUuid = uuid))
+            selectCategory(uuid)
             creatingCategory = false
         } }, editableAction { creatingCategory = false })
     }
