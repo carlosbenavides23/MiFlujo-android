@@ -712,3 +712,19 @@ El PDF anterior pasó el verificador final. El raster de Poppler confirma el pun
   edición con restauración del borrador. Pasaron `git diff --check` y la
   compilación de `catalogPreview`. La actualización en el POCO conservó la
   base experimental.
+
+### Apertura del teclado en Quick Entry
+
+- En dos reproducciones de `c46e90f` con la cola vacía, la primera apertura
+  midió un descenso de 90 px de la ventana antes del primer inset de teclado
+  distinto de cero. El panel interior conservó su altura y ubicación relativa.
+  El salto no se observó en la comparación focalizada con `7a30842`.
+- Una ventana transparente de tamaño estable aplica `safeDrawingPadding` una
+  vez y centra el panel dinámico en el área disponible. El toque fuera conserva
+  la salida y la confirmación de descarte. El formulario y las acciones siguen
+  fuera del scroll de la cola.
+- En el POCO X7 Pro se revisaron 16 ciclos de apertura y cierre con Monto y
+  Detalle y con 0, 1, 2 y 8 pendientes. La transferencia 2→3 con el teclado
+  abierto midió un destino de 200 px al inicio y al final. Pasaron los
+  recorridos focalizados de altura, edición y toque fuera. Se retiraron las
+  trazas y se actualizó `catalogPreview` por ADB conservando su base.

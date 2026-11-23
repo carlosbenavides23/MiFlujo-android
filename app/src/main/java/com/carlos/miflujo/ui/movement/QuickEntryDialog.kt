@@ -190,12 +190,10 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
         if (saving) return
         if (state.hasWork) state = state.requestExit() else onClose()
     }
-    Dialog(
+    QuickEntryWindow(
         onDismissRequest = {
             if (catalog != null && categoryMenu.expanded) categoryMenu.expanded = false else close()
         },
-        // Compose applies the IME and system bar insets once, even as this dialog grows.
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
         Surface(modifier = Modifier.fillMaxWidth()
                 .onGloballyPositioned { selectorHostBounds = it.boundsInWindow() }
@@ -217,7 +215,7 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                         }
                     }
                 }
-                .padding(12.dp).safeDrawingPadding(), shape = RoundedCornerShape(28.dp)) {
+                .padding(12.dp), shape = RoundedCornerShape(28.dp)) {
             Box(Modifier.fillMaxWidth().onGloballyPositioned { transferHost = it }) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(if (editingStored) "Editar movimiento" else "Registro con cápsulas", style = MaterialTheme.typography.titleLarge)
@@ -487,6 +485,27 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
         confirmButton = { TextButton(onClick = onClose) { Text("Descartar y salir") } },
         dismissButton = { TextButton(onClick = { state = state.copy(confirmedCount = null) }) { Text("Seguir revisando") } },
     )
+}
+
+@Composable
+private fun QuickEntryWindow(onDismissRequest: () -> Unit, content: @Composable () -> Unit) {
+    val dismissOnBackdrop by rememberUpdatedState(onDismissRequest)
+    Dialog(
+        onDismissRequest = onDismissRequest,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnClickOutside = false,
+            decorFitsSystemWindows = false,
+        ),
+    ) {
+        // Keep the window bounds stable while the compact panel uses the inset-adjusted space.
+        Box(Modifier.fillMaxSize().safeDrawingPadding(), contentAlignment = Alignment.Center) {
+            Box(Modifier.matchParentSize().pointerInput(Unit) {
+                detectTapGestures { dismissOnBackdrop() }
+            })
+            content()
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
