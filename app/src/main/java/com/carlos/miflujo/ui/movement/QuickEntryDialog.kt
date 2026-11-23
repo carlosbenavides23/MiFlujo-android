@@ -122,11 +122,6 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
     }
     fun editableAction(action: () -> Unit): () -> Unit = { ifEditable(action) }
 
-    fun submissionEntries(): List<PendingEntry> =
-        if (editingStored || state.includesCreationDraft) {
-            state.pending + PendingEntry(activeId, state.active)
-        } else state.pending
-
     fun save() {
         if (submissionId != null || catalog == null || choosingDate || creatingCategory ||
             state.exitRequested || state.deleteRequestedId != null || state.editingId != null
@@ -134,12 +129,12 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
         val id = UUID.randomUUID().toString()
         submissionId = id
         focus.clearFocus()
-        if (!catalog.startSave(id, submissionEntries())) submissionId = null
+        if (!catalog.startSave(id, state.catalogSubmissionEntries(activeId, editingStored))) submissionId = null
     }
     val closeAfterSave by rememberUpdatedState(onClose)
     LaunchedEffect(submissionId) {
         val id = submissionId ?: return@LaunchedEffect
-        val entries = submissionEntries()
+        val entries = state.catalogSubmissionEntries(activeId, editingStored)
         val saveError = "No se pudo guardar. Revisá la categoría e intentá de nuevo."
         val pendingSave = checkNotNull(catalog)
         var confirmed: Boolean
@@ -433,7 +428,7 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                         }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Agregar otro") }
                         Button(enabled = !saving, onClick = editableAction {
                             val previousMessage = state.message
-                            val confirmed = state.confirm(validate)
+                            val confirmed = if (catalog != null) state.confirmCatalog(validate) else state.confirm(validate)
                             if (catalog != null && confirmed.confirmedCount != null) {
                                 save()
                             } else state = confirmed

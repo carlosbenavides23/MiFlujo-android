@@ -791,3 +791,15 @@ El PDF anterior pasó el verificador final. El raster de Poppler confirma el pun
   anterior al volver al tipo original.
 - Pasaron las ocho pruebas JVM focalizadas de `QuickEntryCategoryTest`,
   `:app:assembleCatalogPreview` y `git diff --check`.
+
+### Confirmar la cola con un borrador sin monto
+
+- En `catalogPreview`, si ya hay pendientes y el monto del borrador actual
+  está vacío o contiene solo espacios en blanco, **Confirmar** envía solo
+  la cola. Los cambios de detalle, fecha, moneda, tipo o categoría de ese
+  borrador se descartan al cerrar tras el guardado exitoso.
+- Un monto con otro contenido debe ser válido para confirmar. Si es válido
+  se incorpora al mismo lote. Con la cola vacía siempre se requiere un
+  movimiento válido.
+- Pasaron las cuatro pruebas JVM focalizadas de `QuickEntryConfirmationTest`,
+  `:app:assembleCatalogPreview` y `git diff --check`.

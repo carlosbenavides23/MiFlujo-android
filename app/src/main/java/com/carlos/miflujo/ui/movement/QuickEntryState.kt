@@ -31,7 +31,26 @@ internal data class QuickEntryDraft(
 
 internal data class PendingEntry(val id: String, val draft: QuickEntryDraft) : Serializable
 
-internal val QuickEntryState.includesCreationDraft: Boolean get() = dirty || pending.isEmpty()
+private val QuickEntryState.includesCreationDraft: Boolean
+    get() = pending.isEmpty() || creationDraft.amount.isNotBlank()
+
+internal fun QuickEntryState.confirmCatalog(validate: (QuickEntryDraft) -> String?): QuickEntryState =
+    confirmDraft(includesCreationDraft, validate)
+
+internal fun QuickEntryState.catalogSubmissionEntries(activeId: String, editingStored: Boolean): List<PendingEntry> =
+    if (editingStored || includesCreationDraft) pending + PendingEntry(activeId, active) else pending
+
+private fun QuickEntryState.confirmDraft(
+    includeDraft: Boolean,
+    validate: (QuickEntryDraft) -> String?,
+): QuickEntryState {
+    if (editingId != null) return this
+    if (includeDraft) {
+        validate(creationDraft)?.let { return copy(message = it) }
+        return copy(confirmedCount = pending.size + 1, message = null)
+    }
+    return copy(confirmedCount = pending.size, message = null)
+}
 
 /** Saveable form and queue state. Transitions never write to a repository. */
 internal data class QuickEntryState(
@@ -94,12 +113,6 @@ internal data class QuickEntryState(
     fun requestExit() = copy(exitRequested = hasWork)
 
     // Preview a count, never insert into the queue or report a successful save.
-    fun confirm(validate: (QuickEntryDraft) -> String? = QuickEntryDraft::validationMessage): QuickEntryState {
-        if (editingId != null) return this
-        if (includesCreationDraft) {
-            validate(creationDraft)?.let { return copy(message = it) }
-            return copy(confirmedCount = pending.size + 1, message = null)
-        }
-        return copy(confirmedCount = pending.size, message = null)
-    }
+    fun confirm(validate: (QuickEntryDraft) -> String? = QuickEntryDraft::validationMessage): QuickEntryState =
+        confirmDraft(dirty || pending.isEmpty(), validate)
 }
