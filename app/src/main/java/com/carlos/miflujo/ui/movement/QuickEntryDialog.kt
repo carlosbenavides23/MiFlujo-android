@@ -112,9 +112,10 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
     var choosingDate by rememberSaveable { mutableStateOf(false) }
     val validate = catalog?.validate ?: QuickEntryDraft::validationMessage
     val editingStored = catalog?.initialDraft != null
-    fun selectCategory(uuid: String?) {
+    fun selectCategory(uuid: String?, createdInEditor: Boolean = false) {
         if (catalog == null) return
-        state = state.update(catalog.selectCategory(state.active, uuid, state.baseline.takeIf { editingStored }))
+        val selected = catalog.selectCategory(state.active, uuid, state.baseline.takeIf { editingStored })
+        state = state.update(selected.copy(catalogCategoryCreatedInEditor = createdInEditor))
     }
     fun ifEditable(action: () -> Unit) {
         if (submissionId == null) action()
@@ -488,7 +489,7 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
     }
     if (catalog != null && creatingCategory) {
         catalog.categoryEditor({ uuid -> ifEditable {
-            selectCategory(uuid)
+            selectCategory(uuid, createdInEditor = true)
             creatingCategory = false
         } }, editableAction { creatingCategory = false })
     }

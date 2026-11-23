@@ -133,11 +133,14 @@ internal fun QuickEntryDraft.changeCatalogType(
     val returningToOriginal = keepsOriginalCategory && type == original?.type
     val compatible = when {
         returningToOriginal -> category?.scope?.supports(type) != false
-        else -> category != null && !category.archived && category.scope.supports(type)
+        // The editor creates an active BOTH category before the next snapshot arrives.
+        category == null -> catalogCategoryCreatedInEditor && uuid != null
+        else -> !category.archived && category.scope.supports(type)
     }
     return copy(
         type = type,
         catalogCategoryUuid = uuid.takeIf { compatible },
+        catalogCategoryCreatedInEditor = catalogCategoryCreatedInEditor && compatible,
         // Room only accepts an archived child on the unchanged historical relationship.
         omitHistoricalSubcategory = compatible && keepsOriginalCategory &&
             !returningToOriginal && !hasActiveHistoricalSubcategory,
@@ -147,6 +150,7 @@ internal fun QuickEntryDraft.changeCatalogType(
 internal fun QuickEntryDraft.selectCatalogCategory(uuid: String?, historical: QuickEntryDraft?): QuickEntryDraft =
     copy(
         catalogCategoryUuid = uuid,
+        catalogCategoryCreatedInEditor = false,
         historicalCategoryReplaced = historicalCategoryReplaced ||
             (historical?.catalogCategoryUuid != null && uuid != historical.catalogCategoryUuid),
     )

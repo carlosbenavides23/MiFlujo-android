@@ -22,6 +22,15 @@ class QuickEntryCategoryTest {
     }
 
     @Test
+    fun `a category just created in the editor keeps its both scope until the snapshot arrives`() {
+        val created = original.copy(catalogCategoryCreatedInEditor = true)
+        val switched = created.changeCatalogType(EXPENSE, null, emptyMap(), false)
+        assertEquals(categoryUuid, switched.catalogCategoryUuid)
+        val archived = catalog(CategoryScope.BOTH, archived = true)
+        assertNull(switched.changeCatalogType(INCOME, null, archived, false).catalogCategoryUuid)
+    }
+
+    @Test
     fun `an incompatible category is cleared and historical assignment returns with its type`() {
         val categories = catalog(CategoryScope.INCOME)
         assertNull(original.changeCatalogType(EXPENSE, null, categories, true).catalogCategoryUuid)

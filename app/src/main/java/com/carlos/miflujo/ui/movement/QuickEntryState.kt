@@ -19,6 +19,7 @@ internal data class QuickEntryDraft(
     val catalogCategoryUuid: String? = null,
     val historicalCategoryReplaced: Boolean = false,
     val omitHistoricalSubcategory: Boolean = false,
+    val catalogCategoryCreatedInEditor: Boolean = false,
 ) : Serializable {
     private companion object {
         // Keep compatibility with drafts saved before the category flags were added.

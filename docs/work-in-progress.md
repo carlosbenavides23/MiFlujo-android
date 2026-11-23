@@ -779,7 +779,8 @@ El PDF anterior pasó el verificador final. El raster de Poppler confirma el pun
 
 - Las categorías activas compatibles, incluidas las de alcance `BOTH`, se
   conservan al alternar entre ingreso y egreso. Una categoría incompatible
-  queda fuera de la selección para el nuevo tipo.
+  queda fuera de la selección para el nuevo tipo. Una categoría recién
+  creada conserva su alcance `BOTH` mientras se actualiza el catálogo.
 - En una edición histórica, volver al tipo original recupera la relación
   anterior si el usuario no eligió otra categoría ni la quitó. Esto incluye
   categorías y subcategorías archivadas en su relación original. Con una
@@ -788,5 +789,5 @@ El PDF anterior pasó el verificador final. El raster de Poppler confirma el pun
 - **Sin categoría** está disponible para ambos tipos. Es una selección
   explícita que guarda referencias nulas y evita restaurar la relación
   anterior al volver al tipo original.
-- Pasaron las siete pruebas JVM focalizadas de `QuickEntryCategoryTest`,
+- Pasaron las ocho pruebas JVM focalizadas de `QuickEntryCategoryTest`,
   `:app:assembleCatalogPreview` y `git diff --check`.
