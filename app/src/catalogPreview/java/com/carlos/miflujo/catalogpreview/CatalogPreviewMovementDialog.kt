@@ -16,7 +16,7 @@ import com.carlos.miflujo.ui.movement.QuickEntryCatalog
 import com.carlos.miflujo.ui.movement.QuickEntryDialog
 import com.carlos.miflujo.ui.movement.QuickEntryDraft
 import com.carlos.miflujo.ui.movement.formatAmountInput
-import com.carlos.miflujo.ui.movement.parseAmountMinorOrNull
+import com.carlos.miflujo.ui.movement.validateQuickEntryAmount
 
 @Composable
 internal fun CatalogPreviewMovementDialog(
@@ -36,9 +36,7 @@ internal fun CatalogPreviewMovementDialog(
                     detail = it.detail.orEmpty(), date = it.date, catalogCategoryUuid = it.selection.categoryUuid,
                 )
             },
-            validate = { draft ->
-                if ((parseAmountMinorOrNull(draft.amount) ?: 0) <= 0) "Ingresá un monto positivo válido." else null
-            },
+            validate = { draft -> validateQuickEntryAmount(draft.amount).error },
             categoryLabel = { byUuid[it]?.visibleName() ?: "Sin categoría" },
             categoryIcon = { uuid, modifier, background ->
                 val category = byUuid[uuid]
@@ -73,7 +71,7 @@ private fun QuickEntryDraft.toCatalogDraft(previous: CatalogMovementDraft?): Cat
     val savedDetail = if (previous != null && detail == previous.detail.orEmpty()) previous.detail
         else detail.takeUnless(String::isBlank)
     return CatalogMovementDraft(
-        type, checkNotNull(parseAmountMinorOrNull(amount)), currency, date,
+        type, checkNotNull(validateQuickEntryAmount(amount).amountMinor), currency, date,
         previous?.selection.withCategory(catalogCategoryUuid), savedDetail,
     )
 }

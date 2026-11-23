@@ -530,8 +530,8 @@ private fun validateAddMovementForm(
     date: String,
     category: MovementCategory?,
     subcategory: MovementSubcategory?,
+    parsedAmountMinor: Long? = parseAmountMinorOrNull(amount),
 ): AddMovementValidationResult {
-    val parsedAmountMinor = parseAmountMinorOrNull(amount)
     val parsedDate = parseVisibleDateOrNull(date)
     val businessRuleViolations = if (movementType != null && parsedAmountMinor != null) {
         MovementBusinessRuleValidator.validate(
@@ -605,6 +605,10 @@ internal fun parseAmountMinorOrNull(rawAmount: String): Long? {
     ) ?: return null
     if (centsPart.length > 2 || !centsPart.all { it.isDigit() }) return null
 
+    return toAmountMinorOrNull(wholeDigits, centsPart)
+}
+
+private fun toAmountMinorOrNull(wholeDigits: String, centsPart: String): Long? {
     return try {
         val wholeMinor = Math.multiplyExact(wholeDigits.toLong(), 100L)
         val centsMinor = centsPart.padEnd(2, '0').ifBlank { "0" }.toLong()
@@ -613,6 +617,26 @@ internal fun parseAmountMinorOrNull(rawAmount: String): Long? {
         null
     } catch (_: ArithmeticException) {
         null
+    }
+}
+
+private val quickEntryAmountPattern = Regex("""\p{Nd}+(?:[.,]\p{Nd}{1,2})?""")
+
+private fun parseQuickEntryAmountMinorOrNull(rawAmount: String): Long? {
+    val amount = rawAmount.trim()
+    if (!quickEntryAmountPattern.matches(amount)) return null
+    val parts = amount.split('.', ',')
+    return toAmountMinorOrNull(parts.first(), parts.getOrElse(1) { "" })
+}
+
+internal data class QuickEntryAmountValidation(val amountMinor: Long? = null, val error: String? = null)
+
+internal fun validateQuickEntryAmount(rawAmount: String): QuickEntryAmountValidation {
+    val amountMinor = parseQuickEntryAmountMinorOrNull(rawAmount)
+    return when {
+        amountMinor == null || amountMinor <= 0 -> QuickEntryAmountValidation(error = "Ingresá un monto positivo válido.")
+        amountMinor > MAX_MOVEMENT_AMOUNT_MINOR -> QuickEntryAmountValidation(error = MAX_MOVEMENT_AMOUNT_ERROR)
+        else -> QuickEntryAmountValidation(amountMinor = amountMinor)
     }
 }
 
@@ -746,11 +770,14 @@ private fun Currency.amountPrefix(): String {
     }
 }
 
-// The prototype uses the same validation as the existing form, without submitting data.
+// The prototype keeps the existing date and category rules and uses Quick Entry's decimal syntax.
 internal fun quickEntryValidationMessage(
     type: MovementType, amount: String, currency: Currency, date: LocalDate,
     category: MovementCategory?, subcategory: MovementSubcategory?,
 ): String? {
-    val errors = validateAddMovementForm(type, amount, currency, date.formatVisibleDate(), category, subcategory).errors
+    val errors = validateAddMovementForm(
+        type, amount, currency, date.formatVisibleDate(), category, subcategory,
+        parsedAmountMinor = parseQuickEntryAmountMinorOrNull(amount),
+    ).errors
     return listOfNotNull(errors.amount, errors.date, errors.category, errors.subcategory).firstOrNull()
 }

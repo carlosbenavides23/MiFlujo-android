@@ -738,3 +738,19 @@ El PDF anterior pasó el verificador final. El raster de Poppler confirma el pun
 - Pasaron la revisión estática, `git diff --check` y la compilación de
   `catalogPreview`. Se actualizó el APK en el POCO X7 Pro conservando la base
   experimental. La validación de ergonomía queda para la revisión manual.
+
+### Validación monetaria de Quick Entry
+
+- Quick Entry valida el monto al agregar, confirmar o guardar una edición. Acepta
+  un importe positivo con punto o coma decimal y hasta dos decimales. Las
+  entradas con separadores de miles se rechazan y los borradores conservan
+  su texto mientras se editan.
+- El límite compartido con el formulario normal es 99,999,999,999 unidades
+  menores por movimiento (999,999,999.99). El formulario normal conserva su
+  interpretación anterior de los separadores.
+- Los totales mensuales de datos existentes fuera de rango siguen pendientes:
+  detectar un desborde requiere que las pantallas puedan manejar un total que
+  no cabe en `Long`.
+- Pasaron las cuatro pruebas JVM de `QuickEntryAmountTest`, ejecutadas con
+  `:app:testDebugUnitTest --tests`, y se compiló `:app:assembleCatalogPreview`.
+  También pasó `git diff --check`.
