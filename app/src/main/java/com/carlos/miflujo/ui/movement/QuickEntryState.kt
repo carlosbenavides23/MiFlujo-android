@@ -23,6 +23,8 @@ internal data class QuickEntryDraft(
 
 internal data class PendingEntry(val id: String, val draft: QuickEntryDraft) : Serializable
 
+internal val QuickEntryState.includesCreationDraft: Boolean get() = dirty || pending.isEmpty()
+
 /** Saveable form and queue state. Transitions never write to a repository. */
 internal data class QuickEntryState(
     val creationDraft: QuickEntryDraft = QuickEntryDraft(),
@@ -86,7 +88,7 @@ internal data class QuickEntryState(
     // Preview a count, never insert into the queue or report a successful save.
     fun confirm(validate: (QuickEntryDraft) -> String? = QuickEntryDraft::validationMessage): QuickEntryState {
         if (editingId != null) return this
-        if (dirty || pending.isEmpty()) {
+        if (includesCreationDraft) {
             validate(creationDraft)?.let { return copy(message = it) }
             return copy(confirmedCount = pending.size + 1, message = null)
         }

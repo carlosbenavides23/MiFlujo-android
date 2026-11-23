@@ -80,7 +80,7 @@ import com.carlos.miflujo.ui.theme.financeNegativeColor
 import java.time.LocalDate
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 internal class QuickEntryCatalog(
     val initialDraft: QuickEntryDraft?,
@@ -92,7 +92,8 @@ internal class QuickEntryCatalog(
         onDismiss: () -> Unit, select: (String?) -> Unit, create: () -> Unit,
     ) -> Unit,
     val categoryEditor: @Composable (onCreated: (String) -> Unit, onDismiss: () -> Unit) -> Unit,
-    val onSave: suspend (List<PendingEntry>) -> Unit,
+    val startSave: (String, List<PendingEntry>) -> Boolean,
+    val awaitSave: suspend (String, List<PendingEntry>) -> Boolean,
 )
 
 @Composable
@@ -100,30 +101,58 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
     var state by rememberSaveable {
         mutableStateOf(QuickEntryState(creationDraft = catalog?.initialDraft ?: QuickEntryDraft()))
     }
-    val scope = rememberCoroutineScope()
     val focus = LocalFocusManager.current
     var activeId by rememberSaveable { mutableStateOf(UUID.randomUUID().toString()) }
     var draftRestorations by remember { mutableIntStateOf(0) }
-    var saving by remember { mutableStateOf(false) }
+    var submissionId by rememberSaveable { mutableStateOf<String?>(null) }
+    val saving = submissionId != null
     var creatingCategory by rememberSaveable { mutableStateOf(false) }
     var choosingDate by rememberSaveable { mutableStateOf(false) }
     val validate = catalog?.validate ?: QuickEntryDraft::validationMessage
     val editingStored = catalog?.initialDraft != null
-    fun save(entries: List<PendingEntry>) {
-        if (saving || catalog == null) return
-        saving = true
+    fun ifEditable(action: () -> Unit) {
+        if (submissionId == null) action()
+    }
+    fun editableAction(action: () -> Unit): () -> Unit = { ifEditable(action) }
+
+    fun submissionEntries(): List<PendingEntry> =
+        if (editingStored || state.includesCreationDraft) {
+            state.pending + PendingEntry(activeId, state.active)
+        } else state.pending
+
+    fun save() {
+        if (submissionId != null || catalog == null || choosingDate || creatingCategory ||
+            state.exitRequested || state.deleteRequestedId != null || state.editingId != null
+        ) return
+        val id = UUID.randomUUID().toString()
+        submissionId = id
         focus.clearFocus()
-        scope.launch {
+        if (!catalog.startSave(id, submissionEntries())) submissionId = null
+    }
+    val closeAfterSave by rememberUpdatedState(onClose)
+    LaunchedEffect(submissionId) {
+        val id = submissionId ?: return@LaunchedEffect
+        val entries = submissionEntries()
+        val saveError = "No se pudo guardar. Revisá la categoría e intentá de nuevo."
+        val pendingSave = checkNotNull(catalog)
+        var confirmed: Boolean
+        while (true) {
             try {
-                catalog.onSave(entries)
-                onClose()
+                confirmed = pendingSave.awaitSave(id, entries)
+                break
             } catch (cancel: CancellationException) {
                 throw cancel
             } catch (_: Exception) {
-                state = state.copy(confirmedCount = null, message = "No se pudo guardar. Revisá la categoría e intentá de nuevo.")
-            } finally {
-                saving = false
+                // A failed reconciliation read does not tell us whether the batch was saved.
+                state = state.copy(message = saveError)
+                delay(1_000)
             }
+        }
+        if (confirmed) {
+            closeAfterSave()
+        } else {
+            state = state.copy(confirmedCount = null, message = saveError)
+            submissionId = null
         }
     }
     var showMorphInspector by remember { mutableStateOf(false) }
@@ -187,12 +216,11 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
     val colors = MaterialTheme.colorScheme
     // Keep a neutral surface suited to the active color scheme.
     val activeSurface = if (colors.background.luminance() < 0.5f) Color(0xFF1B1E23) else colors.surfaceContainerHigh
-    fun close() {
-        if (saving) return
+    fun close() = ifEditable {
         if (state.hasWork) state = state.requestExit() else onClose()
     }
     QuickEntryWindow(
-        onDismissRequest = {
+        onDismissRequest = editableAction {
             if (catalog != null && categoryMenu.expanded) categoryMenu.expanded = false else close()
         },
     ) {
@@ -255,14 +283,14 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                                 .graphicsLayer { alpha = if (transferId == entry.id) 0f else 1f },
                         ) {
                             PendingSummary(draft, catalogLabel = catalog?.categoryLabel?.invoke(draft.catalogCategoryUuid)) {
-                                IconButton(onClick = {
+                                IconButton(onClick = editableAction {
                                     val previousId = state.editingId
                                     state = state.edit(entry.id)
                                     if (previousId == null && state.editingId == entry.id) haptics.perform(QuickEntryHaptics.Action.EditStarted)
-                                }, enabled = editing == null, modifier = Modifier.size(PendingActionSize)) {
+                                }, enabled = editing == null && !saving, modifier = Modifier.size(PendingActionSize)) {
                                     Icon(Icons.Default.Edit, contentDescription = editDescription)
                                 }
-                                PendingMenu(onDelete = { state = state.requestDelete(entry.id) })
+                                PendingMenu(enabled = !saving, onDelete = { ifEditable { state = state.requestDelete(entry.id) } })
                             }
                         }
                     }
@@ -285,16 +313,17 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                             CompactEntryField(
-                                active.amount, { state = state.update(state.active.copy(amount = it)) },
+                                active.amount, { amount -> ifEditable { state = state.update(state.active.copy(amount = amount)) } },
                                 "Monto", Modifier.weight(1f), KeyboardType.Decimal,
                                 selectionReset = draftRestorations,
+                                readOnly = saving,
                             )
                             CapsuleToggle(
                                 value = active.currency, label = if (active.currency == Currency.CORDOBA) "Córdobas, cambiar a dólares" else "Dólares, cambiar a córdobas",
                                 accent = if (active.currency == Currency.CORDOBA) CapsuleToggleColors.Cordoba else CapsuleToggleColors.Dollar,
                                 foreground = if (active.currency == Currency.CORDOBA) CapsuleToggleColors.CordobaText else Color.White,
-                                onLongClick = if (debuggable) ({ showMorphInspector = true }) else null,
-                                onClick = {
+                                onLongClick = if (debuggable) ({ ifEditable { showMorphInspector = true } }) else null,
+                                onClick = editableAction {
                                     val previous = state.active.currency
                                     state = state.update(state.active.copy(currency = if (previous == Currency.CORDOBA) Currency.DOLLAR else Currency.CORDOBA))
                                     if (state.active.currency != previous) haptics.perform(QuickEntryHaptics.Action.ToggleCurrency)
@@ -303,7 +332,7 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                             CapsuleToggle(
                                 value = active.type, label = if (active.type == MovementType.INCOME) "Ingreso, cambiar a egreso" else "Egreso, cambiar a ingreso",
                                 accent = if (active.type == MovementType.INCOME) CapsuleToggleColors.Income else CapsuleToggleColors.Expense,
-                                onClick = {
+                                onClick = editableAction {
                                     state = state.update(state.active.copy(type = if (state.active.type == MovementType.INCOME) MovementType.EXPENSE else MovementType.INCOME, category = null, subcategory = null, catalogCategoryUuid = null))
                                     haptics.perform(QuickEntryHaptics.Action.ToggleType)
                                 },
@@ -311,9 +340,10 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                         }
                         Column {
                             CompactEntryField(
-                                active.detail, { state = state.update(state.active.copy(detail = it)) },
+                                active.detail, { detail -> ifEditable { state = state.update(state.active.copy(detail = detail)) } },
                                 "Detalle (opcional)", Modifier.fillMaxWidth(), secondary = true,
                                 selectionReset = draftRestorations,
+                                readOnly = saving,
                             )
                             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                                 CapsuleMenuControl(
@@ -321,7 +351,7 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                                     label = "Fecha",
                                     text = if (active.date == LocalDate.now()) "Hoy" else active.date.formatVisibleDate(),
                                     modifier = Modifier.weight(1f),
-                                    onClick = { choosingDate = true },
+                                    onClick = editableAction { choosingDate = true },
                                 )
                                 if (catalog != null) {
                                     Box(Modifier.weight(1f).onGloballyPositioned { categoryMenu.anchor = it.boundsInWindow() }) {
@@ -330,7 +360,7 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                                             label = "Categoría",
                                             text = active.catalogCategoryUuid?.let(catalog.categoryLabel) ?: "Categoría",
                                             modifier = Modifier.fillMaxWidth(),
-                                            onClick = { categoryMenu.expanded = !categoryMenu.expanded },
+                                            onClick = editableAction { categoryMenu.expanded = !categoryMenu.expanded },
                                             announceLabelOnly = true,
                                             pressScale = true,
                                         ) { iconModifier ->
@@ -338,12 +368,12 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                                         }
                                         catalog.categoryPicker(
                                             categoryMenu.expanded, motion, active.type, active.catalogCategoryUuid,
-                                            { categoryMenu.expanded = false },
-                                            { uuid ->
+                                            editableAction { categoryMenu.expanded = false },
+                                            { uuid -> ifEditable {
                                                 state = state.update(state.active.copy(catalogCategoryUuid = uuid))
                                                 categoryMenu.expanded = false
-                                            },
-                                            {
+                                            } },
+                                            editableAction {
                                                 categoryMenu.expanded = false
                                                 creatingCategory = true
                                             },
@@ -367,16 +397,16 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                 FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     TextButton(onClick = { close() }, enabled = !saving, modifier = Modifier.heightIn(min = 48.dp)) { Text("Salir") }
                     if (editingStored) {
-                        Button(enabled = !saving, onClick = {
+                        Button(enabled = !saving, onClick = editableAction {
                             val error = validate(state.active)
-                            if (error == null) save(listOf(PendingEntry(activeId, state.active)))
+                            if (error == null) save()
                             else {
                                 state = state.copy(message = error)
                                 haptics.perform(QuickEntryHaptics.Action.ValidationRejected)
                             }
                         }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (saving) "Guardando…" else "Guardar cambios") }
                     } else if (editing == null) {
-                        OutlinedButton(enabled = !saving, onClick = {
+                        OutlinedButton(enabled = !saving, onClick = editableAction {
                             val before = state.pending.size
                             val previousMessage = state.message
                             state = state.add(validate, activeId)
@@ -390,21 +420,18 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                                 haptics.perform(QuickEntryHaptics.Action.ValidationRejected)
                             }
                         }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Agregar otro") }
-                        Button(enabled = !saving, onClick = {
+                        Button(enabled = !saving, onClick = editableAction {
                             val previousMessage = state.message
                             val confirmed = state.confirm(validate)
                             if (catalog != null && confirmed.confirmedCount != null) {
-                                val entries = state.pending
-                                val submitted = if (confirmed.confirmedCount == entries.size) entries
-                                    else entries + PendingEntry(activeId, state.active)
-                                save(submitted)
+                                save()
                             } else state = confirmed
                             if (state.message != null && state.message != previousMessage) haptics.perform(QuickEntryHaptics.Action.ValidationRejected)
                         }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (saving) "Guardando…" else "Confirmar") }
                     } else {
                         val editActionPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                         OutlinedButton(
-                            onClick = {
+                            onClick = editableAction {
                                 if (state.editingId != null) {
                                     state = state.cancelEdit()
                                     draftRestorations++
@@ -414,7 +441,7 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                             contentPadding = editActionPadding,
                         ) { Text("Cancelar") }
                         Button(
-                            onClick = {
+                            onClick = editableAction {
                                 val previousMessage = state.message
                                 val wasEditing = state.editingId != null
                                 state = state.saveEdit(validate)
@@ -442,21 +469,21 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
     if (choosingDate) {
         QuickEntryDateDialog(
             initialDate = active.date,
-            onConfirm = { date ->
+            onConfirm = { date -> ifEditable {
                 state = state.update(state.active.copy(date = date))
                 choosingDate = false
-            },
-            onDismiss = { choosingDate = false },
+            } },
+            onDismiss = editableAction { choosingDate = false },
         )
     }
     if (catalog != null && creatingCategory) {
-        catalog.categoryEditor({ uuid ->
+        catalog.categoryEditor({ uuid -> ifEditable {
             state = state.update(state.active.copy(catalogCategoryUuid = uuid))
             creatingCategory = false
-        }, { creatingCategory = false })
+        } }, editableAction { creatingCategory = false })
     }
     if (state.exitRequested) AlertDialog(
-        onDismissRequest = { state = state.copy(exitRequested = false) },
+        onDismissRequest = editableAction { state = state.copy(exitRequested = false) },
         title = { Text(if (catalog == null) "Salir de la demostración" else "¿Descartar cambios?") },
         text = {
             Text(
@@ -467,18 +494,18 @@ internal fun QuickEntryDialog(onClose: () -> Unit, catalog: QuickEntryCatalog? =
                 }
             )
         },
-        confirmButton = { TextButton(onClick = onClose) { Text("Descartar y salir") } },
-        dismissButton = { TextButton(onClick = { state = state.copy(exitRequested = false) }) { Text("Continuar") } },
+        confirmButton = { TextButton(onClick = editableAction(onClose)) { Text("Descartar y salir") } },
+        dismissButton = { TextButton(onClick = editableAction { state = state.copy(exitRequested = false) }) { Text("Continuar") } },
     )
     if (state.deleteRequestedId != null) AlertDialog(
-        onDismissRequest = { state = state.copy(deleteRequestedId = null) },
+        onDismissRequest = editableAction { state = state.copy(deleteRequestedId = null) },
         title = { Text("Eliminar movimiento provisional") }, text = { Text("Se quitará únicamente este movimiento de la cola. Si está en edición, también se descartarán sus cambios.") },
-        confirmButton = { TextButton(onClick = {
+        confirmButton = { TextButton(onClick = editableAction {
             val before = state.pending.size
             state = state.deleteRequested()
             if (state.pending.size < before) haptics.perform(QuickEntryHaptics.Action.Deleted)
         }) { Text("Eliminar", color = MaterialTheme.colorScheme.error) } },
-        dismissButton = { TextButton(onClick = { state = state.copy(deleteRequestedId = null) }) { Text("Cancelar") } },
+        dismissButton = { TextButton(onClick = editableAction { state = state.copy(deleteRequestedId = null) }) { Text("Cancelar") } },
     )
     if (state.confirmedCount != null) AlertDialog(
         onDismissRequest = { state = state.copy(confirmedCount = null) },
@@ -691,11 +718,11 @@ internal fun MovementSymbol(type: MovementType) {
 }
 
 @Composable
-private fun PendingMenu(onDelete: () -> Unit) {
+private fun PendingMenu(enabled: Boolean, onDelete: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        IconButton(onClick = { expanded = true }, modifier = Modifier.size(PendingActionSize)) { Icon(Icons.Default.MoreVert, contentDescription = "Opciones del movimiento") }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        IconButton(onClick = { expanded = true }, enabled = enabled, modifier = Modifier.size(PendingActionSize)) { Icon(Icons.Default.MoreVert, contentDescription = "Opciones del movimiento") }
+        DropdownMenu(expanded = expanded && enabled, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(text = { Text("Eliminar") }, onClick = { expanded = false; onDelete() })
         }
     }
@@ -830,6 +857,7 @@ internal fun CompactEntryField(
     keyboardType: KeyboardType = KeyboardType.Text,
     secondary: Boolean = false,
     selectionReset: Int = 0,
+    readOnly: Boolean = false,
 ) {
     // Keep selection and IME composition local, while the form owns the text.
     var input by remember(selectionReset) {
@@ -852,6 +880,7 @@ internal fun CompactEntryField(
             }
         },
         singleLine = true,
+        readOnly = readOnly,
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         textStyle = (if (secondary) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge).copy(color = MaterialTheme.colorScheme.onSurface),
         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
@@ -863,7 +892,7 @@ internal fun CompactEntryField(
                     inner()
                 }
                 if (value.isNotEmpty()) {
-                    IconButton(onClick = { onChange("") }, modifier = Modifier.size(48.dp)) {
+                    IconButton(onClick = { onChange("") }, enabled = !readOnly, modifier = Modifier.size(48.dp)) {
                         Icon(Icons.Default.Close, contentDescription = "Limpiar $label", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }

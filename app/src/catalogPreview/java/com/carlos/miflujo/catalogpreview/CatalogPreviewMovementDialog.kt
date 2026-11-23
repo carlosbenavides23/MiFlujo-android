@@ -1,6 +1,8 @@
 package com.carlos.miflujo.catalogpreview
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import com.carlos.miflujo.cataloglab.CatalogIcon
 import com.carlos.miflujo.cataloglab.CatalogCategoryPicker
 import com.carlos.miflujo.cataloglab.CatalogItemEditor
@@ -11,12 +13,15 @@ import com.carlos.miflujo.cataloglab.withCategory
 import com.carlos.miflujo.domain.backup.BackupCategory
 import com.carlos.miflujo.domain.model.CatalogMovement
 import com.carlos.miflujo.domain.model.CatalogMovementDraft
+import com.carlos.miflujo.domain.model.CatalogMovementSelection
 import com.carlos.miflujo.domain.model.MovementType
+import com.carlos.miflujo.ui.movement.PendingEntry
 import com.carlos.miflujo.ui.movement.QuickEntryCatalog
 import com.carlos.miflujo.ui.movement.QuickEntryDialog
 import com.carlos.miflujo.ui.movement.QuickEntryDraft
 import com.carlos.miflujo.ui.movement.formatAmountInput
 import com.carlos.miflujo.ui.movement.validateQuickEntryAmount
+import java.io.Serializable
 
 @Composable
 internal fun CatalogPreviewMovementDialog(
@@ -26,6 +31,17 @@ internal fun CatalogPreviewMovementDialog(
     onClose: () -> Unit,
 ) {
     val previous = original?.draft
+    val baseline = rememberSaveable {
+        mutableStateOf(original?.let {
+            EditBaseline(
+                it.updatedAtEpochMillis, it.draft.selection.categoryUuid,
+                it.draft.selection.subcategoryUuid, it.draft.detail,
+            )
+        })
+    }.value
+    fun normalized(entries: List<PendingEntry>) = entries.map {
+        (original?.uuid ?: it.id) to it.draft.toCatalogDraft(baseline)
+    }
     val byUuid = categories.associateBy { it.uuid }
     QuickEntryDialog(
         onClose = onClose,
@@ -59,19 +75,38 @@ internal fun CatalogPreviewMovementDialog(
                     onSaved = onCreated,
                 )
             },
-            onSave = { entries ->
-                if (original == null) model.saveNew(entries.map { it.id to it.draft.toCatalogDraft(null) })
-                else model.edit(original, entries.single().draft.toCatalogDraft(previous))
+            startSave = { id, entries ->
+                model.quickEntrySave.start(id) {
+                    val drafts = normalized(entries)
+                    if (original == null) {
+                        model.saveNew(drafts)
+                    } else {
+                        check(original.updatedAtEpochMillis == baseline?.updatedAt)
+                        model.edit(original, drafts.single().second)
+                    }
+                }
+            },
+            awaitSave = { id, entries ->
+                model.quickEntrySave.await(id) { model.wasSaved(normalized(entries)) }
             },
         ),
     )
 }
 
-private fun QuickEntryDraft.toCatalogDraft(previous: CatalogMovementDraft?): CatalogMovementDraft {
+// Keep the historical fields needed to compare the exact requested edit after restoration.
+private data class EditBaseline(
+    val updatedAt: Long,
+    val categoryUuid: String?,
+    val subcategoryUuid: String?,
+    val detail: String?,
+) : Serializable
+
+private fun QuickEntryDraft.toCatalogDraft(previous: EditBaseline?): CatalogMovementDraft {
     val savedDetail = if (previous != null && detail == previous.detail.orEmpty()) previous.detail
         else detail.takeUnless(String::isBlank)
     return CatalogMovementDraft(
         type, checkNotNull(validateQuickEntryAmount(amount).amountMinor), currency, date,
-        previous?.selection.withCategory(catalogCategoryUuid), savedDetail,
+        previous?.let { CatalogMovementSelection(it.categoryUuid, it.subcategoryUuid) }
+            .withCategory(catalogCategoryUuid), savedDetail,
     )
 }

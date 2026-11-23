@@ -44,8 +44,9 @@ import kotlinx.coroutines.launch
 
 @Composable
 internal fun CatalogPreviewApp(model: CatalogPreviewModel) {
-    val result by model.snapshot.collectAsState()
-    val data = result?.getOrNull()
+    val read by model.snapshot.collectAsState()
+    val result = read.latest
+    val data = read.lastValid
     val snapshot = data?.catalog
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
@@ -64,10 +65,16 @@ internal fun CatalogPreviewApp(model: CatalogPreviewModel) {
     }
     BackHandler(enabled = showSettings) { closeSettings() }
 
+    LaunchedEffect(result) {
+        if (data != null && result?.isFailure == true) {
+            snackbar.showSnackbar("No se pudieron cargar los movimientos.")
+        }
+    }
+
     LaunchedEffect(editUuid) {
         val uuid = editUuid
         editing = if (uuid == null) null else try {
-            checkNotNull(model.find(uuid))
+            checkNotNull(model.loadEditor(uuid))
         } catch (cancel: CancellationException) {
             throw cancel
         } catch (_: Exception) {
@@ -167,10 +174,14 @@ internal fun CatalogPreviewApp(model: CatalogPreviewModel) {
     }
 
     val original = editing?.takeIf { it.uuid == editUuid }
-    if (data != null && (showAdd || original != null)) key(original?.uuid) {
+    if (showAdd || original != null) key(original?.uuid) {
         CatalogPreviewMovementDialog(
-            data.categoriesByUsage, original, model,
-            onClose = { showAdd = false; editUuid = null },
+            data?.categoriesByUsage.orEmpty(), original, model,
+            onClose = {
+                model.closeEditor()
+                showAdd = false
+                editUuid = null
+            },
         )
     }
 }

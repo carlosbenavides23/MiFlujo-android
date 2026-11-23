@@ -754,3 +754,23 @@ El PDF anterior pasó el verificador final. El raster de Poppler confirma el pun
 - Pasaron las cuatro pruebas JVM de `QuickEntryAmountTest`, ejecutadas con
   `:app:testDebugUnitTest --tests`, y se compiló `:app:assembleCatalogPreview`.
   También pasó `git diff --check`.
+
+### Confirmación de Quick Entry durante recreación o fallos de lectura
+
+- La confirmación bloquea los manejadores de entrada, cola y descarte antes
+  de iniciar Room. Un fallo de escritura conserva la captura y sus UUID.
+  Solo se cierra la sesión al confirmar el éxito.
+- El ViewModel de `catalogPreview` conserva la escritura y su resultado
+  durante una recreación. El diálogo conserva el identificador del intento
+  junto con su borrador y cola restaurables. Si se restaura un intento sin
+  la escritura en memoria, compara los UUID y el contenido exacto en Room
+  antes de reactivar la captura. Si falla esa consulta, vuelve a consultar
+  manteniendo la captura bloqueada. Un conflicto no autoriza sobrescribir
+  el movimiento existente. El lote sigue usando una sola transacción.
+- El último catálogo y los movimientos válidos se conservan aunque falle
+  la última lectura. El error se informa por separado y la lectura ya no
+  controla si se desmonta el diálogo de una sesión abierta.
+- Pasaron las cuatro pruebas JVM de `CatalogPreviewQuickEntryTest`, el
+  ensamblado de `catalogPreview` y `git diff --check`. Se revisaron
+  estáticamente los manejadores de mutación. La recreación se cubrió
+  reemplazando al consumidor del resultado en JVM, sin una Activity real.
